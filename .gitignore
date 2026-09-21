@@ -1,0 +1,79 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version.local
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+dist/
+build/
+*.egg-info/
+
+# Node.js and frontend
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+coverage/
+.vite/
+.parcel-cache/
+frontend/dist/
+
+# Logs and runtime files
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files and generated artifacts
+tmp/
+temp/
+.cache/
+output/
+outputs/
+
+# Office lock files
+~$*.doc
+~$*.docx
+~$*.xls
+~$*.xlsx
+~$*.ppt
+~$*.pptx
+
+# Customer source materials are stored outside Git
+materials/customer/
+
+# Local Codex state
+.codex/local/
+.codex/*.local.toml
