@@ -1,56 +1,35 @@
-# UT112-XXX — Краткое название
+# UT112-XX — Краткое название
 
-## Metadata
+- **Branch:** `feature/UT112-XX-short-name`
+- **Owner:** ...
+- **WEEEK:** ...
+- **Updated:** YYYY-MM-DD HH:MM
 
-- **Status:** READY | IN_PROGRESS | REVIEW | QA | DONE | BLOCKED
-- **Branch:** `feature/UT112-XXX-short-slug`
-- **WEEEK:** `<task id or link>`
-- **Owner:** `<developer>`
-- **Last updated:** YYYY-MM-DD HH:MM
+## Цель
 
-## Goal
+Одно-два предложения.
 
-Коротко: какой результат должна дать задача.
-
-## Acceptance criteria
-
-- [ ] ...
-- [ ] ...
-
-## Done
+## Сделано
 
 - ...
 
-## In progress
+## Осталось
 
 - ...
 
-## Changed files
-
-- `path/to/file`
-
-## Checks
-
-- `pytest ...` — not run / passed / failed
-- `ruff ...` — not run / passed / failed
-- `npm test` — not run / passed / failed
-
-## Decisions inside this task
-
-Только локальные решения, которые нужны следующей сессии. Долговременные решения дополнительно перенести в `docs/decision-log.md` или ADR.
+## Проверки
 
 - ...
 
-## Blockers / open questions
+## Блокеры
 
-- none
+- нет
 
-## Exact next step
+## Следующий шаг
 
-**Один конкретный ближайший шаг:** ...
+**Один конкретный шаг:** ...
 
-## Checkpoint
+## Последний checkpoint
 
-- **Last commit:** `<hash or none>`
-- **Pushed:** yes / no
-- **Working tree:** clean / dirty
+- Commit: ...
+- Pushed: yes / no

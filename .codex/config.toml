@@ -1,7 +1,6 @@
 # Project-level Codex configuration for UT112.
-# Secrets must never be stored here.
+# Secrets are stored only in local environment/.env.
 
-# Keep project instructions compact; AGENTS.md acts as the loader for deeper docs.
 project_doc_max_bytes = 32768
 
 [mcp_servers.weeek]
@@ -14,8 +13,7 @@ required = false
 startup_timeout_sec = 20
 tool_timeout_sec = 60
 
-# Only the task tools needed by developer/controller workflows are exposed.
-# Destructive completion/deletion and workspace-admin tools are intentionally absent.
+# Only simple task-management operations are exposed.
 enabled_tools = [
   "weeek_whoami",
   "weeek_list_members",
@@ -30,5 +28,4 @@ enabled_tools = [
   "weeek_remove_assignees"
 ]
 
-# Read operations should remain frictionless; Codex can request approval for writes.
 default_tools_approval_mode = "writes"
