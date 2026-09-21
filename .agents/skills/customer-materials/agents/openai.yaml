@@ -1,0 +1,7 @@
+interface:
+  display_name: "Материалы заказчика"
+  short_description: "Точечный поиск по документам заказчика"
+  default_prompt: "Используй $customer-materials, чтобы проверить требование по исходным материалам заказчика."
+
+policy:
+  allow_implicit_invocation: false
