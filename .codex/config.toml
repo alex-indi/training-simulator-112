@@ -22,6 +22,7 @@ enabled_tools = [
   "weeek_list_board_columns",
   "weeek_list_tasks",
   "weeek_get_task",
+  "weeek_create_task",
   "weeek_update_task",
   "weeek_move_task",
   "weeek_set_assignees",
