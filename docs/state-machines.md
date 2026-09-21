@@ -1,0 +1,653 @@
+# State Machines
+
+**Версия:** 0.1  
+**Дата:** 21.09.2026  
+**Статус:** WORKING BASELINE
+
+## Назначение
+
+Документ фиксирует состояния и переходы, необходимые для первого vertical slice проекта «Учебный тренажер 112».
+
+Главная цель — не смешивать несколько разных состояний в одно поле `status`.
+
+В системе существуют как минимум четыре независимых автомата:
+
+```text
+TrainingSession / TrainingRun
+Incident lifecycle
+DDS response status
+ResponseAssignment state
+```
+
+Они связаны событиями, но не должны автоматически подменять друг друга.
+
+## Обозначения
+
+- `CONFIRMED` — подтверждено заказчиком или профильными материалами;
+- `PRODUCT_DECISION` — принято командой для MVP;
+- `OPEN` — деталь ещё требует уточнения.
+
+Названия enum ниже являются техническими именами продукта. Русские названия в интерфейсе должны соответствовать предметной терминологии.
+
+---
+
+# 1. TrainingSession
+
+`PRODUCT_DECISION`.
+
+`TrainingSession` — занятие, созданное преподавателем для одного или нескольких обучаемых.
+
+## Состояния
+
+```text
+DRAFT
+READY
+ACTIVE
+COMPLETED
+CANCELLED
+```
+
+| State | Смысл |
+| --- | --- |
+| `DRAFT` | Занятие создано, его настройки ещё можно изменять. |
+| `READY` | Занятие подготовлено к запуску. |
+| `ACTIVE` | Учебная смена запущена. |
+| `COMPLETED` | Занятие штатно завершено. |
+| `CANCELLED` | Занятие отменено до штатного завершения. |
+
+## Переходы
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT
+    DRAFT --> READY: prepare
+    READY --> DRAFT: reopen_for_edit
+    READY --> ACTIVE: start
+    DRAFT --> CANCELLED: cancel
+    READY --> CANCELLED: cancel
+    ACTIVE --> COMPLETED: finish
+    ACTIVE --> CANCELLED: cancel
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+```
+
+## Правила
+
+- `start` создаёт `TrainingRun` для назначенных обучаемых;
+- после перехода в `ACTIVE` исходные параметры занятия не должны тихо изменяться так, чтобы менялась история уже начатого прохождения;
+- pause/resume пока не вводится. Если такая необходимость появится, она оформляется отдельным решением.
+
+---
+
+# 2. TrainingRun
+
+`PRODUCT_DECISION`.
+
+`TrainingRun` — индивидуальное прохождение `TrainingSession` конкретным обучаемым.
+
+## Состояния
+
+```text
+PENDING
+ACTIVE
+COMPLETED
+ABORTED
+```
+
+| State | Смысл |
+| --- | --- |
+| `PENDING` | Прохождение создано, но ещё не началось. |
+| `ACTIVE` | Обучаемый выполняет занятие. |
+| `COMPLETED` | Индивидуальное прохождение завершено. |
+| `ABORTED` | Прохождение досрочно прекращено. |
+
+## Переходы
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> ACTIVE: session_started / trainee_started
+    ACTIVE --> COMPLETED: complete
+    PENDING --> ABORTED: abort
+    ACTIVE --> ABORTED: abort
+    COMPLETED --> [*]
+    ABORTED --> [*]
+```
+
+`TrainingSession.COMPLETED` не означает, что история `TrainingRun` удаляется или пересчитывается.
+
+---
+
+# 3. Incident lifecycle
+
+Это **технический жизненный цикл учебной карточки**, а не статус реагирования ДДС и не общий статус реальной карточки Системы-112.
+
+`PRODUCT_DECISION`.
+
+## Состояния
+
+```text
+CREATED
+DELIVERED
+OPENED
+FINISHED
+```
+
+| State | Смысл |
+| --- | --- |
+| `CREATED` | Карточка создана внутри `Virtual112`, но ещё не доставлена обучаемому. |
+| `DELIVERED` | Карточка поступила в рабочее место обучаемого. |
+| `OPENED` | Обучаемый открыл карточку. |
+| `FINISHED` | Учебная обработка этой карточки завершена. |
+
+## Переходы
+
+```mermaid
+stateDiagram-v2
+    [*] --> CREATED
+    CREATED --> DELIVERED: deliver
+    DELIVERED --> OPENED: open
+    OPENED --> FINISHED: finish_training_incident
+    FINISHED --> [*]
+```
+
+## Временные метки
+
+Сервер фиксирует минимум:
+
+```text
+created_at
+delivered_at
+opened_at
+finished_at
+```
+
+`primary_status_at` хранится отдельно и относится к автомату статуса ДДС.
+
+## Важно
+
+`IncidentLifecycleState.FINISHED` не должен использоваться вместо предметного `Работы завершены`.
+
+Например, корректное `Не принята` также может завершить учебную обработку карточки, хотя никакого статуса `Работы завершены` не было.
+
+---
+
+# 4. Статус реагирования ДДС
+
+Это основной предметный автомат действий обучаемого.
+
+## Подтверждённые предметные статусы
+
+`CONFIRMED`:
+
+- `Принята`;
+- `Не принята`;
+- `Начало реагирования`;
+- `Прибытие`;
+- `Проведение работ`;
+- `Работы завершены`;
+- `Отказ от выполнения работ`.
+
+Также в реальной системе существуют технические отметки вроде `Добавлена` и `Получена службой`. В MVP они не смешиваются с пользовательским operational status.
+
+## Технические enum MVP
+
+```text
+AWAITING_DECISION
+ACCEPTED
+REJECTED
+RESPONSE_STARTED
+ARRIVED
+WORKING
+COMPLETED
+WORK_REFUSED
+```
+
+| Enum | UI / предметный смысл |
+| --- | --- |
+| `AWAITING_DECISION` | Внутреннее состояние: первичное решение ещё не принято. |
+| `ACCEPTED` | `Принята`. |
+| `REJECTED` | `Не принята`. |
+| `RESPONSE_STARTED` | `Начало реагирования`. |
+| `ARRIVED` | `Прибытие`. |
+| `WORKING` | `Проведение работ`. |
+| `COMPLETED` | `Работы завершены`. |
+| `WORK_REFUSED` | `Отказ от выполнения работ`. |
+
+## Базовый универсальный flow MVP
+
+Заказчик разрешил использовать универсальный алгоритм вместо моделирования внутренней специфики каждой ДДС.
+
+```mermaid
+stateDiagram-v2
+    [*] --> AWAITING_DECISION
+
+    AWAITING_DECISION --> ACCEPTED: accept
+    AWAITING_DECISION --> REJECTED: reject + comment
+
+    REJECTED --> ACCEPTED: accept_later
+
+    ACCEPTED --> RESPONSE_STARTED: start_response
+    RESPONSE_STARTED --> ARRIVED: mark_arrival
+    ARRIVED --> WORKING: start_work
+    WORKING --> COMPLETED: complete_work
+
+    RESPONSE_STARTED --> WORK_REFUSED: refuse_work + comment
+    ARRIVED --> WORK_REFUSED: refuse_work + comment
+
+    COMPLETED --> [*]
+    WORK_REFUSED --> [*]
+```
+
+## Правила переходов
+
+### `AWAITING_DECISION → ACCEPTED`
+
+`CONFIRMED`.
+
+Обучаемый решил, что служба будет реагировать.
+
+Backend фиксирует `primary_status_at`, если это первый первичный статус.
+
+### `AWAITING_DECISION → REJECTED`
+
+`CONFIRMED`.
+
+Требуется комментарий с обоснованием.
+
+Команда отклоняется backend, если обязательный комментарий отсутствует.
+
+### `REJECTED → ACCEPTED`
+
+`CONFIRMED`.
+
+Материалы допускают последующее принятие карточки после первоначального `Не принята`.
+
+История не перезаписывается: оба действия должны остаться в `IncidentAction`.
+
+### `ACCEPTED → RESPONSE_STARTED`
+
+`CONFIRMED` по смыслу статуса.
+
+Действие выполняется обучаемым на основании фактической информации о начале реагирования.
+
+Для MVP эта информация обычно приходит от виртуального старшего группы реагирования через чат.
+
+### `RESPONSE_STARTED → ARRIVED`
+
+`CONFIRMED` по смыслу статуса.
+
+Действие выполняется после получения информации о прибытии.
+
+### `ARRIVED → WORKING`
+
+`CONFIRMED` по смыслу статуса.
+
+Действие выполняется после получения информации о начале работ.
+
+### `WORKING → COMPLETED`
+
+`CONFIRMED` по смыслу статуса.
+
+Перед завершением вся существенная итоговая информация сценария должна быть отражена в комментариях, если этого требует сценарий/правило.
+
+### `RESPONSE_STARTED/ARRIVED → WORK_REFUSED`
+
+`PRODUCT_DECISION` для универсального MVP.
+
+Предметный смысл: реагирование началось, но работы не выполнялись.
+
+Комментарий обязателен.
+
+Если позднее материалы заказчика потребуют более узкого перехода, меняется policy backend, а не frontend.
+
+## Терминальные состояния
+
+Для operational status:
+
+```text
+COMPLETED
+WORK_REFUSED
+```
+
+`REJECTED` не считается безусловно терминальным, поскольку подтверждён переход `Не принята → Принята`.
+
+Учебный сценарий может закончить карточку в `REJECTED`, если именно отказ является ожидаемым правильным результатом. Это определяется `TrainingScenario`, а не самим enum.
+
+## `available_actions`
+
+Frontend не строит transition table самостоятельно.
+
+Пример:
+
+```json
+{
+  "dds_status": "ARRIVED",
+  "available_actions": [
+    "START_WORK",
+    "REFUSE_WORK"
+  ]
+}
+```
+
+Backend учитывает:
+
+- текущий статус;
+- роль пользователя;
+- обязательность комментария;
+- состояние учебного сценария;
+- дополнительные policy конкретного профиля, если они появятся позднее.
+
+---
+
+# 5. ResponseAssignment
+
+`ResponseUnit` — виртуальная группа реагирования как сущность/идентичность.
+
+`ResponseAssignment` — участие конкретной группы в конкретной карточке.
+
+**Runtime state хранится на `ResponseAssignment`.**
+
+Это решение уточняет раннюю формулировку «состояние ResponseUnit» в проектной документации.
+
+## Состояния
+
+```text
+ASSIGNED
+ACKNOWLEDGED
+EN_ROUTE
+ARRIVED
+WORKING
+COMPLETED
+CANCELLED
+```
+
+| State | Смысл виртуальной группы |
+| --- | --- |
+| `ASSIGNED` | Группа назначена на происшествие. |
+| `ACKNOWLEDGED` | Старший группы подтвердил получение задачи. |
+| `EN_ROUTE` | Группа выехала. |
+| `ARRIVED` | Группа прибыла. |
+| `WORKING` | Группа выполняет работы. |
+| `COMPLETED` | Группа завершила работы. |
+| `CANCELLED` | Назначение отменено / прекращено сценарием. |
+
+## Базовый flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> ASSIGNED
+    ASSIGNED --> ACKNOWLEDGED: acknowledge
+    ACKNOWLEDGED --> EN_ROUTE: depart
+    EN_ROUTE --> ARRIVED: arrive
+    ARRIVED --> WORKING: start_work
+    WORKING --> COMPLETED: complete
+
+    ASSIGNED --> CANCELLED: cancel
+    ACKNOWLEDGED --> CANCELLED: cancel
+    EN_ROUTE --> CANCELLED: cancel
+
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+```
+
+## Кто меняет состояние
+
+Не обучаемый напрямую.
+
+Состояние меняет движок виртуальной группы на основании `TrainingScenarioEvent` или будущего runtime-механизма сценария.
+
+Пример:
+
+```text
++00:20 ACKNOWLEDGED
++01:00 EN_ROUTE
++04:00 ARRIVED
++05:00 WORKING
++10:00 COMPLETED
+```
+
+Переход обычно создаёт `ResponseMessage`.
+
+Например:
+
+```text
+EN_ROUTE
+→
+«Выехали на место происшествия»
+```
+
+## Критическое правило независимости
+
+```text
+ResponseAssignment.EN_ROUTE
+```
+
+**не вызывает автоматически**:
+
+```text
+DdsResponseStatus.RESPONSE_STARTED
+```
+
+Правильный путь:
+
+```text
+ResponseAssignment.EN_ROUTE
+        ↓
+ResponseMessage: «Выехали»
+        ↓
+обучаемый читает сообщение
+        ↓
+обучаемый выбирает «Начало реагирования»
+        ↓
+backend проверяет команду
+        ↓
+DdsResponseStatus.RESPONSE_STARTED
+```
+
+Именно разница между фактическим миром сценария и действиями обучаемого используется в Assessment.
+
+---
+
+# 6. ResponseMessage
+
+Отдельный state machine для сообщения в первом MVP не нужен.
+
+Сообщение считается неизменяемым фактом истории.
+
+Минимум:
+
+```text
+id
+response_assignment_id
+sender_type
+body
+created_at
+```
+
+`sender_type`:
+
+```text
+DISPATCHER
+RESPONSE_UNIT
+SYSTEM
+```
+
+Для контроля чтения при необходимости добавляется `read_at` или отдельное событие `RESPONSE_MESSAGE_READ`, но текст сообщения после создания не редактируется.
+
+## Два подтверждённых режима коммуникации
+
+Заказчик описал оба варианта:
+
+### Push
+
+```text
+старший группы
+→ звонит/сообщает в ДДС
+→ докладывает обстановку
+```
+
+В MVP:
+
+```text
+Virtual Response Unit
+→ ResponseMessage
+→ чат обучаемого
+```
+
+### Pull
+
+```text
+диспетчер
+→ сам связывается со старшим группы
+→ уточняет ход работ
+```
+
+В MVP обучаемый должен иметь действие вроде:
+
+```text
+[Запросить состояние]
+```
+
+или возможность отправить сообщение в чат.
+
+Сценарий может намеренно не присылать следующий доклад, пока обучаемый сам не проявит инициативу.
+
+---
+
+# 7. Связь автоматов
+
+Нормальный успешный пример:
+
+```text
+Incident.DELIVERED
+        ↓
+Incident.OPENED
+        ↓
+DdsResponseStatus.ACCEPTED
+        ↓
+ResponseAssignment.ASSIGNED
+        ↓
+ResponseAssignment.ACKNOWLEDGED
+        ↓
+ResponseAssignment.EN_ROUTE
+        ↓
+сообщение «Выехали»
+        ↓
+DdsResponseStatus.RESPONSE_STARTED
+        ↓
+ResponseAssignment.ARRIVED
+        ↓
+сообщение «Прибыли»
+        ↓
+DdsResponseStatus.ARRIVED
+        ↓
+ResponseAssignment.WORKING
+        ↓
+сообщение «Приступили к работам»
+        ↓
+DdsResponseStatus.WORKING
+        ↓
+ResponseAssignment.COMPLETED
+        ↓
+сообщение «Работы завершены»
+        ↓
+DdsResponseStatus.COMPLETED
+        ↓
+Incident.FINISHED
+```
+
+Но это **не автоматическая цепочка**. Между событиями группы и статусами ДДС всегда существует действие обучаемого.
+
+---
+
+# 8. Assessment и state machines
+
+Assessment сравнивает два потока времени:
+
+```text
+фактические события сценария
+vs
+действия обучаемого
+```
+
+Пример:
+
+```text
+14:04:00 ResponseAssignment → EN_ROUTE
+14:04:01 ResponseMessage «Выехали»
+14:04:18 Trainee → RESPONSE_STARTED
+```
+
+Можно вычислить:
+
+```text
+reaction_delay = 17 seconds
+```
+
+Примеры детерминированных ошибок:
+
+- обучаемый поставил `ARRIVED`, когда группа только `EN_ROUTE`;
+- группа сообщила о прибытии, но обучаемый не изменил статус;
+- `REJECTED` установлен без комментария;
+- `WORK_REFUSED` установлен без комментария;
+- обучаемый завершил работу до сообщения о фактическом завершении;
+- сценарий требовал инициативного запроса, но обучаемый его не сделал.
+
+AI для таких проверок не нужен.
+
+---
+
+# 9. Атомарность и история
+
+Каждая предметная команда backend должна атомарно:
+
+1. проверить текущий state;
+2. проверить `available_actions`/policy;
+3. проверить обязательные входные данные;
+4. изменить текущее состояние;
+5. записать `IncidentAction`;
+6. сохранить серверную временную метку;
+7. после успешного commit отправить realtime-уведомление.
+
+Недопустимо сначала отправить Socket.IO-событие, а затем обнаружить, что изменение БД не сохранилось.
+
+---
+
+# 10. Конкурентность и повторные команды
+
+Frontend может повторить запрос после reconnect или двойного клика.
+
+Для критичных команд backend должен защищаться от:
+
+- повторного выполнения одного и того же перехода;
+- перехода из устаревшего состояния;
+- параллельного изменения карточки двумя запросами.
+
+Конкретный механизм optimistic locking / idempotency key выбирается при реализации соответствующего endpoint и не фиксируется этим документом.
+
+---
+
+# 11. Что пока не моделируем
+
+В первый vertical slice не добавлять без отдельной задачи:
+
+- state machine реального оператора первичного приёма 112;
+- все общесистемные статусы реальной карточки Системы-112;
+- отдельные workflow для всех реальных ДДС;
+- availability-state самой `ResponseUnit`;
+- полноценный call-state SIP-телефонии;
+- сложный assessment lifecycle;
+- pause/resume учебной смены;
+- автоматическое изменение статусов ДДС по событиям виртуальной группы.
+
+---
+
+# 12. Открытые вопросы
+
+1. Какие исходные поля карточки диспетчер ДДС имеет право редактировать?
+2. Что именно должен сделать диспетчер при обнаружении ошибки в исходной карточке?
+3. Нужен ли в первом MVP сценарий `ResponseAssignment.CANCELLED` в UI или достаточно внутренней поддержки?
+4. Какие дополнительные переходы понадобятся после выбора конкретного набора демонстрационных сценариев?
+
+Эти вопросы не блокируют bootstrap приложения и первый сквозной flow.

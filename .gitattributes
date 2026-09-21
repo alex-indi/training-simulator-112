@@ -1,0 +1,17 @@
+# Keep repository text files consistent across Windows and macOS.
+* text=auto eol=lf
+
+# Common binary formats.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
