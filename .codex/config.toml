@@ -1,0 +1,32 @@
+# Project-level Codex configuration for UT112.
+# Secrets are stored only in local environment/.env.
+
+project_doc_max_bytes = 32768
+
+[mcp_servers.weeek]
+command = "uvx"
+args = ["--from", "weeek-mcp", "weeek-mcp"]
+cwd = "."
+env_vars = ["WEEEK_API_TOKEN"]
+enabled = true
+required = false
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+
+# Only simple task-management operations are exposed.
+enabled_tools = [
+  "weeek_whoami",
+  "weeek_list_members",
+  "weeek_list_projects",
+  "weeek_list_boards",
+  "weeek_list_board_columns",
+  "weeek_list_tasks",
+  "weeek_get_task",
+  "weeek_create_task",
+  "weeek_update_task",
+  "weeek_move_task",
+  "weeek_set_assignees",
+  "weeek_remove_assignees"
+]
+
+default_tools_approval_mode = "writes"
