@@ -5,9 +5,15 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.db.session import check_database_connection, create_database_engine
+from app.db.session import (
+    check_database_connection,
+    create_database_engine,
+    create_session_factory,
+)
+from app.modules.identity.router import router as identity_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -17,6 +23,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     """Проверяет PostgreSQL при старте и освобождает соединения при остановке."""
     engine = create_database_engine(get_settings())
     application.state.database_engine = engine
+    application.state.database_session_factory = create_session_factory(engine)
 
     try:
         try:
@@ -36,6 +43,14 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(identity_router)
 
 
 @app.get("/health", tags=["system"])

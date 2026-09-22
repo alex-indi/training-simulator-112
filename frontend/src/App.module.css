@@ -5,93 +5,186 @@
   padding: 32px;
 }
 
-.hero {
-  width: min(720px, 100%);
-  padding: clamp(32px, 7vw, 72px);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+.shell {
+  width: min(980px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 32px;
-  background:
-    linear-gradient(145deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
-  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.52);
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 28px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .badge {
-  width: 78px;
-  height: 78px;
+  width: 52px;
+  height: 52px;
   display: grid;
   place-items: center;
-  margin-bottom: 32px;
-  border-radius: 24px;
+  border-radius: 16px;
   background: #ef4444;
   color: #fff;
-  font-size: 25px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.04em;
-  box-shadow: 0 12px 32px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 10px 28px rgba(239, 68, 68, 0.28);
 }
 
 .eyebrow {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: #93c5fd;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
-.hero h1 {
+.brand .eyebrow {
+  margin-bottom: 3px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.brand strong {
+  color: #f8fafc;
+}
+
+.userSelect {
+  display: grid;
+  gap: 6px;
+}
+
+.userSelect span {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.userSelect select {
+  min-width: 280px;
+  padding: 10px 36px 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+  background: #111c31;
+  color: #e2e8f0;
+}
+
+.content {
+  min-height: 440px;
+  padding: clamp(44px, 8vw, 88px);
+  background:
+    radial-gradient(circle at 88% 20%, rgba(59, 130, 246, 0.14), transparent 30%),
+    linear-gradient(145deg, rgba(30, 41, 59, 0.46), transparent 58%);
+}
+
+.rolePill {
+  display: inline-flex;
+  margin-bottom: 28px;
+  padding: 7px 11px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.content h1 {
+  max-width: 700px;
   margin: 0;
   color: #f8fafc;
-  font-size: clamp(38px, 7vw, 68px);
-  line-height: 0.98;
-  letter-spacing: -0.055em;
+  font-size: clamp(38px, 6vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.05em;
 }
 
 .description {
-  max-width: 560px;
+  max-width: 620px;
   margin: 24px 0 36px;
   color: #cbd5e1;
-  font-size: clamp(17px, 2.4vw, 21px);
+  font-size: clamp(17px, 2.2vw, 21px);
   line-height: 1.55;
 }
 
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 16px;
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.08);
-  color: #a7f3d0;
-  font-size: 14px;
-  font-weight: 600;
+.primaryAction {
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 13px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 750;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.3);
+}
+
+.primaryAction:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.error {
+  width: fit-content;
+  padding: 12px 15px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 12px;
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+.footer {
+  justify-content: flex-start;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 0;
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 .statusDot {
   width: 8px;
   height: 8px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: #34d399;
   box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.12);
 }
 
-@media (max-width: 560px) {
+@media (max-width: 680px) {
   .page {
-    padding: 16px;
+    padding: 14px;
   }
 
-  .hero {
-    border-radius: 24px;
+  .shell {
+    border-radius: 22px;
   }
 
-  .status {
-    align-items: flex-start;
-    border-radius: 18px;
+  .header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .statusDot {
-    flex: 0 0 auto;
-    margin-top: 5px;
+  .userSelect select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .content {
+    min-height: 420px;
+    padding: 42px 26px;
   }
 }
