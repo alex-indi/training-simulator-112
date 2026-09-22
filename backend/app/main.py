@@ -14,6 +14,7 @@ from app.db.session import (
     create_session_factory,
 )
 from app.modules.identity.router import router as identity_router
+from app.modules.training.router import router as training_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -51,6 +52,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(identity_router)
+app.include_router(training_router)
 
 
 @app.get("/health", tags=["system"])
