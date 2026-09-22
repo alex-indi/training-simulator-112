@@ -14,14 +14,17 @@ def test_lifespan_checks_database_and_logs_connection(monkeypatch, caplog) -> No
     application = FastAPI()
     engine = AsyncMock()
     check_connection = AsyncMock()
+    session_factory = object()
 
     monkeypatch.setattr(main_module, "get_settings", lambda: object())
     monkeypatch.setattr(main_module, "create_database_engine", lambda settings: engine)
+    monkeypatch.setattr(main_module, "create_session_factory", lambda value: session_factory)
     monkeypatch.setattr(main_module, "check_database_connection", check_connection)
 
     async def run_lifespan() -> None:
         async with main_module.lifespan(application):
             assert application.state.database_engine is engine
+            assert application.state.database_session_factory is session_factory
 
     with caplog.at_level(logging.INFO, logger="uvicorn.error"):
         asyncio.run(run_lifespan())

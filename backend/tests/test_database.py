@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from app.core.config import Settings
 from app.db.base import Base
 from app.db.session import create_database_engine, create_session_factory
+from app.modules.identity.models import User
 
 
 def test_database_engine_uses_configured_url() -> None:
@@ -14,7 +15,7 @@ def test_database_engine_uses_configured_url() -> None:
 
     assert isinstance(engine, AsyncEngine)
     assert engine.url.render_as_string(hide_password=False) == database_url
-    assert Base.metadata.tables == {}
+    assert Base.metadata.tables["users"] is User.__table__
 
     session_factory = create_session_factory(engine)
     assert session_factory.class_ is AsyncSession
