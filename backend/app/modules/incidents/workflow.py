@@ -1,4 +1,4 @@
-"""Доменная команда доставки готовой карточки происшествия."""
+"""Доменные команды lifecycle готовой карточки происшествия."""
 
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -34,3 +34,18 @@ def create_delivered_incident(
         created_at=delivered_at,
         delivered_at=delivered_at,
     )
+
+
+def mark_incident_opened(
+    incident: Incident,
+    *,
+    server_time: datetime | None = None,
+) -> Incident:
+    """Идемпотентно фиксирует первое открытие карточки серверным временем."""
+    if incident.opened_at is not None:
+        return incident
+
+    incident.opened_at = server_time or datetime.now(UTC)
+    if incident.lifecycle_state != IncidentLifecycleState.FINISHED:
+        incident.lifecycle_state = IncidentLifecycleState.OPENED
+    return incident

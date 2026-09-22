@@ -9,9 +9,9 @@ from fastapi import HTTPException
 
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import IncidentLifecycleState
-from app.modules.incidents.router import create_incident, read_incident
+from app.modules.incidents.router import create_incident, open_incident, read_incident
 from app.modules.incidents.schemas import IncidentCreate, IncidentSnapshot
-from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.incidents.workflow import create_delivered_incident, mark_incident_opened
 from app.modules.training.models import TrainingSession, TrainingSessionState
 
 
@@ -73,6 +73,24 @@ def test_snapshot_rejects_invalid_coordinates() -> None:
 
     with pytest.raises(ValueError):
         IncidentSnapshot.model_validate(data)
+
+def test_open_incident_is_idempotent_and_uses_first_server_time() -> None:
+    """Повторное открытие не переписывает время первого просмотра карточки."""
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
+        server_time=datetime(2026, 9, 22, 9, 0, tzinfo=UTC),
+    )
+    first_opened_at = datetime(2026, 9, 22, 9, 5, tzinfo=UTC)
+
+    mark_incident_opened(incident, server_time=first_opened_at)
+    mark_incident_opened(
+        incident,
+        server_time=datetime(2026, 9, 22, 9, 10, tzinfo=UTC),
+    )
+
+    assert incident.lifecycle_state == IncidentLifecycleState.OPENED
+    assert incident.opened_at == first_opened_at
 
 
 def test_only_instructor_can_deliver_incident() -> None:
@@ -182,3 +200,67 @@ def test_assigned_trainee_can_restore_incident_from_api() -> None:
     assert response.id == incident.id
     assert response.source_snapshot.features == ["дым", "жилой дом"]
     assert response.source_snapshot.notified_services == ["ДДС пожарной охраны"]
+
+
+def test_assigned_trainee_opens_incident_and_backend_commits_time() -> None:
+    """Команда открытия сохраняет серверное время в доступной карточке."""
+    trainee = User(
+        id=3,
+        username="trainee",
+        full_name="Диспетчер ДДС",
+        role=UserRole.TRAINEE,
+    )
+    training_session = TrainingSession(
+        id=12,
+        title="Учебная смена",
+        instructor_id=2,
+        state=TrainingSessionState.ACTIVE,
+        trainees=[trainee],
+    )
+    incident = create_delivered_incident(
+        training_session_id=training_session.id,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
+        server_time=datetime(2026, 9, 22, 9, 0, tzinfo=UTC),
+    )
+    incident.id = 7
+    incident.training_session = training_session
+    scalar_result = MagicMock()
+    scalar_result.one_or_none.return_value = incident
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=scalar_result)
+    database.commit = AsyncMock()
+
+    response = asyncio.run(
+        open_incident(
+            incident_id=incident.id,
+            current_user=trainee,
+            database=database,
+        )
+    )
+
+    assert response.lifecycle_state == IncidentLifecycleState.OPENED
+    assert response.opened_at is not None
+    database.commit.assert_awaited_once()
+
+
+def test_instructor_cannot_mark_incident_as_opened_by_trainee() -> None:
+    """Просмотр преподавателя не подменяет факт открытия обучаемым."""
+    instructor = User(
+        id=2,
+        username="instructor",
+        full_name="Преподаватель",
+        role=UserRole.INSTRUCTOR,
+    )
+    database = MagicMock()
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            open_incident(
+                incident_id=7,
+                current_user=instructor,
+                database=database,
+            )
+        )
+
+    assert error.value.status_code == 403
+    database.commit.assert_not_called()

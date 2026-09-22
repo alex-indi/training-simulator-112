@@ -12,7 +12,7 @@ from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import Incident
 from app.modules.incidents.schemas import IncidentCreate, IncidentRead
-from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.incidents.workflow import create_delivered_incident, mark_incident_opened
 from app.modules.training.models import (
     TrainingSession,
     TrainingSessionState,
@@ -59,8 +59,13 @@ def _ensure_incident_visible(incident: Incident, user: User) -> None:
         )
 
 
-async def _load_incident(database: AsyncSession, incident_id: int) -> Incident:
-    result = await database.scalars(
+async def _load_incident(
+    database: AsyncSession,
+    incident_id: int,
+    *,
+    for_update: bool = False,
+) -> Incident:
+    statement = (
         select(Incident)
         .where(Incident.id == incident_id)
         .options(
@@ -69,6 +74,10 @@ async def _load_incident(database: AsyncSession, incident_id: int) -> Incident:
             )
         )
     )
+    if for_update:
+        statement = statement.with_for_update()
+
+    result = await database.scalars(statement)
     incident = result.one_or_none()
     if incident is None:
         raise HTTPException(
@@ -149,4 +158,24 @@ async def read_incident(
     """Восстанавливает карточку и её исходный snapshot из PostgreSQL."""
     incident = await _load_incident(database, incident_id)
     _ensure_incident_visible(incident, current_user)
+    return _to_read_model(incident)
+
+
+@router.post("/{incident_id}/open", response_model=IncidentRead)
+async def open_incident(
+    incident_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> IncidentRead:
+    """Фиксирует первое открытие карточки назначенным обучаемым."""
+    if current_user.role != UserRole.TRAINEE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Открытие карточки фиксируется только для обучаемого",
+        )
+
+    incident = await _load_incident(database, incident_id, for_update=True)
+    _ensure_incident_visible(incident, current_user)
+    mark_incident_opened(incident)
+    await database.commit()
     return _to_read_model(incident)
