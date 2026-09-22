@@ -1,13 +1,19 @@
 """SQLAlchemy-модели базовой учебной сессии."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Table, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.modules.identity.models import User
+
+if TYPE_CHECKING:
+    from app.modules.incidents.models import Incident
 
 
 class TrainingSessionState(StrEnum):
@@ -73,4 +79,8 @@ class TrainingSession(Base):
     trainees: Mapped[list[User]] = relationship(
         secondary=training_session_trainees,
         order_by=User.id,
+    )
+    incidents: Mapped[list[Incident]] = relationship(
+        back_populates="training_session",
+        cascade="all, delete-orphan",
     )
