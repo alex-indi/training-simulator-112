@@ -1,36 +1,93 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import styles from './App.module.css'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
-const roleContent = {
-  ADMIN: {
-    label: 'Администратор',
-    title: 'Настройка учебного стенда',
-    description: 'Управляйте пользователями, ролями, ДДС и справочниками.',
-    action: 'Открыть параметры стенда',
-  },
-  INSTRUCTOR: {
-    label: 'Преподаватель',
-    title: 'Управление обучением',
-    description: 'Готовьте занятия, назначайте обучаемых и наблюдайте за ходом смены.',
-    action: 'Создать учебную сессию',
-  },
-  TRAINEE: {
-    label: 'Обучаемый',
-    title: 'Рабочее место диспетчера ДДС',
-    description: 'Получайте учебные карточки и принимайте решения по реагированию.',
-    action: 'Перейти к карточкам',
-  },
+const roleLabels = {
+  ADMIN: 'Администратор',
+  INSTRUCTOR: 'Преподаватель',
+  TRAINEE: 'Диспетчер ДДС',
 }
 
-async function requestJson(path, demoUsername) {
-  const headers = demoUsername ? { 'X-Demo-User': demoUsername } : {}
-  const response = await fetch(`${apiUrl}${path}`, { headers })
+const lifecycleLabels = {
+  CREATED: 'Создана',
+  DELIVERED: 'Добавлена',
+  OPENED: 'Получена службой',
+  FINISHED: 'Завершена',
+}
 
+const emptyFilters = {
+  number: '',
+  type: '',
+  address: '',
+  applicant: '',
+  description: '',
+  source: '',
+  state: '',
+}
+
+const fullDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'Europe/Moscow',
+})
+
+const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+  timeZone: 'Europe/Moscow',
+})
+
+const timeFormatter = new Intl.DateTimeFormat('ru-RU', {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+  timeZone: 'Europe/Moscow',
+})
+
+function formatDate(value) {
+  return value ? dateFormatter.format(new Date(value)) : '—'
+}
+
+function formatTime(value) {
+  return value ? timeFormatter.format(new Date(value)) : '—'
+}
+
+function formatDateTime(value) {
+  return value ? `${formatDate(value)} ${formatTime(value)}` : '—'
+}
+
+function compactServiceName(service) {
+  return service
+    .replace(/^ДДС\s+/i, '')
+    .replace(/пожарной охраны/i, 'Служба 101')
+    .replace(/скорой медицинской помощи/i, 'Служба 103')
+    .replace(/полиции/i, 'Служба 102')
+}
+
+function includesText(value, filter) {
+  return !filter || (value || '').toLocaleLowerCase('ru-RU').includes(filter.toLocaleLowerCase('ru-RU'))
+}
+
+async function requestJson(path, demoUsername, options = {}) {
+  const headers = new Headers(options.headers)
+  if (demoUsername) headers.set('X-Demo-User', demoUsername)
+
+  const response = await fetch(`${apiUrl}${path}`, { ...options, headers })
   if (!response.ok) {
-    throw new Error('Backend локального стенда недоступен')
+    let detail = 'Backend локального стенда недоступен'
+    try {
+      const payload = await response.json()
+      detail = payload.detail || detail
+    } catch {
+      // Ответ без JSON оставляет понятное общее сообщение.
+    }
+    throw new Error(detail)
   }
 
   return response.json()
@@ -39,7 +96,20 @@ async function requestJson(path, demoUsername) {
 function App() {
   const [users, setUsers] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
+  const [incidents, setIncidents] = useState([])
+  const [selectedIncident, setSelectedIncident] = useState(null)
+  const [selectedService, setSelectedService] = useState('')
+  const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
+  const [expandedSearch, setExpandedSearch] = useState(false)
+  const [filters, setFilters] = useState(emptyFilters)
+  const [now, setNow] = useState(() => new Date())
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     Promise.all([requestJson('/api/users/demo'), requestJson('/api/users/me')])
@@ -48,66 +118,340 @@ function App() {
         setCurrentUser(user)
       })
       .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (currentUser?.role !== 'TRAINEE') {
+      setIncidents([])
+      return
+    }
+
+    let isCurrent = true
+    setLoading(true)
+    setError('')
+    requestJson('/api/incidents', currentUser.username)
+      .then((items) => {
+        if (isCurrent) setIncidents(items)
+      })
+      .catch((requestError) => {
+        if (isCurrent) setError(requestError.message)
+      })
+      .finally(() => {
+        if (isCurrent) setLoading(false)
+      })
+
+    return () => {
+      isCurrent = false
+    }
+  }, [currentUser])
+
+  const visibleIncidents = useMemo(() => incidents.filter((incident) => {
+    const stateMatches = !filters.state
+      || (filters.state === 'new' && !incident.opened_at)
+      || (filters.state === 'opened' && Boolean(incident.opened_at))
+    return stateMatches
+      && includesText(incident.incident_number, filters.number)
+      && includesText(incident.incident_type, filters.type)
+      && includesText(incident.address, filters.address)
+      && includesText(incident.applicant_name, filters.applicant)
+      && includesText(incident.description, filters.description)
+      && includesText(incident.source, filters.source)
+  }), [filters, incidents])
+
+  const updateFilter = (event) => {
+    setFilters((current) => ({ ...current, [event.target.name]: event.target.value }))
+  }
 
   const selectUser = async (event) => {
     const demoUsername = event.target.value
     setError('')
+    setSelectedIncident(null)
+    setSelectedService('')
+    setServiceHistoryOpen(false)
+    setFilters(emptyFilters)
+    setLoading(true)
 
     try {
       setCurrentUser(await requestJson('/api/users/me', demoUsername))
     } catch (requestError) {
       setError(requestError.message)
+      setLoading(false)
     }
   }
 
-  const currentRole = roleContent[currentUser?.role] || roleContent.TRAINEE
+  const openCard = async (incident) => {
+    setError('')
+    setLoading(true)
+    try {
+      const openedIncident = await requestJson(
+        `/api/incidents/${incident.id}/open`,
+        currentUser.username,
+        { method: 'POST' },
+      )
+      const services = openedIncident.source_snapshot?.notified_services || []
+      setSelectedIncident(openedIncident)
+      setSelectedService(services[0] || 'Служба ДДС')
+      setServiceHistoryOpen(false)
+      setIncidents((items) =>
+        items.map((item) => (item.id === openedIncident.id ? openedIncident : item)),
+      )
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const closeCard = () => {
+    setSelectedIncident(null)
+    setSelectedService('')
+    setServiceHistoryOpen(false)
+  }
+
+  const selectService = (service) => {
+    if (selectedService === service) {
+      setServiceHistoryOpen((isOpen) => !isOpen)
+      return
+    }
+    setSelectedService(service)
+    setServiceHistoryOpen(true)
+  }
+
+  if (currentUser && currentUser.role !== 'TRAINEE') {
+    return (
+      <main className={styles.roleScreen}>
+        <section>
+          <div className={styles.systemName}>ГБУ Система 112</div>
+          <h1>{roleLabels[currentUser.role]}</h1>
+          <p>Для просмотра рабочего места ДДС выберите пользователя с ролью «Диспетчер ДДС».</p>
+          <select value={currentUser.username} onChange={selectUser}>
+            {users.map((user) => (
+              <option key={user.id} value={user.username}>
+                {user.full_name} · {roleLabels[user.role]}
+              </option>
+            ))}
+          </select>
+        </section>
+      </main>
+    )
+  }
+
+  const snapshot = selectedIncident?.source_snapshot
+  const services = snapshot?.notified_services || []
+  const features = snapshot?.features || []
+  const newCount = incidents.filter((incident) => !incident.opened_at).length
+  const filtersActive = Object.values(filters).some(Boolean)
 
   return (
-    <main className={styles.page}>
-      <section className={styles.shell}>
-        <header className={styles.header}>
-          <div className={styles.brand}>
-            <div className={styles.badge} aria-hidden="true">
-              112
+    <main className={styles.armShell}>
+      {error && (
+        <div className={styles.errorBanner} role="alert">
+          <strong>Ошибка:</strong> {error}
+        </div>
+      )}
+
+      {selectedIncident ? (
+        <section className={styles.incidentWorkspace} aria-busy={loading}>
+          <header className={styles.telephonyStrip}>
+            <div className={styles.callState}>
+              <span className={styles.headsetIcon}>◖</span>
+              <div><span>не подключен</span><small>линия оператора</small></div>
+              <div className={styles.callButtons}>
+                <button type="button" disabled title="Архив записей телефонных разговоров">записи звонков</button>
+                <button type="button" disabled title="Входящие и исходящие SMS">список SMS</button>
+              </div>
             </div>
-            <div>
-              <p className={styles.eyebrow}>Учебный тренажёр</p>
-              <strong>Диспетчерская ДДС</strong>
+            <div className={styles.phoneField}><b>◖</b><span>АОН<strong>{selectedIncident.applicant_phone || 'не определён'}</strong></span><i>▰</i></div>
+            <div className={styles.phoneField}><b>◖</b><span>предоставленный<strong>{selectedIncident.applicant_phone || 'не указан'}</strong></span><i>▰</i></div>
+            <div className={styles.phoneField}><b>◖</b><span>телефон на место<strong>не указан</strong></span></div>
+            <div className={styles.incidentIdentity}>
+              <strong>Происшествие {selectedIncident.incident_number}</strong>
+              <span>Сохр. {formatDateTime(selectedIncident.delivered_at)}</span>
+              <span>Опер. 0, АРМ 4, УМЦ О.п.</span>
+            </div>
+            <div className={styles.viewTabs}>
+              <button className={styles.viewTabActive} type="button" title="Режим просмотра сохранённой карточки">просмотр</button>
+              <button type="button" disabled title="Дополнения к карточке">дополнение</button>
+            </div>
+          </header>
+
+          <div className={styles.incidentInfoStrip}>
+            <div><strong>{selectedIncident.applicant_name || 'ФИО заявителя не указано'}</strong><span>заявитель</span></div>
+            <div className={styles.incidentIndicators}>
+              <span>Пострадавшие: нет</span>
+              <span>Отказ от скорой: нет</span>
+              <span>Заблокированные: нет</span>
+              <button type="button" disabled title="Признак чрезвычайной ситуации">ЧС ⚡</button>
+              <button className={styles.emergencyButton} type="button" disabled title="Признак чрезвычайного происшествия">ЧП ▲</button>
+              <button className={styles.pencilButton} type="button" disabled title="Редактирование классификации доступно оператору Службы 112">✎</button>
             </div>
           </div>
-          <label className={styles.userSelect}>
-            <span>Текущий пользователь</span>
-            <select value={currentUser?.username || ''} onChange={selectUser} disabled={!users.length}>
-              {!currentUser && <option value="">Загрузка…</option>}
-              {users.map((user) => (
-                <option key={user.id} value={user.username}>
-                  {user.full_name} · {roleContent[user.role].label}
-                </option>
+
+          <div className={styles.incidentBody}>
+            <section className={styles.callerColumn}>
+              <div className={styles.addressPanel}>
+                <strong>{selectedIncident.address}</strong>
+                <span>{selectedIncident.latitude !== null && selectedIncident.longitude !== null
+                  ? `Координаты: ${selectedIncident.latitude}, ${selectedIncident.longitude}`
+                  : 'Описательный адрес не указан'}</span>
+                <button type="button" disabled title="Открыть точку происшествия на карте">⌖</button>
+              </div>
+              <div className={styles.reportPanel}>
+                <strong>{formatDateTime(selectedIncident.reported_at)} &nbsp; 0 УМЦ О.п.</strong>
+                <p>{selectedIncident.description}</p>
+                <span>Источник: {selectedIncident.source}</span>
+              </div>
+            </section>
+
+            <section className={styles.classificationColumn}>
+              <div className={styles.classificationTitle}>Происшествие {selectedIncident.incident_type}</div>
+              <div className={styles.classificationLine}>
+                <strong>{features.length ? features.join(' · ') : selectedIncident.description}</strong>
+              </div>
+              <div className={styles.classificationLine}>Класс: <strong>{selectedIncident.incident_type}</strong>;</div>
+              <div className={styles.classificationLine}>[ВИС] Класс:</div>
+            </section>
+          </div>
+
+          <div className={styles.serviceArea}>
+            {serviceHistoryOpen && (
+              <div className={styles.serviceHistory}>
+                <button type="button" onClick={() => setServiceHistoryOpen(false)} aria-label="Закрыть историю">×</button>
+                <strong>{selectedService}</strong>
+                <div><span>оп. 0</span><b>›</b><time>{formatDateTime(selectedIncident.delivered_at)}</time><em>Добавлена</em></div>
+                {selectedService === services[0] && (
+                  <div><span>оп. 0</span><b>›</b><time>{formatDateTime(selectedIncident.opened_at)}</time><em>Получена службой</em></div>
+                )}
+              </div>
+            )}
+
+            <div className={styles.servicesDock}>
+              <div className={styles.servicesLabel}>Службы:</div>
+              {(services.length ? services : ['Служба ДДС']).map((service, index) => (
+                <button
+                  className={`${styles.serviceTile} ${selectedService === service ? styles.serviceTileActive : ''}`}
+                  key={service}
+                  type="button"
+                  onClick={() => selectService(service)}
+                  title="Выбрать службу и показать историю статусов"
+                >
+                  <span>⌃</span>
+                  <strong>{compactServiceName(service)}</strong>
+                  <small>{index === 0
+                    ? `${formatTime(selectedIncident.opened_at)} Получена службой`
+                    : `${formatTime(selectedIncident.delivered_at)} Добавлена`}</small>
+                  {selectedService === service && <i title="Последовательный ввод статусов будет реализован в UT112-9">✎</i>}
+                </button>
               ))}
-            </select>
-          </label>
-        </header>
+              {['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
+                <button className={`${styles.serviceTile} ${styles.serviceTileMuted}`} key={service} type="button" disabled>
+                  <span>⌃</span><strong>{service}</strong><small>не оповещена</small>
+                </button>
+              ))}
+              <button className={styles.dockControl} type="button" onClick={() => setServiceHistoryOpen((isOpen) => !isOpen)} title="Развернуть или свернуть историю выбранной службы">↕</button>
+              <div className={styles.dockSpacer} />
+              <button className={styles.dockControl} type="button" disabled title="Сообщения по карточке">▣</button>
+              <button className={styles.closeCardButton} type="button" onClick={closeCard} title="Закрыть карточку и вернуться к списку">×</button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className={styles.registryWorkspace} aria-busy={loading}>
+          <header className={styles.registrySearchArea}>
+            <div className={styles.searchPanel}>
+              <div className={styles.searchTitleRow}>
+                <h1>Поиск происшествий</h1>
+                <span aria-hidden="true">⌕</span>
+              </div>
+              <div className={styles.searchControls}>
+                <button className={styles.expandSearchButton} type="button" onClick={() => setExpandedSearch((isOpen) => !isOpen)}>
+                  расширенный по параметрам {expandedSearch ? '⌃' : '⌄'}
+                </button>
+                <button type="button" onClick={() => setFilters(emptyFilters)} disabled={!filtersActive}>сбросить</button>
+              </div>
+            </div>
 
-        <div className={styles.content}>
-          <div className={styles.rolePill}>{currentRole.label}</div>
-          <p className={styles.eyebrow}>Локальный демонстрационный стенд</p>
-          <h1>{currentRole.title}</h1>
-          <p className={styles.description}>{currentRole.description}</p>
-          {error ? (
-            <div className={styles.error} role="alert">{error}</div>
-          ) : (
-            <button className={styles.primaryAction} type="button" disabled={!currentUser}>
-              {currentRole.action}
-            </button>
+            <div className={styles.clockPanel}>
+              <div>
+                <strong>{fullDateFormatter.format(now)}</strong>
+                <label>
+                  <select value={currentUser?.username || ''} onChange={selectUser} disabled={!users.length} aria-label="Текущий пользователь">
+                    {!currentUser && <option value="">загрузка…</option>}
+                    {users.map((user) => (
+                      <option key={user.id} value={user.username}>
+                        {user.full_name} · {roleLabels[user.role]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <time>{formatTime(now)}</time>
+            </div>
+          </header>
+
+          {expandedSearch && (
+            <form className={styles.advancedSearch} onSubmit={(event) => event.preventDefault()}>
+              <label>тип происшествия<input name="type" value={filters.type} onChange={updateFilter} /></label>
+              <label>признаки происшествия<input name="description" value={filters.description} onChange={updateFilter} /></label>
+              <label>по адресу<input name="address" value={filters.address} onChange={updateFilter} /></label>
+              <label>по заявителю (ФИО/АОН)<input name="applicant" value={filters.applicant} onChange={updateFilter} /></label>
+              <label>источник происшествия<input name="source" value={filters.source} onChange={updateFilter} /></label>
+              <label>по номеру карточки<input name="number" value={filters.number} onChange={updateFilter} /></label>
+              <label>статус<select name="state" value={filters.state} onChange={updateFilter}><option value="">любой</option><option value="new">Добавлена</option><option value="opened">Получена службой</option></select></label>
+              <button type="button" onClick={() => setFilters(emptyFilters)}>сбросить</button>
+            </form>
           )}
-        </div>
 
-        <footer className={styles.footer}>
-          <span className={styles.statusDot} />
-          Роль определяется backend по выбранному demo-пользователю
-        </footer>
-      </section>
+          <section className={styles.registryContent}>
+            <div className={styles.registryToolbar}>
+              <h2>Список происшествий <span>⌃</span></h2>
+              <div><span>ⓘ уведомления</span><select disabled><option>выберите что показать</option></select></div>
+            </div>
+
+            <div className={styles.registryHeader} aria-hidden="true">
+              <span>Связи</span><span>ЧС</span><span>Опер.</span><span>АРМ</span><span>Номер</span><span>Дата ↓</span><span>Время</span><span>Тип происшествия</span><span>Постр.</span><span>Адрес</span><span>Статус службы</span><span />
+            </div>
+
+            <div className={styles.registryRows}>
+              {loading && !incidents.length ? (
+                <div className={styles.registryEmpty}>Загрузка происшествий…</div>
+              ) : visibleIncidents.length ? visibleIncidents.map((incident) => (
+                <button
+                  key={incident.id}
+                  className={`${styles.registryRow} ${!incident.opened_at ? styles.registryRowNew : ''}`}
+                  type="button"
+                  onClick={() => openCard(incident)}
+                >
+                  <span className={styles.linkCell}>⌄</span>
+                  <span>◆</span>
+                  <span className={styles.operatorCell}>{incident.opened_at ? '0' : '!'}</span>
+                  <span>4</span>
+                  <strong>{incident.incident_number}</strong>
+                  <span>{formatDate(incident.reported_at)}</span>
+                  <time>{formatTime(incident.reported_at)}</time>
+                  <strong>{incident.incident_type}</strong>
+                  <span>Нет</span>
+                  <strong className={styles.registryAddress}>{incident.address}</strong>
+                  <span className={styles.serviceState}><i>◒</i>{lifecycleLabels[incident.lifecycle_state]}</span>
+                  <span>▣</span>
+                  <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
+                </button>
+              )) : (
+                <div className={styles.registryEmpty}>{filtersActive ? 'Происшествия не найдены' : 'Происшествий нет'}</div>
+              )}
+            </div>
+
+            <footer className={styles.registryPager}>
+              <span>Новые: {newCount}</span>
+              <span>Страница: 1⌄</span>
+              <span>Записей на странице: 10⌄</span>
+              <strong>{visibleIncidents.length ? `1-${visibleIncidents.length}` : '0'} из {visibleIncidents.length}</strong>
+              <button type="button" disabled>‹</button><button type="button" disabled>›</button>
+            </footer>
+          </section>
+        </section>
+      )}
     </main>
   )
 }
