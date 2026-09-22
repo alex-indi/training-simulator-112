@@ -1,97 +1,803 @@
-.page {
+.armShell {
+  min-width: 1180px;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #8d9ba3;
+  color: #172026;
+  font-size: 11px;
+}
+.errorBanner {
+  position: fixed;
+  z-index: 30;
+  top: 8px;
+  left: 50%;
+  padding: 8px 14px;
+  transform: translateX(-50%);
+  border: 1px solid #9d2b17;
+  background: #ffd8cf;
+  color: #791e10;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 22%);
+}
+
+.registryWorkspace,
+.incidentWorkspace {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.registrySearchArea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  min-height: 94px;
+  background: #f1f2f2;
+  border-bottom: 5px solid #c6cccf;
+}
+
+.searchPanel {
+  padding: 15px 14px 10px;
+}
+
+.searchTitleRow {
+  height: 39px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #111;
+}
+
+.searchTitleRow h1 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.searchTitleRow > span {
+  margin-left: auto;
+  font-size: 34px;
+  line-height: 1;
+  transform: rotate(-18deg);
+}
+
+.searchControls {
+  height: 30px;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  padding-top: 5px;
+}
+
+.searchControls button {
+  padding: 3px 8px;
+  border: 1px solid #90999e;
+  background: #eef0f0;
+  color: #515b60;
+  font-size: 10px;
+}
+
+.searchControls .expandSearchButton {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #30393d;
+  cursor: pointer;
+}
+
+.clockPanel {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 12px 10px;
+  background: #30373c;
+  color: #fff;
+}
+
+.clockPanel > div {
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+}
+
+.clockPanel strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-transform: capitalize;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clockPanel select {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #d9dfe1;
+  font-size: 9px;
+}
+
+.clockPanel select option {
+  color: #111;
+}
+
+.clockPanel > time {
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.advancedSearch {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 13px 22px;
+  padding: 15px 24px 18px;
+  background: #f1f2f2;
+  border-bottom: 5px solid #c6cccf;
+}
+
+.advancedSearch label {
+  display: grid;
+  gap: 4px;
+  color: #536066;
+  font-size: 9px;
+}
+
+.advancedSearch input,
+.advancedSearch select {
+  min-width: 0;
+  padding: 2px 1px 4px;
+  border: 0;
+  border-bottom: 1px solid #778388;
+  outline: 0;
+  background: transparent;
+  color: #222d32;
+}
+
+.advancedSearch button {
+  align-self: end;
+  justify-self: start;
+  padding: 5px 16px;
+  border: 1px solid #ee6340;
+  background: transparent;
+  color: #dd5434;
+}
+
+.registryContent {
+  flex: 1;
+  padding: 13px 15px 30px;
+  background: #8d9ba3;
+}
+
+.registryToolbar {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  color: #edf1f2;
+}
+
+.registryToolbar h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.registryToolbar h2 span {
+  font-size: 12px;
+}
+
+.registryToolbar > div {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: #d5dcdf;
+}
+
+.registryToolbar select {
+  width: 165px;
+  padding: 4px 7px;
+  border: 1px solid #d0d6d8;
+  background: transparent;
+  color: #e6eaeb;
+  font-size: 10px;
+}
+
+.registryHeader,
+.registryRow {
+  display: grid;
+  grid-template-columns: 42px 42px 48px 44px 110px 64px 70px minmax(180px, 1fr) 44px minmax(280px, 1.75fr) 142px 36px;
+}
+
+.registryHeader {
+  min-height: 28px;
+  align-items: end;
+  padding-bottom: 8px;
+  color: #e1e7e9;
+  font-size: 9px;
+}
+
+.registryHeader span {
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registryRows {
+  border-top: 1px solid #78878f;
+}
+
+.registryRow {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #849198;
+  background: #38444b;
+  color: #f3f6f7;
+  cursor: pointer;
+  text-align: left;
+}
+
+.registryRow:hover,
+.registryRow:focus-visible {
+  z-index: 1;
+  outline: 2px solid #1594d2;
+  outline-offset: -2px;
+  background: #303b42;
+}
+
+.registryRow > span,
+.registryRow > strong,
+.registryRow > time {
+  min-width: 0;
+  min-height: 29px;
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  overflow: hidden;
+  border-right: 1px solid #6e7b82;
+  font-size: 10px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registryRow > time {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.registryRow > small {
+  grid-column: 1 / -1;
+  min-height: 24px;
+  display: grid;
+  grid-template-columns: 74px 155px 70px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  overflow: hidden;
+  background: #4a5860;
+  color: #e5eaec;
+  font-size: 9px;
+}
+
+.registryRow > small b,
+.registryRow > small strong,
+.registryRow > small span,
+.registryRow > small time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registryRowNew {
+  box-shadow: inset 4px 0 0 #ec633b;
+}
+
+.registryRowNew .operatorCell {
+  background: #81394f;
+  color: #fff;
+  font-weight: 700;
+}
+
+.linkCell {
+  justify-content: center;
+  font-size: 15px !important;
+}
+
+.registryAddress {
+  font-size: 10px !important;
+}
+
+.serviceState {
+  gap: 7px;
+}
+
+.serviceState i {
+  color: #f06b42;
+  font-size: 18px;
+  font-style: normal;
+}
+
+.registryEmpty {
+  min-height: 190px;
+  display: grid;
+  place-items: center;
+  color: #e3e8ea;
+  font-size: 14px;
+}
+
+.registryPager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 4px;
+  color: #e0e5e7;
+  font-size: 10px;
+}
+
+.registryPager span:first-child {
+  margin-right: auto;
+}
+
+.registryPager button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 22px;
+}
+
+.telephonyStrip {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 220px minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr) 170px 82px;
+  gap: 5px;
+  padding: 5px;
+  background: #c8ced1;
+}
+
+.callState,
+.phoneField,
+.incidentIdentity {
+  min-width: 0;
+  background: #f1f2f2;
+}
+
+.callState {
+  display: grid;
+  grid-template-columns: 43px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+}
+
+.headsetIcon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  color: #263238;
+  font-size: 22px;
+  transform: rotate(90deg);
+}
+
+.callState > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.callState small {
+  color: #6c777c;
+  font-size: 8px;
+}
+
+.callButtons {
+  display: flex;
+  gap: 6px;
+  padding: 3px 6px 5px 0;
+}
+
+.callButtons button {
+  flex: 1;
+  padding: 3px 4px;
+  border: 1px solid #aeb6ba;
+  background: #e7e9e9;
+  color: #626c71;
+  font-size: 8px;
+}
+
+.phoneField {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 18px;
+  align-items: center;
+}
+
+.phoneField b {
+  display: grid;
+  place-items: center;
+  color: #717b80;
+  font-size: 22px;
+  transform: rotate(90deg);
+}
+
+.phoneField span {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  color: #626d72;
+  font-size: 9px;
+}
+
+.phoneField span strong {
+  overflow: hidden;
+  color: #303a3f;
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneField i {
+  color: #6d777c;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.incidentIdentity {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 7px 8px;
+}
+
+.incidentIdentity strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incidentIdentity span {
+  font-size: 9px;
+}
+
+.viewTabs {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
+}
+
+.viewTabs button {
+  border: 0;
+  background: #354149;
+  color: #fff;
+  font-size: 8px;
+}
+
+.viewTabs .viewTabActive {
+  background: #1587c3;
+}
+
+.incidentInfoStrip {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 45% 55%;
+  gap: 5px;
+  padding: 0 5px 5px;
+  background: #c8ced1;
+}
+
+.incidentInfoStrip > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  background: #f1f2f2;
+  font-size: 9px;
+}
+
+.incidentInfoStrip > div > span {
+  color: #647076;
+}
+
+.incidentIndicators {
+  gap: 8px !important;
+}
+
+.incidentIndicators button {
+  height: 25px;
+  padding: 0 8px;
+  border: 1px solid #aeb7bb;
+  background: #eef0f0;
+  color: #253036;
+  font-weight: 700;
+}
+
+.incidentIndicators .emergencyButton {
+  background: #e35f3e;
+  color: #fff;
+}
+
+.incidentIndicators .pencilButton {
+  width: 27px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 16px;
+}
+
+.incidentBody {
+  min-height: 430px;
+  display: grid;
+  grid-template-columns: 45% 55%;
+  gap: 5px;
+  flex: 1;
+  padding: 0 5px 5px;
+  background: #c8ced1;
+}
+
+.callerColumn,
+.classificationColumn {
+  min-width: 0;
+  background: #eef0f0;
+}
+
+.addressPanel {
+  position: relative;
+  min-height: 78px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 34px 10px 8px;
+  border-bottom: 5px solid #c8ced1;
+}
+
+.addressPanel strong {
+  font-size: 11px;
+}
+
+.addressPanel span {
+  font-size: 10px;
+}
+
+.addressPanel button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: #2e3b42;
+  font-size: 20px;
+}
+
+.reportPanel {
+  min-height: 238px;
+  padding: 12px 9px;
+}
+
+.reportPanel p {
+  margin: 3px 0 9px;
+  font-size: 11px;
+}
+
+.reportPanel span {
+  color: #69757a;
+  font-size: 9px;
+}
+
+.classificationColumn {
+  padding-bottom: 5px;
+  background: #c8ced1;
+}
+
+.classificationTitle {
+  padding: 6px 8px;
+  background: #333b40;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.classificationLine {
+  min-height: 32px;
+  margin-top: 5px;
+  padding: 8px;
+  background: #f1f2f2;
+  font-size: 10px;
+}
+
+.serviceArea {
+  position: relative;
+  min-height: 82px;
+  background: #455159;
+}
+
+.servicesDock {
+  position: absolute;
+  inset: auto 0 0;
+  min-height: 82px;
+  display: flex;
+  align-items: stretch;
+  background: #455159;
+  color: #fff;
+}
+
+.servicesLabel {
+  width: 70px;
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-right: 1px solid #91a0a7;
+  font-size: 9px;
+}
+
+.serviceTile {
+  position: relative;
+  width: 104px;
+  min-width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 4px;
+  border: 0;
+  border-right: 1px solid #91a0a7;
+  background: #455159;
+  color: #fff;
+  cursor: pointer;
+}
+
+.serviceTile > span {
+  position: absolute;
+  top: 3px;
+  font-size: 9px;
+}
+
+.serviceTile strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serviceTile small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serviceTile i {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.serviceTileActive {
+  background: #1687c3;
+}
+
+.serviceTileMuted {
+  color: #d4dadc;
+}
+
+.serviceTile:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.dockControl,
+.closeCardButton {
+  width: 39px;
+  align-self: center;
+  height: 38px;
+  margin: 0 5px;
+  border: 1px solid #a2adb2;
+  background: transparent;
+  color: #fff;
+  font-size: 22px;
+}
+
+.dockSpacer {
+  flex: 1;
+}
+
+.serviceHistory {
+  position: absolute;
+  z-index: 10;
+  left: 174px;
+  bottom: 78px;
+  width: 410px;
+  padding: 6px 8px 8px;
+  background: #1484bd;
+  color: #fff;
+  box-shadow: 3px 4px 0 rgb(0 0 0 / 32%);
+}
+
+.serviceHistory > button {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+
+.serviceHistory > strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+}
+
+.serviceHistory > div {
+  display: grid;
+  grid-template-columns: 38px 12px 125px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+  font-size: 8px;
+}
+
+.serviceHistory em {
+  font-style: normal;
+}
+
+.roleScreen {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 32px;
+  background: #8d9ba3;
 }
 
-.hero {
-  width: min(720px, 100%);
-  padding: clamp(32px, 7vw, 72px);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 32px;
-  background:
-    linear-gradient(145deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
-  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+.roleScreen section {
+  width: 440px;
+  padding: 26px;
+  border-top: 5px solid #1587c3;
+  background: #eef0f0;
+  box-shadow: 0 18px 45px rgb(0 0 0 / 24%);
 }
 
-.badge {
-  width: 78px;
-  height: 78px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 32px;
-  border-radius: 24px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 25px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  box-shadow: 0 12px 32px rgba(239, 68, 68, 0.3);
+.systemName {
+  color: #667278;
+  font-size: 11px;
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  color: #93c5fd;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.roleScreen h1 {
+  margin: 7px 0 14px;
 }
 
-.hero h1 {
-  margin: 0;
-  color: #f8fafc;
-  font-size: clamp(38px, 7vw, 68px);
-  line-height: 0.98;
-  letter-spacing: -0.055em;
-}
-
-.description {
-  max-width: 560px;
-  margin: 24px 0 36px;
-  color: #cbd5e1;
-  font-size: clamp(17px, 2.4vw, 21px);
+.roleScreen p {
+  color: #4e5a60;
   line-height: 1.55;
 }
 
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 16px;
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  border-radius: 999px;
-  background: rgba(16, 185, 129, 0.08);
-  color: #a7f3d0;
-  font-size: 14px;
-  font-weight: 600;
+.roleScreen select {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #98a3a8;
+  background: #fff;
 }
 
-.statusDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.12);
-}
-
-@media (max-width: 560px) {
-  .page {
-    padding: 16px;
+@media (max-height: 720px) {
+  .incidentBody {
+    min-height: 340px;
   }
 
-  .hero {
-    border-radius: 24px;
-  }
-
-  .status {
-    align-items: flex-start;
-    border-radius: 18px;
-  }
-
-  .statusDot {
-    flex: 0 0 auto;
-    margin-top: 5px;
+  .serviceArea,
+  .servicesDock {
+    min-height: 70px;
   }
 }
