@@ -1,11 +1,12 @@
 """REST API готовых карточек происшествий."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.db.dependencies import get_database_session
 from app.modules.identity.dependencies import get_current_user
@@ -26,6 +27,7 @@ from app.modules.incidents.workflow import (
     perform_incident_action,
 )
 from app.modules.training.models import (
+    QueueMode,
     TrainingRun,
     TrainingSession,
     TrainingSessionState,
@@ -51,15 +53,46 @@ def _to_action_read_model(action: IncidentAction) -> IncidentActionRead:
 
 
 def _to_read_model(incident: Incident, user: User) -> IncidentRead:
+    member_run = next(
+        (run for run in incident.training_session.runs if run.trainee_id == user.id), None
+    )
+    is_shared = incident.training_group_id is not None
     can_act = (
         user.role == UserRole.TRAINEE
         and incident.training_session.state == TrainingSessionState.ACTIVE
-        and (incident.training_run is None or incident.training_run.trainee_id == user.id)
+        and (
+            incident.claimed_by_training_run_id == member_run.id
+            if is_shared and member_run is not None
+            else not is_shared
+            and (incident.training_run is None or incident.training_run.trainee_id == user.id)
+        )
+    )
+    claimant = next(
+        (
+            run
+            for run in incident.training_session.runs
+            if run.id == incident.claimed_by_training_run_id
+        ),
+        None,
     )
     return IncidentRead(
         id=incident.id,
         training_session_id=incident.training_session_id,
         training_run_id=incident.training_run_id,
+        training_group_id=incident.training_group_id,
+        claimed_by_training_run_id=incident.claimed_by_training_run_id,
+        claimed_at=incident.claimed_at,
+        claimant_name=claimant.trainee.full_name if claimant else None,
+        claimant_workstation_number=claimant.workstation_number if claimant else None,
+        can_claim=bool(
+            is_shared
+            and member_run
+            and member_run.group_id == incident.training_group_id
+            and member_run.queue_mode == QueueMode.SHARED_QUEUE
+            and incident.claimed_by_training_run_id is None
+            and incident.training_session.state == TrainingSessionState.ACTIVE
+        ),
+        can_edit=can_act,
         incident_number=incident.incident_number,
         reported_at=incident.reported_at,
         source=incident.source,
@@ -91,9 +124,19 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
 def _ensure_incident_visible(incident: Incident, user: User) -> None:
     session = incident.training_session
     is_owner = user.role == UserRole.INSTRUCTOR and session.instructor_id == user.id
-    is_trainee = user.role == UserRole.TRAINEE and any(
-        trainee.id == user.id for trainee in session.trainees
-    ) and (incident.training_run is None or incident.training_run.trainee_id == user.id)
+    if incident.training_group_id is not None:
+        is_trainee = user.role == UserRole.TRAINEE and any(
+            run.trainee_id == user.id
+            and run.group_id == incident.training_group_id
+            and run.queue_mode == QueueMode.SHARED_QUEUE
+            for run in session.runs
+        )
+    else:
+        is_trainee = (
+            user.role == UserRole.TRAINEE
+            and any(trainee.id == user.id for trainee in session.trainees)
+            and (incident.training_run is None or incident.training_run.trainee_id == user.id)
+        )
     if user.role != UserRole.ADMIN and not is_owner and not is_trainee:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -111,9 +154,10 @@ async def _load_incident(
         select(Incident)
         .where(Incident.id == incident_id)
         .options(
-            selectinload(Incident.training_session).selectinload(
-                TrainingSession.trainees
-            ),
+            selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
+            selectinload(Incident.training_session)
+            .selectinload(TrainingSession.runs)
+            .selectinload(TrainingRun.trainee),
             selectinload(Incident.actions),
             selectinload(Incident.training_run),
         )
@@ -145,7 +189,9 @@ async def create_incident(
         )
 
     result = await database.scalars(
-        select(TrainingSession).options(selectinload(TrainingSession.runs)).where(
+        select(TrainingSession)
+        .options(selectinload(TrainingSession.runs), selectinload(TrainingSession.groups))
+        .where(
             TrainingSession.id == payload.training_session_id,
             TrainingSession.instructor_id == current_user.id,
         )
@@ -163,10 +209,29 @@ async def create_incident(
         )
 
     matching_runs = [
-        run for run in training_session.runs
+        run
+        for run in training_session.runs
         if payload.trainee_id is None or run.trainee_id == payload.trainee_id
     ]
-    if len(matching_runs) > 1 or (payload.trainee_id is not None and not matching_runs):
+    if payload.training_group_id is not None and payload.trainee_id is not None:
+        raise HTTPException(status_code=422, detail="Укажите группу или обучаемого")
+    group = (
+        next(
+            (group for group in training_session.groups if group.id == payload.training_group_id),
+            None,
+        )
+        if payload.training_group_id is not None
+        else None
+    )
+    if payload.training_group_id is not None and (
+        group is None
+        or group.queue_mode != QueueMode.SHARED_QUEUE
+        or not any(run.group_id == group.id for run in training_session.runs)
+    ):
+        raise HTTPException(status_code=422, detail="Группа не принадлежит общей очереди занятия")
+    if (not group and len(matching_runs) > 1) or (
+        payload.trainee_id is not None and not matching_runs
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Укажите обучаемого из текущей учебной сессии",
@@ -176,8 +241,14 @@ async def create_incident(
         training_session_id=training_session.id,
         source_snapshot=payload.source_snapshot.model_dump(mode="json"),
     )
-    if matching_runs:
-        incident.training_run = matching_runs[0]
+    if group:
+        incident.training_group_id = group.id
+    elif matching_runs:
+        run = matching_runs[0]
+        if run.queue_mode == QueueMode.SHARED_QUEUE and run.group_id is not None:
+            incident.training_group_id = run.group_id
+        else:
+            incident.training_run = run
     database.add(incident)
     await database.commit()
     incident.training_session = training_session
@@ -192,6 +263,9 @@ async def list_incidents(
     """Возвращает карточки только из доступных пользователю учебных сессий."""
     statement = select(Incident).options(
         selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
+        selectinload(Incident.training_session)
+        .selectinload(TrainingSession.runs)
+        .selectinload(TrainingRun.trainee),
         selectinload(Incident.actions),
         selectinload(Incident.training_run),
     )
@@ -200,11 +274,32 @@ async def list_incidents(
             TrainingSession.instructor_id == current_user.id
         )
     elif current_user.role == UserRole.TRAINEE:
-        statement = statement.join(TrainingSession).join(
-            training_session_trainees
-        ).outerjoin(TrainingRun, Incident.training_run_id == TrainingRun.id).where(
-            training_session_trainees.c.trainee_id == current_user.id,
-            or_(Incident.training_run_id.is_(None), TrainingRun.trainee_id == current_user.id),
+        member_run = aliased(TrainingRun)
+        statement = (
+            statement.join(TrainingSession)
+            .join(training_session_trainees)
+            .outerjoin(TrainingRun, Incident.training_run_id == TrainingRun.id)
+            .where(
+                training_session_trainees.c.trainee_id == current_user.id,
+                or_(
+                    and_(
+                        Incident.training_group_id.is_(None),
+                        or_(
+                            Incident.training_run_id.is_(None),
+                            TrainingRun.trainee_id == current_user.id,
+                        ),
+                    ),
+                    Incident.training_group_id.in_(
+                        select(member_run.group_id)
+                        .where(
+                            member_run.training_session_id == Incident.training_session_id,
+                            member_run.trainee_id == current_user.id,
+                            member_run.queue_mode == QueueMode.SHARED_QUEUE,
+                        )
+                        .correlate(Incident)
+                    ),
+                ),
+            )
         )
 
     result = await database.scalars(statement.order_by(Incident.id.desc()))
@@ -223,6 +318,57 @@ async def read_incident(
     return _to_read_model(incident, current_user)
 
 
+@router.post("/{incident_id}/claim", response_model=IncidentRead)
+async def claim_incident(
+    incident_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> IncidentRead:
+    """Одна условная запись в БД допускает только одного владельца общей карточки."""
+    if current_user.role != UserRole.TRAINEE:
+        raise HTTPException(status_code=403, detail="Карточку может взять только обучаемый")
+    incident = await _load_incident(database, incident_id)
+    _ensure_incident_visible(incident, current_user)
+    run = next(
+        (run for run in incident.training_session.runs if run.trainee_id == current_user.id), None
+    )
+    if (
+        incident.training_group_id is None
+        or run is None
+        or run.group_id != incident.training_group_id
+        or run.queue_mode != QueueMode.SHARED_QUEUE
+    ):
+        raise HTTPException(status_code=409, detail="Карточка не входит в вашу общую очередь")
+    if incident.training_session.state != TrainingSessionState.ACTIVE:
+        raise HTTPException(status_code=409, detail="Занятие не активно")
+    claimed_at = datetime.now(UTC)
+    result = await database.execute(
+        update(Incident)
+        .where(Incident.id == incident_id, Incident.claimed_by_training_run_id.is_(None))
+        .values(
+            claimed_by_training_run_id=run.id,
+            claimed_at=claimed_at,
+            training_run_id=run.id,
+        )
+        .returning(Incident.id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=409, detail="Карточка уже взята в работу другим диспетчером"
+        )
+    await database.commit()
+    database.expire_all()
+    updated = await _load_incident(database, incident_id)
+    from app.main import sio
+
+    await sio.emit(
+        "incident.claimed",
+        {"session_id": updated.training_session_id, "incident_id": incident_id},
+        room=f"session:{updated.training_session_id}",
+    )
+    return _to_read_model(updated, current_user)
+
+
 @router.post("/{incident_id}/open", response_model=IncidentRead)
 async def open_incident(
     incident_id: int,
@@ -238,6 +384,11 @@ async def open_incident(
 
     incident = await _load_incident(database, incident_id, for_update=True)
     _ensure_incident_visible(incident, current_user)
+    if incident.training_group_id is not None and incident.claimed_by_training_run_id != next(
+        (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
+        None,
+    ):
+        raise HTTPException(status_code=409, detail="Сначала возьмите карточку в работу")
     mark_incident_opened(
         incident,
         actor_user_id=current_user.id,
@@ -263,6 +414,13 @@ async def change_incident_status(
 
     incident = await _load_incident(database, incident_id, for_update=True)
     _ensure_incident_visible(incident, current_user)
+    if incident.training_group_id is not None and incident.claimed_by_training_run_id != next(
+        (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
+        None,
+    ):
+        raise HTTPException(
+            status_code=409, detail="Карточка уже взята в работу другим диспетчером"
+        )
     if incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -290,4 +448,12 @@ async def change_incident_status(
 
     database.add(action)
     await database.commit()
+    if incident.training_group_id is not None:
+        from app.main import sio
+
+        await sio.emit(
+            "incident.updated",
+            {"session_id": incident.training_session_id, "incident_id": incident.id},
+            room=f"session:{incident.training_session_id}",
+        )
     return _to_read_model(incident, current_user)

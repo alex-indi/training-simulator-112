@@ -4,7 +4,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.modules.training.models import DeliveryOrder, QueueMode, TrainingMode, TrainingSessionState
+from app.modules.incidents.schemas import IncidentSnapshot
+from app.modules.training.models import (
+    DeliveryOrder,
+    DeliveryState,
+    QueueMode,
+    TrainingMode,
+    TrainingSessionState,
+)
 
 
 class SessionSettings(BaseModel):
@@ -93,6 +100,8 @@ class ReadinessRead(BaseModel):
     offline_count: int
     warnings: list[str]
     can_start: bool
+    prepared_count: int = 0
+    approved_count: int = 0
 
 
 class TrainingSessionRead(SessionSettings):
@@ -117,3 +126,40 @@ class TemplateRead(BaseModel):
     name: str
     settings: dict
     created_at: datetime
+
+
+class QueueItemWrite(BaseModel):
+    training_run_id: int | None = Field(default=None, gt=0)
+    training_group_id: int | None = Field(default=None, gt=0)
+    title: str = Field(min_length=1, max_length=200)
+    snapshot: IncidentSnapshot
+
+    @model_validator(mode="after")
+    def one_target(self) -> "QueueItemWrite":
+        if (self.training_run_id is None) == (self.training_group_id is None):
+            raise ValueError("Укажите один АРМ или одну группу")
+        return self
+
+
+class QueueItemUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    snapshot: IncidentSnapshot
+
+
+class QueueItemRead(BaseModel):
+    id: int
+    training_run_id: int | None
+    training_group_id: int | None
+    scenario_id: int | None
+    title: str
+    snapshot: IncidentSnapshot
+    position: int
+    delivery_position: int | None
+    approved: bool
+    delivery_state: DeliveryState
+    delivered_at: datetime | None
+    incident_id: int | None
+
+
+class GenerateQueueRequest(BaseModel):
+    count_per_run: int = Field(ge=1, le=100)

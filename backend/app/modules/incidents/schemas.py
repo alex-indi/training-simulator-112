@@ -71,6 +71,7 @@ class IncidentCreate(BaseModel):
 
     training_session_id: int = Field(gt=0)
     trainee_id: int | None = Field(default=None, gt=0)
+    training_group_id: int | None = Field(default=None, gt=0)
     source_snapshot: IncidentSnapshot
 
 
@@ -109,6 +110,13 @@ class IncidentRead(BaseModel):
     id: int
     training_session_id: int
     training_run_id: int | None
+    training_group_id: int | None = None
+    claimed_by_training_run_id: int | None = None
+    claimed_at: datetime | None = None
+    claimant_name: str | None = None
+    claimant_workstation_number: int | None = None
+    can_claim: bool = False
+    can_edit: bool = False
     incident_number: str
     reported_at: datetime
     source: str
