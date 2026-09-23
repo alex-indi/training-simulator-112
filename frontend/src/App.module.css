@@ -871,6 +871,64 @@
   font-size: 9px;
 }
 
+.responsePanel {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgb(255 255 255 / 35%);
+  font-size: 9px;
+}
+
+.responseHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.responseHeading > strong {
+  font-size: 10px;
+}
+
+.responsePanel form,
+.responseAssignment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.responsePanel select {
+  flex: 1;
+  min-width: 180px;
+  padding: 5px;
+}
+
+.responsePanel button {
+  padding: 5px 9px;
+  border: 1px solid #fff;
+  background: #32434b;
+  color: #fff;
+}
+
+.responsePanel button:disabled {
+  opacity: 0.5;
+}
+
+.responseAssignment {
+  padding: 5px 0;
+  border-top: 1px solid rgb(255 255 255 / 18%);
+}
+
+.responseAssignment b {
+  color: #e5f7b7;
+}
+
+.responseAssignment details {
+  flex-basis: 100%;
+  line-height: 1.6;
+}
+
 .roleScreen {
   min-height: 100vh;
   display: grid;
