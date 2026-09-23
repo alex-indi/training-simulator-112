@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { io } from 'socket.io-client'
 
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
@@ -140,6 +141,7 @@ function App() {
   const [users, setUsers] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [incidents, setIncidents] = useState([])
+  const [joinedSessionId, setJoinedSessionId] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [selectedService, setSelectedService] = useState('')
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
@@ -193,6 +195,27 @@ function App() {
       isCurrent = false
     }
   }, [currentUser])
+
+  useEffect(() => {
+    if (currentUser?.role !== 'TRAINEE') return undefined
+    let active = true
+    const refresh = () => requestJson('/api/incidents', currentUser.username)
+      .then((items) => { if (active) setIncidents(items) })
+      .catch((cause) => { if (active) setError(cause.message) })
+    const socket = io(apiUrl, { auth: { username: currentUser.username } })
+    socket.on('connect', async () => {
+      try {
+        const sessions = await requestJson('/api/training/sessions', currentUser.username)
+        if (!active) return
+        sessions.filter((item) => item.trainee_ids.includes(currentUser.id))
+          .forEach((item) => socket.emit('subscribe', { session_id: item.id }))
+        refresh()
+      } catch (cause) { if (active) setError(cause.message) }
+    })
+    socket.on('incident.delivered', refresh)
+    const fallback = window.setInterval(refresh, 30000)
+    return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
+  }, [currentUser, joinedSessionId])
 
   const visibleIncidents = useMemo(() => incidents.filter((incident) => {
     const stateMatches = !filters.state
@@ -403,7 +426,7 @@ function App() {
 
   return (
     <main className={styles.armShell}>
-      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} />}
+      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} onJoined={setJoinedSessionId} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <strong>Ошибка:</strong> {error}

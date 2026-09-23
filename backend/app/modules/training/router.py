@@ -1,5 +1,6 @@
 """REST API подготовки занятия и учебного класса."""
 
+import math
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -13,7 +14,9 @@ from app.db.dependencies import get_database_session
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.training.models import (
+    QueueMode,
     TrainingGroup,
+    TrainingMode,
     TrainingRun,
     TrainingSession,
     TrainingSessionState,
@@ -72,6 +75,29 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         warnings.append("Назначьте рабочее место каждому участнику")
     if online < len(runs):
         warnings.append(f"Offline: {len(runs) - online}")
+    prepared = len(item.queue_items)
+    approved = sum(queue_item.approved for queue_item in item.queue_items)
+    required_per_run = (
+        math.ceil(item.duration_minutes * 60 / item.delivery_interval_seconds)
+        if item.mode == TrainingMode.FLOW
+        and item.duration_minutes
+        and item.delivery_interval_seconds
+        else 0
+    )
+    pool_complete = all(
+        sum(queue_item.training_run_id == run.id for queue_item in item.queue_items)
+        >= required_per_run
+        for run in runs
+    )
+    has_shared_queue = any(run.queue_mode == QueueMode.SHARED_QUEUE for run in runs)
+    if item.mode != TrainingMode.MANUAL and not prepared:
+        warnings.append("Подготовьте пул карточек")
+    if not pool_complete:
+        warnings.append(f"Для FLOW нужно не менее {required_per_run} карточек на АРМ")
+    if prepared != approved:
+        warnings.append("Утвердите подготовленные карточки")
+    if has_shared_queue:
+        warnings.append("Общая очередь будет доступна после UT112-19")
     return ReadinessRead(
         participant_count=len(runs),
         workstation_count=item.workstation_count,
@@ -85,7 +111,13 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
             and assigned == len(runs)
             and stationed == len(runs)
             and len(runs) == len(item.trainees)
+            and (item.mode == TrainingMode.MANUAL or bool(prepared))
+            and pool_complete
+            and prepared == approved
+            and not has_shared_queue
         ),
+        prepared_count=prepared,
+        approved_count=approved,
     )
 
 
@@ -145,6 +177,7 @@ async def _load_session(
             selectinload(TrainingSession.trainees),
             selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
             selectinload(TrainingSession.groups),
+            selectinload(TrainingSession.queue_items),
         )
     )
     if for_update:
@@ -230,6 +263,7 @@ async def list_training_sessions(
         selectinload(TrainingSession.trainees),
         selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
         selectinload(TrainingSession.groups),
+        selectinload(TrainingSession.queue_items),
     )
     if current_user.role == UserRole.INSTRUCTOR:
         statement = statement.where(TrainingSession.instructor_id == current_user.id)
@@ -468,6 +502,11 @@ async def start_session(
         start_training_session(item)
     except InvalidTrainingSessionTransitionError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    from app.modules.training.delivery import finalize_order
+
+    finalize_order(item)
+    item.delivery_elapsed_seconds = 0
+    item.delivery_checked_at = item.started_at
     return await _save(database, item)
 
 
