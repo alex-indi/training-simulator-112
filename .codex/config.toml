@@ -3,6 +3,7 @@
 
 project_doc_max_bytes = 32768
 
+sandbox_mode = "workspace-write"
 [mcp_servers.weeek]
 command = "uvx"
 args = ["--from", "weeek-mcp", "weeek-mcp"]

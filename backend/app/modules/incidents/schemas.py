@@ -4,7 +4,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.modules.incidents.models import IncidentLifecycleState
+from app.modules.incidents.models import (
+    DDSResponseStatus,
+    IncidentActionType,
+    IncidentLifecycleState,
+)
 
 
 class IncidentSnapshot(BaseModel):
@@ -66,7 +70,37 @@ class IncidentCreate(BaseModel):
     """Команда Virtual112 на создание и доставку готовой карточки."""
 
     training_session_id: int = Field(gt=0)
+    trainee_id: int | None = Field(default=None, gt=0)
     source_snapshot: IncidentSnapshot
+
+
+class IncidentActionCreate(BaseModel):
+    """Команда обучаемого на изменение статуса реагирования ДДС."""
+
+    action: IncidentActionType
+    comment: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("comment")
+    @classmethod
+    def normalize_comment(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
+
+
+class IncidentActionRead(BaseModel):
+    """Запись неизменяемой истории действий по карточке."""
+
+    id: int
+    actor_user_id: int | None
+    actor_display_name: str
+    is_system: bool
+    status: str
+    action: IncidentActionType | None
+    from_status: DDSResponseStatus | None
+    to_status: DDSResponseStatus | None
+    comment: str | None
+    created_at: datetime
 
 
 class IncidentRead(BaseModel):
@@ -74,6 +108,7 @@ class IncidentRead(BaseModel):
 
     id: int
     training_session_id: int
+    training_run_id: int | None
     incident_number: str
     reported_at: datetime
     source: str
@@ -86,8 +121,12 @@ class IncidentRead(BaseModel):
     incident_type: str
     source_snapshot: IncidentSnapshot
     lifecycle_state: IncidentLifecycleState
+    dds_status: DDSResponseStatus
+    available_actions: list[IncidentActionType]
+    actions: list[IncidentActionRead]
     created_at: datetime
     delivered_at: datetime | None
     opened_at: datetime | None
     primary_status_at: datetime | None
+    primary_response_duration_seconds: float | None
     finished_at: datetime | None
