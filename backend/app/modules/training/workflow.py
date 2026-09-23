@@ -36,7 +36,12 @@ def start_training_session(
 
     training_session.state = TrainingSessionState.ACTIVE
     training_session.started_at = server_time or datetime.now(UTC)
+    existing_ids = {run.trainee_id for run in training_session.runs}
+    for run in training_session.runs:
+        run.started_at = training_session.started_at
     for trainee in training_session.trainees:
+        if trainee.id in existing_ids:
+            continue
         training_session.runs.append(
             TrainingRun(
                 trainee_id=trainee.id,
