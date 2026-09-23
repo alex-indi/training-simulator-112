@@ -70,6 +70,7 @@ class IncidentCreate(BaseModel):
     """Команда Virtual112 на создание и доставку готовой карточки."""
 
     training_session_id: int = Field(gt=0)
+    trainee_id: int | None = Field(default=None, gt=0)
     source_snapshot: IncidentSnapshot
 
 
@@ -107,6 +108,7 @@ class IncidentRead(BaseModel):
 
     id: int
     training_session_id: int
+    training_run_id: int | None
     incident_number: str
     reported_at: datetime
     source: str

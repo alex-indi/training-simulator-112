@@ -14,7 +14,8 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.modules.identity.models import User
-    from app.modules.training.models import TrainingSession
+    from app.modules.response.models import ResponseAssignment
+    from app.modules.training.models import TrainingRun, TrainingSession
 
 
 class IncidentLifecycleState(StrEnum):
@@ -71,6 +72,9 @@ class Incident(Base):
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         index=True,
     )
+    training_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True
+    )
     incident_number: Mapped[str] = mapped_column(String(64), index=True)
     reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     source: Mapped[str] = mapped_column(String(120))
@@ -112,10 +116,15 @@ class Incident(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     training_session: Mapped[TrainingSession] = relationship(back_populates="incidents")
+    training_run: Mapped[TrainingRun | None] = relationship(back_populates="incidents")
     actions: Mapped[list[IncidentAction]] = relationship(
         back_populates="incident",
         cascade="all, delete-orphan",
         order_by="IncidentAction.created_at, IncidentAction.id",
+    )
+    response_assignments: Mapped[list[ResponseAssignment]] = relationship(
+        back_populates="incident",
+        cascade="all, delete-orphan",
     )
 
 

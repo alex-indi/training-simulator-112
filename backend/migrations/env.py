@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.modules.identity import models as identity_models  # noqa: F401
 from app.modules.incidents import models as incident_models  # noqa: F401
+from app.modules.response import models as response_models  # noqa: F401
 from app.modules.training import models as training_models  # noqa: F401
 
 config = context.config
