@@ -163,9 +163,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    Promise.all([requestJson('/api/users/demo'), requestJson('/api/users/me')])
+    const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
+    Promise.all([
+      requestJson('/api/users/demo'),
+      requestJson('/api/users/me', savedUsername).catch(() => requestJson('/api/users/me')),
+    ])
       .then(([demoUsers, user]) => {
         setUsers(demoUsers)
+        window.sessionStorage.setItem('ut112-demo-username', user.username)
         setCurrentUser(user)
       })
       .catch((requestError) => setError(requestError.message))
@@ -258,7 +263,9 @@ function App() {
     setLoading(true)
 
     try {
-      setCurrentUser(await requestJson('/api/users/me', demoUsername))
+      const selected = await requestJson('/api/users/me', demoUsername)
+      window.sessionStorage.setItem('ut112-demo-username', selected.username)
+      setCurrentUser(selected)
     } catch (requestError) {
       setError(requestError.message)
       setLoading(false)
