@@ -54,4 +54,12 @@
 .notice { background: #e7f7ee; color: #156b42; }
 .back { border: 0 !important; padding-left: 0 !important; background: transparent !important; }
 .badge { border-radius: 20px; padding: 5px 12px; background: #dceaf2; }
+.scenarioList { display: grid; gap: 10px; margin-top: 16px; max-height: 560px; overflow-y: auto; }
+.scenario { padding: 13px; border: 1px solid #d8e2ea; border-radius: 8px; background: #f8fbfd; }
+.scenario div:first-child { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.scenario small { color: #627385; }
+.scenario p { margin: 7px 0 0; }
+.scenarioForm { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 20px; padding: 15px; border-radius: 8px; background: #edf4f8; }
+.scenarioForm h4, .scenarioForm .actions { grid-column: 1 / -1; margin: 0; }
+.scenarioForm label { display: grid; gap: 5px; }
 @media (max-width: 780px) { .header, .topline { flex-direction: column; } .layout { grid-template-columns: 1fr; } .groupForm { grid-template-columns: 1fr 1fr; } }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { io } from 'socket.io-client'
 
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
@@ -143,6 +144,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [incidents, setIncidents] = useState([])
+  const [joinedSessionId, setJoinedSessionId] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [selectedService, setSelectedService] = useState('')
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
@@ -197,6 +199,35 @@ function App() {
       isCurrent = false
     }
   }, [currentUser])
+
+  useEffect(() => {
+    if (currentUser?.role !== 'TRAINEE') return undefined
+    let active = true
+    const refresh = () => requestJson('/api/incidents', currentUser.username)
+      .then((items) => { if (active) setIncidents(items) })
+      .catch((cause) => { if (active) setError(cause.message) })
+    const socket = io(apiUrl, { auth: { username: currentUser.username } })
+    socket.on('connect', async () => {
+      try {
+        const sessions = await requestJson('/api/training/sessions', currentUser.username)
+        if (!active) return
+        sessions.filter((item) => item.trainee_ids.includes(currentUser.id))
+          .forEach((item) => socket.emit('subscribe', { session_id: item.id }))
+        refresh()
+      } catch (cause) { if (active) setError(cause.message) }
+    })
+    socket.on('incident.delivered', refresh)
+    socket.on('incident.claimed', refresh)
+    socket.on('incident.updated', refresh)
+    const fallback = window.setInterval(refresh, 30000)
+    return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
+  }, [currentUser, joinedSessionId])
+
+  useEffect(() => {
+    if (!selectedIncident?.training_group_id) return
+    const current = incidents.find((incident) => incident.id === selectedIncident.id)
+    if (current) setSelectedIncident(current)
+  }, [incidents, selectedIncident?.id, selectedIncident?.training_group_id])
 
   const visibleIncidents = useMemo(() => incidents.filter((incident) => {
     const stateMatches = !filters.state
@@ -280,10 +311,11 @@ function App() {
     setError('')
     setLoading(true)
     try {
+      const isSharedReadOnly = incident.training_group_id && !incident.can_edit
       const openedIncident = await requestJson(
-        `/api/incidents/${incident.id}/open`,
+        `/api/incidents/${incident.id}${isSharedReadOnly ? '' : '/open'}`,
         currentUser.username,
-        { method: 'POST' },
+        isSharedReadOnly ? undefined : { method: 'POST' },
       )
       const [units, assignments] = await Promise.all([
         requestJson(`/api/response/units?incident_id=${incident.id}`, currentUser.username),
@@ -305,6 +337,22 @@ function App() {
       )
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const claimCard = async () => {
+    if (!selectedIncident?.can_claim) return
+    setError('')
+    setLoading(true)
+    try {
+      const claimed = await requestJson(`/api/incidents/${selectedIncident.id}/claim`, currentUser.username, { method: 'POST' })
+      await openCard(claimed)
+      setIncidents(await requestJson('/api/incidents', currentUser.username))
+    } catch (requestError) {
+      setError(requestError.message)
+      setIncidents(await requestJson('/api/incidents', currentUser.username))
     } finally {
       setLoading(false)
     }
@@ -518,7 +566,7 @@ function App() {
 
   return (
     <main className={styles.armShell}>
-      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} />}
+      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} onJoined={setJoinedSessionId} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <strong>Ошибка:</strong> {error}
@@ -527,6 +575,15 @@ function App() {
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
+          {selectedIncident.training_group_id && (
+            <div className={styles.errorBanner}>
+              {selectedIncident.claimant_name
+                ? `В работе: ${selectedIncident.claimant_name} · АРМ ${selectedIncident.claimant_workstation_number}`
+                : 'Новая карточка общей очереди'}
+              {selectedIncident.can_claim && <button type="button" onClick={claimCard} disabled={loading}>Взять в работу</button>}
+              {!selectedIncident.can_claim && !selectedIncident.available_actions.length && <span> · просмотр без права изменения</span>}
+            </div>
+          )}
           <header className={styles.telephonyStrip}>
             <div className={styles.callState}>
               <span className={styles.headsetIcon}><span className={styles.phoneReceiverIcon} aria-hidden="true" /></span>
@@ -787,18 +844,18 @@ function App() {
                   type="button"
                   onClick={() => openCard(incident)}
                 >
-                  <span className={styles.linkCell}><span className={styles.chevronDownIcon} aria-hidden="true" /></span>
-                  <span><span className={styles.emergencyBookmark} aria-hidden="true" /></span>
-                  <span className={`${styles.operatorCell} ${incident.opened_at ? styles.operatorCellZero : ''}`}>{incident.opened_at ? '0' : '!'}</span>
-                  <span>4</span>
+                  <span className={styles.linkCell}>⌄</span>
+                  <span>◆</span>
+                  <span className={styles.operatorCell}>{incident.opened_at ? '0' : '!'}</span>
+                  <span>{incident.claimant_workstation_number || '—'}</span>
                   <strong>{incident.incident_number}</strong>
                   <span>{formatDate(incident.reported_at)}</span>
                   <time>{formatTime(incident.reported_at)}</time>
                   <strong>{incident.incident_type}</strong>
                   <span>Нет</span>
                   <strong className={styles.registryAddress}>{incident.address}</strong>
-                  <span className={styles.serviceState}><i>◒</i>{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
-                  <span className={styles.fileIconCell}><span className={styles.fileTextIcon} aria-hidden="true" /></span>
+                  <span className={styles.serviceState}><i>◒</i>{incident.claimant_name ? `${incident.claimant_name} · АРМ ${incident.claimant_workstation_number} · ` : ''}{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
+                  <span>▣</span>
                   <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
                 </button>
               )) : (

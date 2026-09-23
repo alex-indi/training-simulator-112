@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import styles from './TrainingEnrollment.module.css'
 
-function TrainingEnrollment({ user, requestJson }) {
+function TrainingEnrollment({ user, requestJson, onJoined }) {
   const [sessions, setSessions] = useState([])
   const [sessionId, setSessionId] = useState('')
   const [station, setStation] = useState('')
@@ -47,6 +47,7 @@ function TrainingEnrollment({ user, requestJson }) {
         body: JSON.stringify({ workstation_number: Number(station) }),
       })
       setSessions((items) => items.map((previous) => previous.id === item.id ? item : previous))
+      onJoined(item.id)
     } catch (cause) { setError(cause.message) } finally { setBusy(false) }
   }
 
