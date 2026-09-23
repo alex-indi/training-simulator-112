@@ -173,7 +173,7 @@ async def send_response_message(
         actor_user_id=current_user.id,
     )
     await database.commit()
-    await notify_message_created(message, current_user.id)
+    await notify_message_created(message, current_user.id, assignment.incident.training_session_id)
     return _message_read(message)
 
 
@@ -199,7 +199,7 @@ async def request_response_state(
         body=STATE_REPORTS[assignment.state],
     )
     await database.commit()
-    await notify_message_created(answer, current_user.id)
+    await notify_message_created(answer, current_user.id, assignment.incident.training_session_id)
     return [_message_read(question), _message_read(answer)]
 
 
@@ -232,7 +232,9 @@ async def send_scenario_message(
         raise HTTPException(status_code=409, detail=str(error)) from error
     if existing is None:
         await database.commit()
-        await notify_message_created(message, assignment.training_run.trainee_id)
+        await notify_message_created(
+            message, assignment.training_run.trainee_id, assignment.incident.training_session_id
+        )
     return _message_read(message)
 
 
@@ -422,5 +424,7 @@ async def apply_response_scenario_event(
     )
     await database.commit()
     if existing_message is None:
-        await notify_message_created(message, assignment.training_run.trainee_id)
+        await notify_message_created(
+            message, assignment.training_run.trainee_id, assignment.incident.training_session_id
+        )
     return _assignment_read(assignment)
