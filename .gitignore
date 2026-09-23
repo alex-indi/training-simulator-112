@@ -73,6 +73,7 @@ outputs/
 
 # Customer source materials are stored outside Git
 materials/customer/
+frontend/src/assets/auth-background.pdf
 
 # Local Codex state
 .codex/local/
