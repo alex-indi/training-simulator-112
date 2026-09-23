@@ -1,0 +1,193 @@
+/* eslint-disable react/prop-types */
+import { useCallback, useEffect, useState } from 'react'
+
+import styles from './InstructorWorkspace.module.css'
+
+const emptySettings = {
+  title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
+  delivery_interval_seconds: 120, delivery_order: 'SEQUENTIAL', workstation_count: 30,
+}
+const emptyGroup = { name: '', dds_profile: '', difficulty: 'Средняя', queue_mode: 'INDIVIDUAL_QUEUE' }
+const steps = ['Параметры', 'Учебный класс', 'Распределение', 'Готовность']
+const stateLabels = { DRAFT: 'Черновик', READY: 'Готово к запуску', ACTIVE: 'Активное', COMPLETED: 'Завершённое', CANCELLED: 'Отменённое' }
+const modeLabels = { FLOW: 'Потоковая тренировка', FIXED_SET: 'Набор заданий', MANUAL: 'Управляемая тренировка' }
+
+function InstructorWorkspace({ user, users, selectUser, requestJson }) {
+  const [sessions, setSessions] = useState([])
+  const [templates, setTemplates] = useState([])
+  const [session, setSession] = useState(null)
+  const [step, setStep] = useState(0)
+  const [settings, setSettings] = useState(emptySettings)
+  const [selected, setSelected] = useState([])
+  const [assignment, setAssignment] = useState({ dds_profile: '', difficulty: 'Средняя', queue_mode: 'INDIVIDUAL_QUEUE', group_id: '' })
+  const [groupDraft, setGroupDraft] = useState(emptyGroup)
+  const [editingGroupId, setEditingGroupId] = useState(null)
+  const [templateName, setTemplateName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const openSessionId = session?.id
+
+  const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
+  const jsonOptions = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+  const reload = useCallback(async (sessionId) => {
+    const [items, savedTemplates] = await Promise.all([
+      api('/api/training/sessions'), api('/api/training/templates'),
+    ])
+    setSessions(items)
+    setTemplates(savedTemplates)
+    if (sessionId) {
+      const fresh = items.find((item) => item.id === sessionId)
+      if (fresh) setSession(fresh)
+    }
+  }, [api])
+
+  useEffect(() => {
+    let active = true
+    Promise.all([api('/api/training/sessions'), api('/api/training/templates')])
+      .then(([items, saved]) => { if (active) { setSessions(items); setTemplates(saved) } })
+      .catch((cause) => { if (active) setError(cause.message) })
+    return () => { active = false }
+  }, [api])
+
+  useEffect(() => {
+    if (!openSessionId) return undefined
+    const timer = window.setInterval(() => {
+      api(`/api/training/sessions/${openSessionId}`)
+        .then((fresh) => setSession((current) => current?.id === fresh.id ? fresh : current))
+        .catch(() => {})
+    }, 10000)
+    return () => window.clearInterval(timer)
+  }, [api, openSessionId])
+
+  const runAction = async (action) => {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false) }
+  }
+
+  const openSession = (item) => {
+    setSession(item)
+    setSettings({
+      title: item.title, topic: item.topic, mode: item.mode,
+      duration_minutes: item.duration_minutes ?? 30,
+      delivery_interval_seconds: item.delivery_interval_seconds ?? 120,
+      delivery_order: item.delivery_order, workstation_count: item.workstation_count,
+    })
+    setSelected([])
+    setStep(0)
+  }
+
+  const createSession = () => runAction(async () => {
+    const item = await api('/api/training/sessions', jsonOptions('POST', settings))
+    await reload(item.id)
+    openSession(item)
+    setNotice('Черновик занятия создан')
+  })
+
+  const saveSettings = () => runAction(async () => {
+    const item = await api(`/api/training/sessions/${session.id}`, jsonOptions('PUT', settings))
+    setSession(item)
+    setStep(1)
+    setNotice('Параметры сохранены')
+  })
+
+  const saveGroup = () => runAction(async () => {
+    const path = `/api/training/sessions/${session.id}/groups${editingGroupId ? `/${editingGroupId}` : ''}`
+    const item = await api(path, jsonOptions(editingGroupId ? 'PUT' : 'POST', groupDraft))
+    setSession(item)
+    setGroupDraft(emptyGroup)
+    setEditingGroupId(null)
+    setNotice(editingGroupId ? 'Группа обновлена' : 'Группа создана')
+  })
+
+  const changeGroup = (group, method) => runAction(async () => {
+    const item = await api(`/api/training/sessions/${session.id}/groups/${group.id}`,
+      method === 'DELETE' ? { method } : jsonOptions(method, group))
+    setSession(item)
+  })
+
+  const assignRuns = () => runAction(async () => {
+    const payload = { run_ids: selected, dds_profile: assignment.dds_profile.trim(), difficulty: assignment.difficulty, queue_mode: assignment.queue_mode }
+    if (assignment.group_id) payload.group_id = Number(assignment.group_id)
+    const item = await api(`/api/training/sessions/${session.id}/assign`, jsonOptions('POST', payload))
+    setSession(item)
+    setSelected([])
+    setNotice(`Параметры назначены: ${selected.length} АРМ`)
+  })
+
+  const prepare = () => runAction(async () => {
+    const item = await api(`/api/training/sessions/${session.id}/prepare`, { method: 'POST' })
+    setSession(item)
+    setNotice('Занятие готово к запуску')
+  })
+  const start = () => runAction(async () => {
+    const item = await api(`/api/training/sessions/${session.id}/start`, { method: 'POST' })
+    setSession(item)
+    setNotice('Занятие запущено')
+  })
+  const saveTemplate = () => runAction(async () => {
+    await api('/api/training/templates', jsonOptions('POST', { name: templateName, training_session_id: session.id }))
+    setTemplateName('')
+    await reload(session.id)
+    setNotice('Шаблон сохранён')
+  })
+  const applyTemplate = (id) => runAction(async () => {
+    const item = await api(`/api/training/templates/${id}/sessions`, { method: 'POST' })
+    await reload(item.id)
+    openSession(item)
+    setNotice('Создан черновик из шаблона')
+  })
+
+  const updateSettings = (event) => {
+    const { name, value, type } = event.target
+    setSettings((current) => ({ ...current, [name]: type === 'number' ? Number(value) : value }))
+  }
+  const toggleRun = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  const editable = session && ['DRAFT', 'READY'].includes(session.state)
+  const stationByNumber = new Map(session?.runs?.map((run) => [run.workstation_number, run]) || [])
+
+  return <main className={styles.shell}>
+    <header className={styles.header}>
+      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1></div>
+      <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
+    </header>
+    {error && <p className={styles.error} role="alert">{error}</p>}
+    {notice && <p className={styles.notice} role="status">{notice}</p>}
+    {!session ? <div className={styles.content}>
+      <div className={styles.topline}><div><h2>Учебные смены</h2><p>Подготовьте класс, затем запустите занятие.</p></div><button type="button" onClick={() => { setSettings(emptySettings); setSession({ id: null, state: 'DRAFT', runs: [], groups: [] }); setStep(0) }}>+ Новое занятие</button></div>
+      {['DRAFT', 'READY', 'ACTIVE', 'COMPLETED'].map((state) => <section key={state} className={styles.section}>
+        <h3>{state === 'DRAFT' || state === 'READY' ? 'Черновики' : state === 'ACTIVE' ? 'Активные' : 'Завершённые'}</h3>
+        <div className={styles.cards}>{sessions.filter((item) => state === 'DRAFT' ? ['DRAFT', 'READY'].includes(item.state) : item.state === state).map((item) => <button key={item.id} type="button" onClick={() => openSession(item)} className={styles.card}>
+          <strong>{item.title}</strong><span>{item.topic || 'Без темы'}</span><small>{stateLabels[item.state]} · {modeLabels[item.mode]} · {item.runs.length} участников</small>
+        </button>)}</div>
+      </section>)}
+      <section className={styles.section}><h3>Шаблоны занятий</h3><div className={styles.cards}>{templates.map((item) => <button key={item.id} className={styles.card} type="button" disabled={busy} onClick={() => applyTemplate(item.id)}><strong>{item.name}</strong><small>Создать новый черновик</small></button>)}</div></section>
+    </div> : <div className={styles.content}>
+      <div className={styles.topline}><div><button className={styles.back} type="button" onClick={() => { setSession(null); reload() }}>← Все занятия</button><h2>{session.id ? session.title : 'Новое занятие'}</h2><p>{session.id ? stateLabels[session.state] : 'Шаг 1 · основные параметры'}</p></div>{session.id && <span className={styles.badge}>№ {session.id}</span>}</div>
+      <nav className={styles.steps} aria-label="Шаги подготовки">{steps.map((label, index) => <button key={label} type="button" className={step === index ? styles.activeStep : ''} disabled={!session.id && index > 0} onClick={() => setStep(index)}><b>{index + 1}</b>{label}</button>)}</nav>
+      {step === 0 && <section className={styles.section}><h3>Основные параметры</h3><div className={styles.formGrid}>
+        <label>Название занятия<input name="title" value={settings.title} onChange={updateSettings} disabled={!editable} required /></label>
+        <label>Тема<input name="topic" value={settings.topic} onChange={updateSettings} disabled={!editable} /></label>
+        <label>Режим<select name="mode" value={settings.mode} onChange={updateSettings} disabled={!editable}>{Object.entries(modeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>Продолжительность, мин<input name="duration_minutes" type="number" min="1" max="480" value={settings.duration_minutes} onChange={updateSettings} disabled={!editable} /></label>
+        {settings.mode === 'FLOW' && <label>Интервал выдачи, сек<input name="delivery_interval_seconds" type="number" min="10" max="3600" value={settings.delivery_interval_seconds} onChange={updateSettings} disabled={!editable} /></label>}
+        <label>Порядок карточек<select name="delivery_order" value={settings.delivery_order} onChange={updateSettings} disabled={!editable}><option value="SEQUENTIAL">По порядку</option><option value="RANDOM">Случайным образом</option></select></label>
+        <label>Рабочих мест<input name="workstation_count" type="number" min="1" max="100" value={settings.workstation_count} onChange={updateSettings} disabled={!editable} /></label>
+      </div><div className={styles.actions}>{editable && <button type="button" disabled={busy || !settings.title.trim()} onClick={session.id ? saveSettings : createSession}>{session.id ? 'Сохранить и продолжить' : 'Создать и продолжить'}</button>}{session.id && <button type="button" onClick={() => setStep(1)}>Далее →</button>}</div></section>}
+      {step === 1 && <section className={styles.section}><h3>Учебный класс</h3><p>Обучаемый выбирает свободное АРМ после входа. Состояние участия сохраняется при отключении браузера.</p><div className={styles.stationGrid}>{Array.from({ length: session.workstation_count }, (_, index) => {
+        const run = stationByNumber.get(index + 1)
+        return <div className={`${styles.station} ${run?.online ? styles.online : ''}`} key={index}><b>АРМ {String(index + 1).padStart(2, '0')}</b><span>{run?.trainee_name || 'Ожидание'}</span><small>{run ? run.online ? '● Online' : '○ Offline' : 'Свободно'}</small></div>
+      })}</div><div className={styles.actions}><button type="button" onClick={() => setStep(2)}>К распределению →</button></div></section>}
+      {step === 2 && <section className={styles.section}><h3>Распределение</h3><p>Выберите несколько АРМ и назначьте параметры одним действием.</p><div className={styles.layout}>
+        <div><div className={styles.selectbar}><button type="button" onClick={() => setSelected(session.runs.map((run) => run.id))}>Выбрать всех</button><button type="button" onClick={() => setSelected([])}>Снять выбор</button><span>Выбрано: {selected.length}</span></div><div className={styles.runList}>{session.runs.map((run) => <label key={run.id} className={styles.run}><input type="checkbox" checked={selected.includes(run.id)} onChange={() => toggleRun(run.id)} disabled={!editable} /><b>АРМ {String(run.workstation_number).padStart(2, '0')}</b><span>{run.trainee_name}</span><small>{run.dds_profile === 'ДДС' ? 'Профиль не назначен' : run.dds_profile} · {run.difficulty || 'Сложность не задана'}</small></label>)}</div></div>
+        <aside className={styles.sidebar}><h4>Массовое назначение</h4><label>Профиль ДДС<input value={assignment.dds_profile} onChange={(event) => setAssignment((current) => ({ ...current, dds_profile: event.target.value }))} placeholder="Например, ДДС района" disabled={!editable} /></label><label>Сложность<select value={assignment.difficulty} onChange={(event) => setAssignment((current) => ({ ...current, difficulty: event.target.value }))} disabled={!editable}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select></label><label>Тип очереди<select value={assignment.queue_mode} onChange={(event) => setAssignment((current) => ({ ...current, queue_mode: event.target.value }))} disabled={!editable}><option value="INDIVIDUAL_QUEUE">Индивидуальная</option><option value="SHARED_QUEUE">Общая</option></select></label><label>Группа<select value={assignment.group_id} onChange={(event) => setAssignment((current) => ({ ...current, group_id: event.target.value }))} disabled={!editable}><option value="">Без группы</option>{session.groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button type="button" disabled={!editable || !selected.length || busy || !assignment.dds_profile.trim()} onClick={assignRuns}>Применить к выбранным</button></aside>
+      </div><h4>Учебные группы</h4><div className={styles.cards}>{session.groups.map((group) => <div key={group.id} className={styles.card}><strong>{group.name}</strong><span>{group.dds_profile || 'Профиль не задан'} · {group.difficulty || 'Без сложности'}</span><small>{group.queue_mode === 'SHARED_QUEUE' ? 'Общая очередь' : 'Индивидуальная очередь'} · {group.run_ids.length} участников</small>{editable && <><button type="button" onClick={() => { setEditingGroupId(group.id); setGroupDraft({ name: group.name, dds_profile: group.dds_profile || '', difficulty: group.difficulty || 'Средняя', queue_mode: group.queue_mode }) }}>Изменить группу</button><button type="button" onClick={() => changeGroup(group, 'DELETE')}>Удалить группу</button></>}</div>)}</div>{editable && <div className={styles.groupForm}><input aria-label="Название группы" placeholder="Новая группа" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} /><input aria-label="Профиль ДДС группы" placeholder="Профиль ДДС" value={groupDraft.dds_profile} onChange={(event) => setGroupDraft((current) => ({ ...current, dds_profile: event.target.value }))} /><select aria-label="Сложность группы" value={groupDraft.difficulty} onChange={(event) => setGroupDraft((current) => ({ ...current, difficulty: event.target.value }))}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select><select aria-label="Тип очереди группы" value={groupDraft.queue_mode} onChange={(event) => setGroupDraft((current) => ({ ...current, queue_mode: event.target.value }))}><option value="INDIVIDUAL_QUEUE">Индивидуальная</option><option value="SHARED_QUEUE">Общая</option></select><button type="button" disabled={!groupDraft.name.trim() || busy} onClick={saveGroup}>{editingGroupId ? 'Сохранить группу' : 'Создать группу'}</button>{editingGroupId && <button type="button" onClick={() => { setEditingGroupId(null); setGroupDraft(emptyGroup) }}>Отмена</button>}</div>}<div className={styles.actions}><button type="button" onClick={() => setStep(3)}>К готовности →</button></div></section>}
+      {step === 3 && <section className={styles.section}><h3>Готовность занятия</h3><div className={styles.summary}><div><span>Участники</span><strong>{session.readiness.participant_count}</strong></div><div><span>Рабочие места</span><strong>{session.workstation_count}</strong></div><div><span>Группы</span><strong>{session.readiness.group_count}</strong></div><div><span>Профили назначены</span><strong>{session.readiness.profiles_assigned}/{session.readiness.participant_count}</strong></div><div><span>Online / offline</span><strong>{session.readiness.online_count} / {session.readiness.offline_count}</strong></div><div><span>Режим</span><strong>{modeLabels[session.mode]}</strong></div><div><span>Продолжительность</span><strong>{session.duration_minutes || '—'} мин</strong></div><div><span>Интервал</span><strong>{session.mode === 'FLOW' ? `${session.delivery_interval_seconds} сек` : '—'}</strong></div></div>{session.readiness.warnings.map((warning) => <p key={warning} className={styles.warning}>⚠ {warning}</p>)}<div className={styles.actions}>{session.state === 'DRAFT' && <button type="button" disabled={busy || !session.readiness.can_start} onClick={prepare}>Проверить готовность</button>}{session.state === 'READY' && <button type="button" disabled={busy || !session.readiness.can_start} onClick={start}>Запустить занятие</button>}</div><div className={styles.templateForm}><h4>Сохранить как шаблон</h4><p>Сохраняются параметры занятия и групп без участников.</p><input aria-label="Название шаблона" placeholder="Название шаблона" value={templateName} onChange={(event) => setTemplateName(event.target.value)} /><button type="button" disabled={!templateName.trim() || busy} onClick={saveTemplate}>Сохранить шаблон</button></div></section>}
+    </div>}
+  </main>
+}
+
+export default InstructorWorkspace
