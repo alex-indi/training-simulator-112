@@ -140,6 +140,9 @@ async function requestJson(path, demoUsername, options = {}) {
 function App() {
   const [users, setUsers] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [passwordVisible, setPasswordVisible] = useState(false)
   const [incidents, setIncidents] = useState([])
   const [joinedSessionId, setJoinedSessionId] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
@@ -162,10 +165,11 @@ function App() {
   }, [])
 
   useEffect(() => {
-    Promise.all([requestJson('/api/users/demo'), requestJson('/api/users/me')])
-      .then(([demoUsers, user]) => {
+    requestJson('/api/users/demo')
+      .then((demoUsers) => {
         setUsers(demoUsers)
-        setCurrentUser(user)
+        const trainee = demoUsers.find((user) => user.role === 'TRAINEE')
+        setLoginUsername(trainee?.username || demoUsers[0]?.username || '')
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false))
@@ -240,6 +244,45 @@ function App() {
 
   const updateFilter = (event) => {
     setFilters((current) => ({ ...current, [event.target.name]: event.target.value }))
+  }
+
+  const submitLogin = async (event) => {
+    event.preventDefault()
+    setError('')
+
+    const normalizedUsername = loginUsername.trim().toLocaleLowerCase('ru-RU')
+    const demoUser = users.find(
+      (user) => user.username.toLocaleLowerCase('ru-RU') === normalizedUsername,
+    )
+
+    if (!demoUser) {
+      setError('Пользователь не найден на локальном учебном стенде')
+      return
+    }
+    if (!loginPassword) {
+      setError('Введите учебный пароль')
+      return
+    }
+
+    setLoading(true)
+    try {
+      setCurrentUser(await requestJson('/api/users/me', demoUser.username))
+      setLoginPassword('')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const logout = () => {
+    setCurrentUser(null)
+    setIncidents([])
+    setSelectedIncident(null)
+    setSelectedService('')
+    setServiceHistoryOpen(false)
+    setFilters(emptyFilters)
+    setError('')
   }
 
   const selectUser = async (event) => {
@@ -414,6 +457,77 @@ function App() {
     return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} />
   }
 
+  if (!currentUser) {
+    return (
+      <main className={styles.loginScreen}>
+        <div className={styles.trainingRibbon}>Учебный контур · данные и действия являются демонстрационными</div>
+
+        <section className={styles.loginPanel} aria-labelledby="login-title">
+          <header className={styles.loginBrand}>
+            <div className={styles.loginNumber}>112</div>
+            <div>
+              <span>Учебный тренажёр</span>
+              <strong id="login-title">Вход в систему</strong>
+            </div>
+          </header>
+
+          <form className={styles.loginForm} onSubmit={submitLogin}>
+            <label>
+              <span>Пользователь</span>
+              <div className={styles.loginSelectField}>
+                <select
+                  autoComplete="username"
+                  disabled={loading || !users.length}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  value={loginUsername}
+                >
+                  {!users.length && <option value="">Загрузка пользователей…</option>}
+                  {users.map((user) => (
+                    <option key={user.id} value={user.username}>
+                      {user.full_name}
+                    </option>
+                  ))}
+                </select>
+                <span aria-hidden="true">⌄</span>
+              </div>
+            </label>
+            <label>
+              <span>Пароль</span>
+              <div className={styles.passwordField}>
+                <input
+                  autoComplete="current-password"
+                  disabled={loading}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  type={passwordVisible ? 'text' : 'password'}
+                  value={loginPassword}
+                />
+                <button
+                  aria-label={passwordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                  onClick={() => setPasswordVisible((visible) => !visible)}
+                  type="button"
+                >
+                  {passwordVisible ? 'скрыть' : 'показать'}
+                </button>
+              </div>
+            </label>
+
+            {error && <div className={styles.loginError} role="alert">{error}</div>}
+
+            <button className={styles.loginButton} disabled={loading || !users.length} type="submit">
+              {loading ? 'Подключение…' : 'Войти'}
+            </button>
+          </form>
+
+          <footer className={styles.loginFooter}>
+            <div><span>Локальный demo-доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
+            <p>Интерфейс имитирует рабочее место ДДС. Не используйте реальные учётные данные.</p>
+          </footer>
+        </section>
+
+      </main>
+    )
+  }
+
   if (currentUser && currentUser.role !== 'TRAINEE') {
     return (
       <main className={styles.roleScreen}>
@@ -424,10 +538,11 @@ function App() {
           <select value={currentUser.username} onChange={selectUser}>
             {users.map((user) => (
               <option key={user.id} value={user.username}>
-                {user.full_name} · {roleLabels[user.role]}
+                {user.full_name}
               </option>
             ))}
           </select>
+          <button className={styles.roleLogout} type="button" onClick={logout}>Выйти</button>
         </section>
       </main>
     )
@@ -471,16 +586,16 @@ function App() {
           )}
           <header className={styles.telephonyStrip}>
             <div className={styles.callState}>
-              <span className={styles.headsetIcon}>◖</span>
+              <span className={styles.headsetIcon}><span className={styles.phoneReceiverIcon} aria-hidden="true" /></span>
               <div><span>не подключен</span><small>линия оператора</small></div>
               <div className={styles.callButtons}>
                 <button type="button" disabled title="Архив записей телефонных разговоров">записи звонков</button>
                 <button type="button" disabled title="Входящие и исходящие SMS">список SMS</button>
               </div>
             </div>
-            <div className={styles.phoneField}><b>◖</b><span>АОН<strong>{selectedIncident.applicant_phone || 'не определён'}</strong></span><i>▰</i></div>
-            <div className={styles.phoneField}><b>◖</b><span>предоставленный<strong>{selectedIncident.applicant_phone || 'не указан'}</strong></span><i>▰</i></div>
-            <div className={styles.phoneField}><b>◖</b><span>телефон на место<strong>не указан</strong></span></div>
+            <div className={styles.phoneField}><b><span className={styles.phoneIcon} aria-hidden="true" /></b><span>АОН<strong>{selectedIncident.applicant_phone || 'не определён'}</strong></span><i>▰</i></div>
+            <div className={styles.phoneField}><b><span className={styles.phoneIcon} aria-hidden="true" /></b><span>предоставленный<strong>{selectedIncident.applicant_phone || 'не указан'}</strong></span><i>▰</i></div>
+            <div className={styles.phoneField}><b><span className={styles.phoneIcon} aria-hidden="true" /></b><span>телефон на место<strong>не указан</strong></span></div>
             <div className={styles.incidentIdentity}>
               <strong>Происшествие {selectedIncident.incident_number}</strong>
               <span>Сохр. {formatDateTime(selectedIncident.delivered_at)}</span>
@@ -641,7 +756,7 @@ function App() {
                   onClick={() => selectService(service)}
                   title="Выбрать службу и показать историю статусов"
                 >
-                  <span>⌃</span>
+                  <span className={styles.serviceChevron} aria-hidden="true" />
                   <strong>{compactServiceName(service)}</strong>
                   <small>{index === 0
                     ? `${formatTime(latestOwnStatus?.created_at)} ${historyStatusLabels[latestOwnStatus?.status] || 'Добавлена'}`
@@ -651,7 +766,7 @@ function App() {
               ))}
               {['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
                 <button className={`${styles.serviceTile} ${styles.serviceTileMuted}`} key={service} type="button" disabled>
-                  <span>⌃</span><strong>{service}</strong><small>не оповещена</small>
+                  <span className={styles.serviceChevron} aria-hidden="true" /><strong>{service}</strong><small>не оповещена</small>
                 </button>
               ))}
               <button className={styles.dockControl} type="button" onClick={() => setServiceHistoryOpen((isOpen) => !isOpen)} title="Развернуть или свернуть историю выбранной службы">↕</button>
@@ -685,11 +800,12 @@ function App() {
                     {!currentUser && <option value="">загрузка…</option>}
                     {users.map((user) => (
                       <option key={user.id} value={user.username}>
-                        {user.full_name} · {roleLabels[user.role]}
+                        {user.full_name}
                       </option>
                     ))}
                   </select>
                 </label>
+                <button className={styles.sessionExit} type="button" onClick={logout}>выйти</button>
               </div>
               <time>{formatTime(now)}</time>
             </div>
