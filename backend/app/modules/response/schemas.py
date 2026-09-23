@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.modules.response.models import ResponseAssignmentState
+from app.modules.response.models import ResponseAssignmentState, ResponseMessageSender
 
 
 class ResponseUnitCreate(BaseModel):
@@ -61,3 +61,37 @@ class ResponseAssignmentRead(BaseModel):
     assigned_at: datetime
     state_changed_at: datetime
     events: list[ResponseAssignmentEventRead]
+
+
+class ResponseMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("body")
+    @classmethod
+    def normalize_body(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Сообщение не может быть пустым")
+        return value
+
+
+class ResponseScenarioMessageCreate(ResponseMessageCreate):
+    event_key: str = Field(min_length=1, max_length=120)
+
+    @field_validator("event_key")
+    @classmethod
+    def normalize_message_key(cls, value: str) -> str:
+        value = value.strip()
+        if not value or value.startswith("state:"):
+            raise ValueError("Укажите ключ сценарного сообщения без префикса state:")
+        return value
+
+
+class ResponseMessageRead(BaseModel):
+    id: int
+    response_assignment_id: int
+    sender_type: ResponseMessageSender
+    body: str
+    actor_user_id: int | None
+    created_at: datetime
+    read_at: datetime | None
