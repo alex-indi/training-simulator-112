@@ -38,7 +38,7 @@ Backend проверяет подключение к PostgreSQL при стар�
 ```bash
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload
+uv run uvicorn app.main:asgi_app --reload
 ```
 
 API будет доступен на `http://localhost:8000`, проверка состояния — `GET /health`, интерактивная документация — `/docs`.
