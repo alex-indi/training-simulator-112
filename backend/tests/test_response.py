@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -13,13 +14,22 @@ from app.db.base import Base
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import DDSResponseStatus, Incident
 from app.modules.incidents.workflow import create_delivered_incident
-from app.modules.response.models import ResponseAssignment, ResponseAssignmentState, ResponseUnit
+from app.modules.response.models import (
+    ResponseAssignment,
+    ResponseAssignmentState,
+    ResponseMessage,
+    ResponseMessageSender,
+    ResponseUnit,
+)
+from app.modules.response.realtime import notify_message_created, sio
 from app.modules.response.router import assign_response_unit
-from app.modules.response.schemas import ResponseAssignmentCreate
+from app.modules.response.schemas import ResponseAssignmentCreate, ResponseScenarioMessageCreate
 from app.modules.response.workflow import (
+    STATE_REPORTS,
     InvalidResponseTransitionError,
     apply_scenario_event,
     create_assignment,
+    create_message,
 )
 from app.modules.training.models import TrainingRun, TrainingSession, TrainingSessionState
 from tests.test_incidents import make_snapshot
@@ -135,6 +145,107 @@ def test_scenario_transition_is_ordered_idempotent_and_server_timed() -> None:
     assert repeated is first
     assert assignment.state_changed_at == changed_at
     assert len(assignment.events) == 2
+
+
+def test_messages_persist_per_assignment_without_changing_dds_status() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    now = datetime(2026, 9, 23, 10, 0, tzinfo=UTC)
+
+    with Session(engine) as database:
+        instructor = User(
+            username="instructor", full_name="Преподаватель", role=UserRole.INSTRUCTOR
+        )
+        trainee = User(username="trainee", full_name="Диспетчер", role=UserRole.TRAINEE)
+        training_session = TrainingSession(
+            title="Учебная смена",
+            instructor=instructor,
+            trainees=[trainee],
+            state=TrainingSessionState.ACTIVE,
+            started_at=now,
+        )
+        run = TrainingRun(training_session=training_session, trainee=trainee, dds_profile="ДДС")
+        unit = ResponseUnit(name="Группа 1", dds_profile="ДДС", is_active=True)
+        database.add_all([training_session, run, unit])
+        database.flush()
+        incident = create_delivered_incident(
+            training_session_id=training_session.id,
+            source_snapshot=make_snapshot().model_dump(mode="json"),
+            server_time=now,
+        )
+        incident.training_run = run
+        incident.dds_status = DDSResponseStatus.ACCEPTED
+        database.add(incident)
+        database.flush()
+        assignment = create_assignment(
+            incident_id=incident.id,
+            training_run_id=run.id,
+            response_unit=unit,
+            actor_user_id=trainee.id,
+            server_time=now,
+        )
+        database.add(assignment)
+        database.flush()
+        create_message(
+            assignment,
+            sender_type=ResponseMessageSender.DISPATCHER,
+            body="Где вы?",
+            actor_user_id=trainee.id,
+            server_time=now,
+        )
+        report = create_message(
+            assignment,
+            sender_type=ResponseMessageSender.RESPONSE_UNIT,
+            body="Подъезд перекрыт",
+            event_key="obstacle",
+            server_time=now + timedelta(seconds=5),
+        )
+        assert (
+            create_message(
+                assignment,
+                sender_type=ResponseMessageSender.RESPONSE_UNIT,
+                body="Подъезд перекрыт",
+                event_key="obstacle",
+            )
+            is report
+        )
+        database.commit()
+        database.expire_all()
+        restored = database.scalars(select(ResponseMessage).order_by(ResponseMessage.id)).all()
+        assert [message.sender_type for message in restored] == [
+            ResponseMessageSender.DISPATCHER,
+            ResponseMessageSender.RESPONSE_UNIT,
+        ]
+        assert restored[1].created_at.replace(tzinfo=UTC) == now + timedelta(seconds=5)
+        assert database.get(Incident, incident.id).dds_status == DDSResponseStatus.ACCEPTED
+        assert (
+            database.get(ResponseAssignment, assignment.id).state
+            == ResponseAssignmentState.ASSIGNED
+        )
+        assert STATE_REPORTS[ResponseAssignmentState.ASSIGNED]
+    engine.dispose()
+
+
+def test_scenario_message_key_reserves_state_reports() -> None:
+    with pytest.raises(ValueError):
+        ResponseScenarioMessageCreate(body="Доклад", event_key="state:departure")
+    assert ResponseScenarioMessageCreate(
+        body="  Подъезд перекрыт  ", event_key="  obstacle  "
+    ).model_dump() == {"body": "Подъезд перекрыт", "event_key": "obstacle"}
+
+
+def test_realtime_notification_contains_only_message_identity(monkeypatch) -> None:
+    emit = AsyncMock()
+    monkeypatch.setattr(sio, "emit", emit)
+    asyncio.run(
+        notify_message_created(
+            SimpleNamespace(id=14, response_assignment_id=7),
+            trainee_id=3,
+        )
+    )
+    emit.assert_awaited_once_with(
+        "response.message_created", {"assignment_id": 7, "message_id": 14}, room="user:3"
+    )
 
 
 def test_assignment_rejects_other_trainee_and_unaccepted_incident(monkeypatch) -> None:

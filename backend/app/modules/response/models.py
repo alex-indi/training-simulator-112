@@ -26,6 +26,17 @@ class ResponseAssignmentState(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class ResponseMessageSender(StrEnum):
+    DISPATCHER = "DISPATCHER"
+    RESPONSE_UNIT = "RESPONSE_UNIT"
+    SYSTEM = "SYSTEM"
+
+
+message_sender_type = Enum(
+    ResponseMessageSender, name="response_message_sender", validate_strings=True
+)
+
+
 assignment_state_type = Enum(
     ResponseAssignmentState,
     name="response_assignment_state",
@@ -83,6 +94,11 @@ class ResponseAssignment(Base):
         cascade="all, delete-orphan",
         order_by="ResponseAssignmentEvent.created_at, ResponseAssignmentEvent.id",
     )
+    messages: Mapped[list[ResponseMessage]] = relationship(
+        back_populates="response_assignment",
+        cascade="all, delete-orphan",
+        order_by="ResponseMessage.created_at, ResponseMessage.id",
+    )
 
 
 class ResponseAssignmentEvent(Base):
@@ -104,3 +120,23 @@ class ResponseAssignmentEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     response_assignment: Mapped[ResponseAssignment] = relationship(back_populates="events")
+
+
+class ResponseMessage(Base):
+    """Неизменяемое сообщение оперативного канала конкретного назначения."""
+
+    __tablename__ = "response_messages"
+    __table_args__ = (UniqueConstraint("response_assignment_id", "event_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    response_assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("response_assignments.id", ondelete="CASCADE"), index=True
+    )
+    sender_type: Mapped[ResponseMessageSender] = mapped_column(message_sender_type)
+    body: Mapped[str] = mapped_column(Text)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    event_key: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    response_assignment: Mapped[ResponseAssignment] = relationship(back_populates="messages")

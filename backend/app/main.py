@@ -19,6 +19,7 @@ from app.db.session import (
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.router import router as identity_router
 from app.modules.incidents.router import router as incidents_router
+from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
 from app.modules.training.delivery import router as delivery_router
 from app.modules.training.delivery import scheduler_loop
@@ -86,6 +87,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     engine = create_database_engine(get_settings())
     application.state.database_engine = engine
     application.state.database_session_factory = create_session_factory(engine)
+    configure_realtime(application.state.database_session_factory)
 
     try:
         try:
@@ -134,4 +136,4 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "training-simulator-112"}
 
 
-socket_app = socketio.ASGIApp(sio, app)
+socket_app = socketio.ASGIApp(sio, other_asgi_app=app)

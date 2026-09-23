@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
+import ResponseChat from './ResponseChat'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -281,7 +282,7 @@ function App() {
       const services = openedIncident.source_snapshot?.notified_services || []
       setSelectedIncident(openedIncident)
       setSelectedService(services[0] || 'Служба ДДС')
-      setServiceHistoryOpen(false)
+      setServiceHistoryOpen(true)
       setSelectedAction(openedIncident.available_actions?.[0] || '')
       setActionComment('')
       setResponseUnits(units)
@@ -600,6 +601,14 @@ function App() {
                               </div>
                             ))}
                           </details>
+                          <ResponseChat
+                            assignment={assignment}
+                            incidentNumber={selectedIncident.incident_number}
+                            username={currentUser.username}
+                            apiUrl={apiUrl}
+                            requestJson={requestJson}
+                            formatDateTime={formatDateTime}
+                          />
                         </div>
                       ))}
                       {canAssignResponse && availableResponseUnits.length > 0 && (

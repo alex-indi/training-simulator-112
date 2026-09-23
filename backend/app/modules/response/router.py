@@ -1,5 +1,6 @@
 """REST API виртуальных групп и их назначений."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,19 +13,30 @@ from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import DDSResponseStatus, Incident
 from app.modules.incidents.router import _ensure_incident_visible, _load_incident
-from app.modules.response.models import ResponseAssignment, ResponseUnit
+from app.modules.response.models import (
+    ResponseAssignment,
+    ResponseMessage,
+    ResponseMessageSender,
+    ResponseUnit,
+)
+from app.modules.response.realtime import notify_message_created
 from app.modules.response.schemas import (
     ResponseAssignmentCreate,
     ResponseAssignmentEventRead,
     ResponseAssignmentRead,
+    ResponseMessageCreate,
+    ResponseMessageRead,
     ResponseScenarioEventCreate,
+    ResponseScenarioMessageCreate,
     ResponseUnitCreate,
     ResponseUnitRead,
 )
 from app.modules.response.workflow import (
+    STATE_REPORTS,
     InvalidResponseTransitionError,
     apply_scenario_event,
     create_assignment,
+    create_message,
 )
 from app.modules.training.models import TrainingRun, TrainingSession, TrainingSessionState
 
@@ -67,12 +79,180 @@ def _assignment_read(assignment: ResponseAssignment) -> ResponseAssignmentRead:
 def _assignment_options():
     return (
         selectinload(ResponseAssignment.response_unit),
+        selectinload(ResponseAssignment.training_run),
         selectinload(ResponseAssignment.events),
+        selectinload(ResponseAssignment.messages),
         selectinload(ResponseAssignment.incident)
         .selectinload(Incident.training_session)
         .selectinload(TrainingSession.trainees),
         selectinload(ResponseAssignment.incident).selectinload(Incident.training_run),
     )
+
+
+def _message_read(message: ResponseMessage) -> ResponseMessageRead:
+    return ResponseMessageRead(
+        id=message.id,
+        response_assignment_id=message.response_assignment_id,
+        sender_type=message.sender_type,
+        body=message.body,
+        actor_user_id=message.actor_user_id,
+        created_at=message.created_at,
+        read_at=message.read_at,
+    )
+
+
+async def _load_visible_assignment(
+    database: AsyncSession, assignment_id: int, user: User, *, for_update: bool = False
+) -> ResponseAssignment:
+    statement = (
+        select(ResponseAssignment)
+        .where(ResponseAssignment.id == assignment_id)
+        .options(*_assignment_options())
+    )
+    if for_update:
+        statement = statement.with_for_update()
+    assignment = await database.scalar(statement)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Назначение группы не найдено")
+    _ensure_incident_visible(assignment.incident, user)
+    return assignment
+
+
+def _ensure_owner(assignment: ResponseAssignment, user: User) -> None:
+    if user.role != UserRole.TRAINEE or assignment.training_run.trainee_id != user.id:
+        raise HTTPException(
+            status_code=403, detail="Канал доступен только обучаемому этой карточки"
+        )
+
+
+def _ensure_owner_active(assignment: ResponseAssignment, user: User) -> None:
+    _ensure_owner(assignment, user)
+    if assignment.incident.training_session.state != TrainingSessionState.ACTIVE:
+        raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+
+
+def _ensure_instructor(assignment: ResponseAssignment, user: User) -> None:
+    if user.role not in {UserRole.INSTRUCTOR, UserRole.ADMIN}:
+        raise HTTPException(status_code=403, detail="Сценарное сообщение доступно преподавателю")
+    if (
+        user.role != UserRole.ADMIN
+        and assignment.incident.training_session.instructor_id != user.id
+    ):
+        raise HTTPException(status_code=404, detail="Назначение группы не найдено")
+    if assignment.incident.training_session.state != TrainingSessionState.ACTIVE:
+        raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+
+
+@router.get("/assignments/{assignment_id}/messages", response_model=list[ResponseMessageRead])
+async def list_response_messages(
+    assignment_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> list[ResponseMessageRead]:
+    assignment = await _load_visible_assignment(database, assignment_id, current_user)
+    return [_message_read(message) for message in assignment.messages]
+
+
+@router.post(
+    "/assignments/{assignment_id}/messages",
+    response_model=ResponseMessageRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def send_response_message(
+    assignment_id: int,
+    payload: ResponseMessageCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> ResponseMessageRead:
+    assignment = await _load_visible_assignment(database, assignment_id, current_user)
+    _ensure_owner_active(assignment, current_user)
+    message = create_message(
+        assignment,
+        sender_type=ResponseMessageSender.DISPATCHER,
+        body=payload.body,
+        actor_user_id=current_user.id,
+    )
+    await database.commit()
+    await notify_message_created(message, current_user.id)
+    return _message_read(message)
+
+
+@router.post("/assignments/{assignment_id}/request-state", response_model=list[ResponseMessageRead])
+async def request_response_state(
+    assignment_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> list[ResponseMessageRead]:
+    assignment = await _load_visible_assignment(
+        database, assignment_id, current_user, for_update=True
+    )
+    _ensure_owner_active(assignment, current_user)
+    question = create_message(
+        assignment,
+        sender_type=ResponseMessageSender.DISPATCHER,
+        body="Запросить состояние группы",
+        actor_user_id=current_user.id,
+    )
+    answer = create_message(
+        assignment,
+        sender_type=ResponseMessageSender.RESPONSE_UNIT,
+        body=STATE_REPORTS[assignment.state],
+    )
+    await database.commit()
+    await notify_message_created(answer, current_user.id)
+    return [_message_read(question), _message_read(answer)]
+
+
+@router.post(
+    "/assignments/{assignment_id}/scenario-messages",
+    response_model=ResponseMessageRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def send_scenario_message(
+    assignment_id: int,
+    payload: ResponseScenarioMessageCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> ResponseMessageRead:
+    assignment = await _load_visible_assignment(
+        database, assignment_id, current_user, for_update=True
+    )
+    _ensure_instructor(assignment, current_user)
+    existing = next(
+        (item for item in assignment.messages if item.event_key == payload.event_key), None
+    )
+    try:
+        message = create_message(
+            assignment,
+            sender_type=ResponseMessageSender.RESPONSE_UNIT,
+            body=payload.body,
+            event_key=payload.event_key,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if existing is None:
+        await database.commit()
+        await notify_message_created(message, assignment.training_run.trainee_id)
+    return _message_read(message)
+
+
+@router.post("/messages/{message_id}/read", response_model=ResponseMessageRead)
+async def mark_response_message_read(
+    message_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> ResponseMessageRead:
+    message = await database.scalar(select(ResponseMessage).where(ResponseMessage.id == message_id))
+    if message is None:
+        raise HTTPException(status_code=404, detail="Сообщение не найдено")
+    assignment = await _load_visible_assignment(
+        database, message.response_assignment_id, current_user
+    )
+    _ensure_owner(assignment, current_user)
+    if message.sender_type == ResponseMessageSender.RESPONSE_UNIT and message.read_at is None:
+        message.read_at = datetime.now(UTC)
+        await database.commit()
+    return _message_read(message)
 
 
 @router.post("/units", response_model=ResponseUnitRead, status_code=status.HTTP_201_CREATED)
@@ -103,13 +283,15 @@ async def list_response_units(
         _ensure_incident_visible(incident, current_user)
         if incident.training_run is None:
             return []
-        statement = statement.where(
-            ResponseUnit.dds_profile == incident.training_run.dds_profile
-        )
+        statement = statement.where(ResponseUnit.dds_profile == incident.training_run.dds_profile)
     elif current_user.role == UserRole.TRAINEE:
-        active_profiles = select(TrainingRun.dds_profile).join(TrainingSession).where(
-            TrainingRun.trainee_id == current_user.id,
-            TrainingSession.state == TrainingSessionState.ACTIVE,
+        active_profiles = (
+            select(TrainingRun.dds_profile)
+            .join(TrainingSession)
+            .where(
+                TrainingRun.trainee_id == current_user.id,
+                TrainingSession.state == TrainingSessionState.ACTIVE,
+            )
         )
         statement = statement.where(ResponseUnit.dds_profile.in_(active_profiles))
     result = await database.scalars(statement.order_by(ResponseUnit.name, ResponseUnit.id))
@@ -174,9 +356,7 @@ async def assign_response_unit(
     return _assignment_read(assignment)
 
 
-@router.get(
-    "/incidents/{incident_id}/assignments", response_model=list[ResponseAssignmentRead]
-)
+@router.get("/incidents/{incident_id}/assignments", response_model=list[ResponseAssignmentRead])
 async def list_response_assignments(
     incident_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -222,12 +402,25 @@ async def apply_response_scenario_event(
     if session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
     try:
-        apply_scenario_event(
+        event = apply_scenario_event(
             assignment,
             target_state=payload.target_state,
             event_key=payload.event_key,
         )
     except InvalidResponseTransitionError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    message_key = f"state:{payload.event_key}"
+    existing_message = next(
+        (item for item in assignment.messages if item.event_key == message_key), None
+    )
+    message = create_message(
+        assignment,
+        sender_type=ResponseMessageSender.RESPONSE_UNIT,
+        body=STATE_REPORTS[event.to_state],
+        event_key=message_key,
+        server_time=event.created_at,
+    )
     await database.commit()
+    if existing_message is None:
+        await notify_message_created(message, assignment.training_run.trainee_id)
     return _assignment_read(assignment)
