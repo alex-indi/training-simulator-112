@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import styles from './App.module.css'
+import InstructorWorkspace from './InstructorWorkspace.jsx'
+import TrainingEnrollment from './TrainingEnrollment.jsx'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -9,6 +11,52 @@ const roleLabels = {
   INSTRUCTOR: 'Преподаватель',
   TRAINEE: 'Диспетчер ДДС',
 }
+
+const lifecycleLabels = {
+  CREATED: 'Создана',
+  DELIVERED: 'Добавлена',
+  OPENED: 'Получена службой',
+  FINISHED: 'Завершена',
+}
+
+const ddsStatusLabels = {
+  AWAITING_DECISION: 'Ожидает решения',
+  ACCEPTED: 'Принята',
+  REJECTED: 'Не принята',
+  RESPONSE_STARTED: 'Начало реагирования',
+  ARRIVED: 'Прибытие',
+  WORKING: 'Проведение работ',
+  COMPLETED: 'Работы завершены',
+  WORK_REFUSED: 'Отказ от выполнения работ',
+}
+
+const actionLabels = {
+  ACCEPT: 'Принята',
+  REJECT: 'Не принята',
+  START_RESPONSE: 'Начало реагирования',
+  MARK_ARRIVAL: 'Прибытие',
+  START_WORK: 'Проведение работ',
+  COMPLETE_WORK: 'Работы завершены',
+  REFUSE_WORK: 'Отказ от выполнения работ',
+}
+
+const historyStatusLabels = {
+  SERVICE_ADDED: 'Добавлена',
+  SERVICE_RECEIVED: 'Получена службой',
+  ...ddsStatusLabels,
+}
+
+const responseStateLabels = {
+  ASSIGNED: 'Назначена',
+  ACKNOWLEDGED: 'Задание подтверждено',
+  EN_ROUTE: 'Выехала',
+  ARRIVED: 'Прибыла',
+  WORKING: 'Выполняет работы',
+  COMPLETED: 'Работы завершила',
+  CANCELLED: 'Назначение отменено',
+}
+
+const commentRequiredActions = new Set(['REJECT', 'REFUSE_WORK'])
 
 const emptyFilters = {
   number: '',
@@ -76,7 +124,9 @@ async function requestJson(path, demoUsername, options = {}) {
     let detail = 'Backend локального стенда недоступен'
     try {
       const payload = await response.json()
-      detail = payload.detail || detail
+      detail = Array.isArray(payload.detail)
+        ? payload.detail.map((item) => item.msg).join('; ')
+        : payload.detail || detail
     } catch {
       // Ответ без JSON оставляет понятное общее сообщение.
     }
@@ -96,6 +146,11 @@ function App() {
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [selectedService, setSelectedService] = useState('')
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
+  const [selectedAction, setSelectedAction] = useState('')
+  const [actionComment, setActionComment] = useState('')
+  const [responseUnits, setResponseUnits] = useState([])
+  const [responseAssignments, setResponseAssignments] = useState([])
+  const [selectedResponseUnitId, setSelectedResponseUnitId] = useState('')
   const [expandedSearch, setExpandedSearch] = useState(false)
   const [filters, setFilters] = useState(emptyFilters)
   const [now, setNow] = useState(() => new Date())
@@ -205,6 +260,11 @@ function App() {
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
+    setSelectedAction('')
+    setActionComment('')
+    setResponseUnits([])
+    setResponseAssignments([])
+    setSelectedResponseUnitId('')
     setFilters(emptyFilters)
     setLoading(true)
 
@@ -225,10 +285,21 @@ function App() {
         currentUser.username,
         { method: 'POST' },
       )
+      const [units, assignments] = await Promise.all([
+        requestJson(`/api/response/units?incident_id=${incident.id}`, currentUser.username),
+        requestJson(`/api/response/incidents/${incident.id}/assignments`, currentUser.username),
+      ])
       const services = openedIncident.source_snapshot?.notified_services || []
       setSelectedIncident(openedIncident)
       setSelectedService(services[0] || 'Служба ДДС')
       setServiceHistoryOpen(false)
+      setSelectedAction(openedIncident.available_actions?.[0] || '')
+      setActionComment('')
+      setResponseUnits(units)
+      setResponseAssignments(assignments)
+      setSelectedResponseUnitId(String(units.find(
+        (unit) => !assignments.some((assignment) => assignment.response_unit.id === unit.id),
+      )?.id || ''))
       setIncidents((items) =>
         items.map((item) => (item.id === openedIncident.id ? openedIncident : item)),
       )
@@ -243,6 +314,11 @@ function App() {
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
+    setSelectedAction('')
+    setActionComment('')
+    setResponseUnits([])
+    setResponseAssignments([])
+    setSelectedResponseUnitId('')
   }
 
   const selectService = (service) => {
@@ -252,6 +328,85 @@ function App() {
     }
     setSelectedService(service)
     setServiceHistoryOpen(true)
+    if (service === services[0]) {
+      setSelectedAction(selectedIncident.available_actions?.[0] || '')
+      setActionComment('')
+    }
+  }
+
+  const submitIncidentAction = async (event) => {
+    event.preventDefault()
+    if (!selectedAction) return
+
+    setError('')
+    setLoading(true)
+    try {
+      const updatedIncident = await requestJson(
+        `/api/incidents/${selectedIncident.id}/actions`,
+        currentUser.username,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: selectedAction,
+            comment: actionComment || null,
+          }),
+        },
+      )
+      setSelectedIncident(updatedIncident)
+      setSelectedAction(updatedIncident.available_actions?.[0] || '')
+      setActionComment('')
+      setIncidents((items) =>
+        items.map((item) => (item.id === updatedIncident.id ? updatedIncident : item)),
+      )
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const submitResponseAssignment = async (event) => {
+    event.preventDefault()
+    if (!selectedResponseUnitId) return
+    setError('')
+    setLoading(true)
+    try {
+      const assignment = await requestJson(
+        `/api/response/incidents/${selectedIncident.id}/assignments`,
+        currentUser.username,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ response_unit_id: Number(selectedResponseUnitId) }),
+        },
+      )
+      const updated = [...responseAssignments, assignment]
+      setResponseAssignments(updated)
+      setSelectedResponseUnitId(String(responseUnits.find(
+        (unit) => !updated.some((item) => item.response_unit.id === unit.id),
+      )?.id || ''))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const refreshResponseAssignments = async () => {
+    setError('')
+    try {
+      setResponseAssignments(await requestJson(
+        `/api/response/incidents/${selectedIncident.id}/assignments`,
+        currentUser.username,
+      ))
+    } catch (requestError) {
+      setError(requestError.message)
+    }
+  }
+
+  if (currentUser?.role === 'INSTRUCTOR') {
+    return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} />
   }
 
   if (!currentUser) {
@@ -348,11 +503,22 @@ function App() {
   const snapshot = selectedIncident?.source_snapshot
   const services = snapshot?.notified_services || []
   const features = snapshot?.features || []
+  const ownService = services[0] || 'Служба ДДС'
+  const isOwnServiceSelected = selectedService === ownService
+  const ownServiceHistory = selectedIncident?.actions || []
+  const latestOwnStatus = ownServiceHistory[ownServiceHistory.length - 1]
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const filtersActive = Object.values(filters).some(Boolean)
+  const canAssignResponse = selectedIncident && [
+    'ACCEPTED', 'RESPONSE_STARTED', 'ARRIVED', 'WORKING',
+  ].includes(selectedIncident.dds_status)
+  const availableResponseUnits = responseUnits.filter(
+    (unit) => !responseAssignments.some((assignment) => assignment.response_unit.id === unit.id),
+  )
 
   return (
     <main className={styles.armShell}>
+      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <strong>Ошибка:</strong> {error}
@@ -427,9 +593,98 @@ function App() {
               <div className={styles.serviceHistory}>
                 <button type="button" onClick={() => setServiceHistoryOpen(false)} aria-label="Закрыть историю">×</button>
                 <strong>{selectedService}</strong>
-                <div><span>оп. 0</span><b>›</b><time>{formatDateTime(selectedIncident.delivered_at)}</time><em>Добавлена</em></div>
-                {selectedService === services[0] && (
-                  <div><span>оп. 0</span><b>›</b><time>{formatDateTime(selectedIncident.opened_at)}</time><em>Получена службой</em></div>
+                {isOwnServiceSelected ? (
+                  <>
+                    <div className={styles.currentDdsStatus}>
+                      <span>Текущий статус</span>
+                      <strong>{ddsStatusLabels[selectedIncident.dds_status]}</strong>
+                    </div>
+                    <div className={styles.historyList}>
+                      {ownServiceHistory.map((entry) => (
+                        <article key={entry.id} className={styles.historyEntry}>
+                          <div>
+                            <em>{historyStatusLabels[entry.status] || entry.status}</em>
+                            <time>{formatDateTime(entry.created_at)}</time>
+                          </div>
+                          <small>{entry.actor_display_name}{entry.is_system ? ' · системное событие' : ''}</small>
+                          {entry.comment && <p>{entry.comment}</p>}
+                        </article>
+                      ))}
+                    </div>
+                    {selectedIncident.available_actions.length ? (
+                      <form className={styles.statusEditor} onSubmit={submitIncidentAction}>
+                        <label>
+                          Новый статус
+                          <select value={selectedAction} onChange={(event) => setSelectedAction(event.target.value)}>
+                            {selectedIncident.available_actions.map((action) => (
+                              <option key={action} value={action}>{actionLabels[action]}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Комментарий{commentRequiredActions.has(selectedAction) ? ' — обязателен' : ''}
+                          <textarea
+                            value={actionComment}
+                            onChange={(event) => setActionComment(event.target.value)}
+                            placeholder="Укажите факты, причину или результат реагирования"
+                            rows="3"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={loading || (commentRequiredActions.has(selectedAction) && !actionComment.trim())}
+                        >
+                          Сохранить статус
+                        </button>
+                      </form>
+                    ) : (
+                      <p className={styles.statusLocked}>Изменение статусов закрыто. История доступна только для просмотра.</p>
+                    )}
+                    <div className={styles.responsePanel}>
+                      <div className={styles.responseHeading}>
+                        <strong>Виртуальная группа реагирования</strong>
+                        <button type="button" onClick={refreshResponseAssignments}>Обновить</button>
+                      </div>
+                      {responseAssignments.map((assignment) => (
+                        <div key={assignment.id} className={styles.responseAssignment}>
+                          <span>{assignment.response_unit.name}</span>
+                          <b>{responseStateLabels[assignment.state]}</b>
+                          <time>{formatDateTime(assignment.state_changed_at)}</time>
+                          <details>
+                            <summary>История группы</summary>
+                            {assignment.events.map((entry) => (
+                              <div key={entry.id}>
+                                {formatDateTime(entry.created_at)} · {responseStateLabels[entry.to_state]}
+                              </div>
+                            ))}
+                          </details>
+                        </div>
+                      ))}
+                      {canAssignResponse && availableResponseUnits.length > 0 && (
+                        <form onSubmit={submitResponseAssignment}>
+                          <select
+                            aria-label="Доступная группа реагирования"
+                            value={selectedResponseUnitId}
+                            onChange={(event) => setSelectedResponseUnitId(event.target.value)}
+                          >
+                            {availableResponseUnits.map((unit) => (
+                              <option key={unit.id} value={unit.id}>{unit.name}</option>
+                            ))}
+                          </select>
+                          <button type="submit" disabled={loading || !selectedResponseUnitId}>Назначить группу</button>
+                        </form>
+                      )}
+                      {!canAssignResponse && <small>Назначение доступно после принятия карточки.</small>}
+                      {canAssignResponse && !availableResponseUnits.length && !responseAssignments.length && (
+                        <small>Для профиля ДДС пока нет доступных групп.</small>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className={styles.readOnlyServiceHistory}>
+                    <div><span>система</span><b>›</b><time>{formatDateTime(selectedIncident.delivered_at)}</time><em>Добавлена</em></div>
+                    <small>Статусы другой службы доступны только для просмотра.</small>
+                  </div>
                 )}
               </div>
             )}
@@ -447,9 +702,9 @@ function App() {
                   <span className={styles.serviceChevron} aria-hidden="true" />
                   <strong>{compactServiceName(service)}</strong>
                   <small>{index === 0
-                    ? `${formatTime(selectedIncident.opened_at)} Получена службой`
+                    ? `${formatTime(latestOwnStatus?.created_at)} ${historyStatusLabels[latestOwnStatus?.status] || 'Добавлена'}`
                     : `${formatTime(selectedIncident.delivered_at)} Добавлена`}</small>
-                  {selectedService === service && <i title="Последовательный ввод статусов будет реализован в UT112-9">✎</i>}
+                  {selectedService === service && index === 0 && <i title="Изменить статус и открыть историю">✎</i>}
                 </button>
               ))}
               {['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
@@ -542,7 +797,7 @@ function App() {
                   <strong>{incident.incident_type}</strong>
                   <span>Нет</span>
                   <strong className={styles.registryAddress}>{incident.address}</strong>
-                  <span className={styles.serviceState}>Добавлена</span>
+                  <span className={styles.serviceState}><i>◒</i>{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
                   <span className={styles.fileIconCell}><span className={styles.fileTextIcon} aria-hidden="true" /></span>
                   <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
                 </button>

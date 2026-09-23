@@ -15,7 +15,9 @@ from app.db.session import (
 )
 from app.modules.identity.router import router as identity_router
 from app.modules.incidents.router import router as incidents_router
+from app.modules.response.router import router as response_router
 from app.modules.training.router import router as training_router
+from app.modules.training.router import template_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -54,7 +56,9 @@ app.add_middleware(
 )
 app.include_router(identity_router)
 app.include_router(training_router)
+app.include_router(template_router)
 app.include_router(incidents_router)
+app.include_router(response_router)
 
 
 @app.get("/health", tags=["system"])

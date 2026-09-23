@@ -3,17 +3,30 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.dependencies import get_database_session
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
-from app.modules.incidents.models import Incident
-from app.modules.incidents.schemas import IncidentCreate, IncidentRead
-from app.modules.incidents.workflow import create_delivered_incident, mark_incident_opened
+from app.modules.incidents.models import Incident, IncidentAction
+from app.modules.incidents.schemas import (
+    IncidentActionCreate,
+    IncidentActionRead,
+    IncidentCreate,
+    IncidentRead,
+)
+from app.modules.incidents.workflow import (
+    IncidentActionCommentRequiredError,
+    InvalidIncidentTransitionError,
+    create_delivered_incident,
+    get_available_actions,
+    mark_incident_opened,
+    perform_incident_action,
+)
 from app.modules.training.models import (
+    TrainingRun,
     TrainingSession,
     TrainingSessionState,
     training_session_trainees,
@@ -22,10 +35,31 @@ from app.modules.training.models import (
 router = APIRouter(prefix="/api/incidents", tags=["incidents"])
 
 
-def _to_read_model(incident: Incident) -> IncidentRead:
+def _to_action_read_model(action: IncidentAction) -> IncidentActionRead:
+    return IncidentActionRead(
+        id=action.id,
+        actor_user_id=action.actor_user_id,
+        actor_display_name=action.actor_display_name,
+        is_system=action.is_system,
+        status=action.status,
+        action=action.action,
+        from_status=action.from_status,
+        to_status=action.to_status,
+        comment=action.comment,
+        created_at=action.created_at,
+    )
+
+
+def _to_read_model(incident: Incident, user: User) -> IncidentRead:
+    can_act = (
+        user.role == UserRole.TRAINEE
+        and incident.training_session.state == TrainingSessionState.ACTIVE
+        and (incident.training_run is None or incident.training_run.trainee_id == user.id)
+    )
     return IncidentRead(
         id=incident.id,
         training_session_id=incident.training_session_id,
+        training_run_id=incident.training_run_id,
         incident_number=incident.incident_number,
         reported_at=incident.reported_at,
         source=incident.source,
@@ -38,10 +72,18 @@ def _to_read_model(incident: Incident) -> IncidentRead:
         incident_type=incident.incident_type,
         source_snapshot=incident.source_snapshot,
         lifecycle_state=incident.lifecycle_state,
+        dds_status=incident.dds_status,
+        available_actions=get_available_actions(incident) if can_act else [],
+        actions=[_to_action_read_model(action) for action in incident.actions],
         created_at=incident.created_at,
         delivered_at=incident.delivered_at,
         opened_at=incident.opened_at,
         primary_status_at=incident.primary_status_at,
+        primary_response_duration_seconds=(
+            (incident.primary_status_at - incident.delivered_at).total_seconds()
+            if incident.primary_status_at is not None and incident.delivered_at is not None
+            else None
+        ),
         finished_at=incident.finished_at,
     )
 
@@ -51,7 +93,7 @@ def _ensure_incident_visible(incident: Incident, user: User) -> None:
     is_owner = user.role == UserRole.INSTRUCTOR and session.instructor_id == user.id
     is_trainee = user.role == UserRole.TRAINEE and any(
         trainee.id == user.id for trainee in session.trainees
-    )
+    ) and (incident.training_run is None or incident.training_run.trainee_id == user.id)
     if user.role != UserRole.ADMIN and not is_owner and not is_trainee:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -71,7 +113,9 @@ async def _load_incident(
         .options(
             selectinload(Incident.training_session).selectinload(
                 TrainingSession.trainees
-            )
+            ),
+            selectinload(Incident.actions),
+            selectinload(Incident.training_run),
         )
     )
     if for_update:
@@ -101,7 +145,7 @@ async def create_incident(
         )
 
     result = await database.scalars(
-        select(TrainingSession).where(
+        select(TrainingSession).options(selectinload(TrainingSession.runs)).where(
             TrainingSession.id == payload.training_session_id,
             TrainingSession.instructor_id == current_user.id,
         )
@@ -118,13 +162,26 @@ async def create_incident(
             detail="Карточку можно доставить только в активную учебную сессию",
         )
 
+    matching_runs = [
+        run for run in training_session.runs
+        if payload.trainee_id is None or run.trainee_id == payload.trainee_id
+    ]
+    if len(matching_runs) > 1 or (payload.trainee_id is not None and not matching_runs):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Укажите обучаемого из текущей учебной сессии",
+        )
+
     incident = create_delivered_incident(
         training_session_id=training_session.id,
         source_snapshot=payload.source_snapshot.model_dump(mode="json"),
     )
+    if matching_runs:
+        incident.training_run = matching_runs[0]
     database.add(incident)
     await database.commit()
-    return _to_read_model(incident)
+    incident.training_session = training_session
+    return _to_read_model(incident, current_user)
 
 
 @router.get("", response_model=list[IncidentRead])
@@ -134,7 +191,9 @@ async def list_incidents(
 ) -> list[IncidentRead]:
     """Возвращает карточки только из доступных пользователю учебных сессий."""
     statement = select(Incident).options(
-        selectinload(Incident.training_session).selectinload(TrainingSession.trainees)
+        selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
+        selectinload(Incident.actions),
+        selectinload(Incident.training_run),
     )
     if current_user.role == UserRole.INSTRUCTOR:
         statement = statement.join(TrainingSession).where(
@@ -143,10 +202,13 @@ async def list_incidents(
     elif current_user.role == UserRole.TRAINEE:
         statement = statement.join(TrainingSession).join(
             training_session_trainees
-        ).where(training_session_trainees.c.trainee_id == current_user.id)
+        ).outerjoin(TrainingRun, Incident.training_run_id == TrainingRun.id).where(
+            training_session_trainees.c.trainee_id == current_user.id,
+            or_(Incident.training_run_id.is_(None), TrainingRun.trainee_id == current_user.id),
+        )
 
     result = await database.scalars(statement.order_by(Incident.id.desc()))
-    return [_to_read_model(item) for item in result.unique().all()]
+    return [_to_read_model(item, current_user) for item in result.unique().all()]
 
 
 @router.get("/{incident_id}", response_model=IncidentRead)
@@ -158,7 +220,7 @@ async def read_incident(
     """Восстанавливает карточку и её исходный snapshot из PostgreSQL."""
     incident = await _load_incident(database, incident_id)
     _ensure_incident_visible(incident, current_user)
-    return _to_read_model(incident)
+    return _to_read_model(incident, current_user)
 
 
 @router.post("/{incident_id}/open", response_model=IncidentRead)
@@ -176,6 +238,56 @@ async def open_incident(
 
     incident = await _load_incident(database, incident_id, for_update=True)
     _ensure_incident_visible(incident, current_user)
-    mark_incident_opened(incident)
+    mark_incident_opened(
+        incident,
+        actor_user_id=current_user.id,
+        actor_display_name=current_user.full_name,
+    )
     await database.commit()
-    return _to_read_model(incident)
+    return _to_read_model(incident, current_user)
+
+
+@router.post("/{incident_id}/actions", response_model=IncidentRead)
+async def change_incident_status(
+    incident_id: int,
+    payload: IncidentActionCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> IncidentRead:
+    """Выполняет разрешённое действие ДДС и сохраняет его серверное время."""
+    if current_user.role != UserRole.TRAINEE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Статус ДДС может менять только обучаемый",
+        )
+
+    incident = await _load_incident(database, incident_id, for_update=True)
+    _ensure_incident_visible(incident, current_user)
+    if incident.training_session.state != TrainingSessionState.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Действия доступны только в активной учебной сессии",
+        )
+
+    try:
+        action = perform_incident_action(
+            incident,
+            action=payload.action,
+            actor_user_id=current_user.id,
+            actor_display_name=current_user.full_name,
+            comment=payload.comment,
+        )
+    except IncidentActionCommentRequiredError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+        ) from error
+    except InvalidIncidentTransitionError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+    database.add(action)
+    await database.commit()
+    return _to_read_model(incident, current_user)

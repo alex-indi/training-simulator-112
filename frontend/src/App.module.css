@@ -1014,10 +1014,12 @@
 .serviceHistory {
   position: absolute;
   z-index: 10;
-  left: 174px;
+  left: 92px;
   bottom: 78px;
-  width: 410px;
-  padding: 6px 8px 8px;
+  width: 520px;
+  max-height: 72vh;
+  padding: 9px 10px 11px;
+  overflow-y: auto;
   background: #1484bd;
   color: #fff;
   box-shadow: 3px 4px 0 rgb(0 0 0 / 32%);
@@ -1038,7 +1040,7 @@
   font-size: 10px;
 }
 
-.serviceHistory > div {
+.readOnlyServiceHistory > div {
   display: grid;
   grid-template-columns: 38px 12px 125px minmax(0, 1fr);
   gap: 4px;
@@ -1048,6 +1050,178 @@
 
 .serviceHistory em {
   font-style: normal;
+}
+
+.currentDdsStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 -10px;
+  padding: 8px 10px;
+  background: rgb(0 0 0 / 16%);
+}
+
+.currentDdsStatus span {
+  font-size: 9px;
+  opacity: 0.8;
+}
+
+.currentDdsStatus strong {
+  font-size: 12px;
+}
+
+.historyList {
+  display: grid;
+  gap: 1px;
+  max-height: 230px;
+  margin: 7px 0;
+  overflow-y: auto;
+  background: rgb(255 255 255 / 18%);
+}
+
+.historyEntry {
+  padding: 7px 8px;
+  background: #157cad;
+}
+
+.historyEntry > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.historyEntry em {
+  font-weight: 700;
+}
+
+.historyEntry time,
+.historyEntry small {
+  color: #d8f1fc;
+  font-size: 8px;
+}
+
+.historyEntry p {
+  margin: 5px 0 0;
+  padding-top: 5px;
+  border-top: 1px solid rgb(255 255 255 / 18%);
+  line-height: 1.35;
+}
+
+.statusEditor {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgb(255 255 255 / 35%);
+}
+
+.statusEditor label {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  color: #e7f7fe;
+  font-size: 8px;
+}
+
+.statusEditor select,
+.statusEditor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #8cc8e3;
+  background: #f7fbfd;
+  color: #1b2b33;
+  font: inherit;
+}
+
+.statusEditor select {
+  min-height: 28px;
+  padding: 4px;
+}
+
+.statusEditor textarea {
+  padding: 6px;
+  resize: vertical;
+}
+
+.statusEditor > button {
+  grid-column: 2;
+  justify-self: end;
+  padding: 6px 12px;
+  border: 1px solid #fff;
+  background: #32434b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.statusEditor > button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.statusLocked,
+.readOnlyServiceHistory > small {
+  margin: 8px 0 0;
+  color: #d8f1fc;
+  font-size: 9px;
+}
+
+.responsePanel {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgb(255 255 255 / 35%);
+  font-size: 9px;
+}
+
+.responseHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.responseHeading > strong {
+  font-size: 10px;
+}
+
+.responsePanel form,
+.responseAssignment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.responsePanel select {
+  flex: 1;
+  min-width: 180px;
+  padding: 5px;
+}
+
+.responsePanel button {
+  padding: 5px 9px;
+  border: 1px solid #fff;
+  background: #32434b;
+  color: #fff;
+}
+
+.responsePanel button:disabled {
+  opacity: 0.5;
+}
+
+.responseAssignment {
+  padding: 5px 0;
+  border-top: 1px solid rgb(255 255 255 / 18%);
+}
+
+.responseAssignment b {
+  color: #e5f7b7;
+}
+
+.responseAssignment details {
+  flex-basis: 100%;
+  line-height: 1.6;
 }
 
 .roleScreen {
