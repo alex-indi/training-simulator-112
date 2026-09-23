@@ -20,6 +20,7 @@ from app.modules.incidents.workflow import create_delivered_incident
 from app.modules.training.models import (
     DeliveryOrder,
     DeliveryState,
+    QueueMode,
     ScenarioQueueItem,
     TrainingMode,
     TrainingScenario,
@@ -57,12 +58,17 @@ def _invalidate_readiness(session: TrainingSession) -> None:
 
 
 def _new_item(
-    session: TrainingSession, run_id: int, title: str, snapshot: dict
+    session: TrainingSession,
+    run_id: int | None,
+    title: str,
+    snapshot: dict,
+    group_id: int | None = None,
 ) -> ScenarioQueueItem:
     scenario = TrainingScenario(instructor_id=session.instructor_id, title=title, snapshot=snapshot)
     position = max((item.position for item in session.queue_items), default=0) + 1
     item = ScenarioQueueItem(
         training_run_id=run_id,
+        training_group_id=group_id,
         scenario=scenario,
         title=title,
         snapshot=snapshot,
@@ -93,13 +99,23 @@ async def add_queue_item(
 ) -> list[QueueItemRead]:
     session = await _load_session(database, training_session_id, for_update=True)
     _editable(session, current_user)
-    if payload.training_run_id not in {run.id for run in session.runs}:
-        raise HTTPException(422, "АРМ не принадлежит занятию")
+    if payload.training_run_id is not None and payload.training_run_id not in {
+        run.id for run in session.runs if run.queue_mode == QueueMode.INDIVIDUAL_QUEUE
+    }:
+        raise HTTPException(422, "АРМ не принадлежит индивидуальной очереди занятия")
+    if payload.training_group_id is not None and payload.training_group_id not in {
+        group.id
+        for group in session.groups
+        if group.queue_mode == QueueMode.SHARED_QUEUE
+        and any(run.group_id == group.id for run in session.runs)
+    }:
+        raise HTTPException(422, "Группа не принадлежит общей очереди занятия")
     _new_item(
         session,
         payload.training_run_id,
         payload.title.strip(),
         payload.snapshot.model_dump(mode="json"),
+        group_id=payload.training_group_id,
     )
     _invalidate_readiness(session)
     await database.commit()
@@ -228,19 +244,30 @@ async def generate_queue(
         raise HTTPException(409, "Сначала подключите участников")
     session.queue_items.clear()
     await database.flush()
-    for run in sorted(session.runs, key=lambda value: value.id):
+    targets = [
+        (run.id, None, run.workstation_number)
+        for run in session.runs
+        if run.queue_mode != QueueMode.SHARED_QUEUE
+    ]
+    targets += [
+        (None, group.id, group.name)
+        for group in session.groups
+        if group.queue_mode == QueueMode.SHARED_QUEUE
+        and any(run.group_id == group.id for run in session.runs)
+    ]
+    for run_id, group_id, label in targets:
         for index in range(payload.count_per_run):
             title, description, incident_type = SCENARIOS[index % len(SCENARIOS)]
             sequence = index + 1
             snapshot = IncidentSnapshot(
-                incident_number=f"КП-{session.id}-{run.id}-{sequence}",
+                incident_number=f"КП-{session.id}-{run_id or 'G' + str(group_id)}-{sequence}",
                 reported_at=datetime.now(UTC),
                 source="Система-112",
-                address=f"Учебный объект, участок АРМ {run.workstation_number}",
+                address=f"Учебный объект, участок {label}",
                 description=description,
                 incident_type=incident_type,
             ).model_dump(mode="json")
-            _new_item(session, run.id, title, snapshot)
+            _new_item(session, run_id, title, snapshot, group_id=group_id)
     _invalidate_readiness(session)
     await database.commit()
     return _read_queue(await _load_session(database, training_session_id))
@@ -248,9 +275,20 @@ async def generate_queue(
 
 def finalize_order(session: TrainingSession) -> None:
     """Порядок RANDOM фиксируется один раз при старте и не меняет содержимое."""
-    for run in session.runs:
+    targets = [("run", run.id) for run in session.runs if run.queue_mode != QueueMode.SHARED_QUEUE]
+    targets += [
+        ("group", group.id)
+        for group in session.groups
+        if group.queue_mode == QueueMode.SHARED_QUEUE
+    ]
+    for target_type, target_id in targets:
         ordered = sorted(
-            (item for item in session.queue_items if item.training_run_id == run.id),
+            (
+                item
+                for item in session.queue_items
+                if (item.training_run_id if target_type == "run" else item.training_group_id)
+                == target_id
+            ),
             key=lambda item: item.position,
         )
         if session.delivery_order == DeliveryOrder.RANDOM:
@@ -305,6 +343,7 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
             training_session_id=session.id, source_snapshot=item.snapshot, server_time=now
         )
         incident.training_run_id = item.training_run_id
+        incident.training_group_id = item.training_group_id
         database.add(incident)
         await database.flush()
         item.delivery_state = DeliveryState.DELIVERED

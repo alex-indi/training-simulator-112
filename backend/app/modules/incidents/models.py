@@ -75,6 +75,13 @@ class Incident(Base):
     training_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True
     )
+    training_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_groups.id", ondelete="RESTRICT"), index=True
+    )
+    claimed_by_training_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     incident_number: Mapped[str] = mapped_column(String(64), index=True)
     reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     source: Mapped[str] = mapped_column(String(120))
@@ -116,7 +123,9 @@ class Incident(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     training_session: Mapped[TrainingSession] = relationship(back_populates="incidents")
-    training_run: Mapped[TrainingRun | None] = relationship(back_populates="incidents")
+    training_run: Mapped[TrainingRun | None] = relationship(
+        back_populates="incidents", foreign_keys=[training_run_id]
+    )
     actions: Mapped[list[IncidentAction]] = relationship(
         back_populates="incident",
         cascade="all, delete-orphan",

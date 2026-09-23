@@ -175,7 +175,9 @@ class TrainingRun(Base):
 
     training_session: Mapped[TrainingSession] = relationship(back_populates="runs")
     trainee: Mapped[User] = relationship()
-    incidents: Mapped[list[Incident]] = relationship(back_populates="training_run")
+    incidents: Mapped[list[Incident]] = relationship(
+        back_populates="training_run", foreign_keys="Incident.training_run_id"
+    )
     group: Mapped[TrainingGroup | None] = relationship(back_populates="runs")
 
 
@@ -238,8 +240,11 @@ class ScenarioQueueItem(Base):
     training_session_id: Mapped[int] = mapped_column(
         ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
     )
-    training_run_id: Mapped[int] = mapped_column(
+    training_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True
+    )
+    training_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_groups.id", ondelete="RESTRICT"), index=True
     )
     scenario_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_scenarios.id", ondelete="SET NULL")
