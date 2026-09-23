@@ -129,9 +129,16 @@ class TemplateRead(BaseModel):
 
 
 class QueueItemWrite(BaseModel):
-    training_run_id: int = Field(gt=0)
+    training_run_id: int | None = Field(default=None, gt=0)
+    training_group_id: int | None = Field(default=None, gt=0)
     title: str = Field(min_length=1, max_length=200)
     snapshot: IncidentSnapshot
+
+    @model_validator(mode="after")
+    def one_target(self) -> "QueueItemWrite":
+        if (self.training_run_id is None) == (self.training_group_id is None):
+            raise ValueError("Укажите один АРМ или одну группу")
+        return self
 
 
 class QueueItemUpdate(BaseModel):
@@ -141,7 +148,8 @@ class QueueItemUpdate(BaseModel):
 
 class QueueItemRead(BaseModel):
     id: int
-    training_run_id: int
+    training_run_id: int | None
+    training_group_id: int | None
     scenario_id: int | None
     title: str
     snapshot: IncidentSnapshot

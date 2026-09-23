@@ -105,7 +105,7 @@ def test_flow_readiness_requires_approved_pool_for_each_run():
     assert _readiness(session).can_start is False
 
 
-def test_shared_queue_start_waits_for_claim_implementation():
+def test_shared_queue_requires_group():
     session, _ = make_session()
     session.trainees = [
         User(id=index, username=f"trainee{index}", role=UserRole.TRAINEE) for index in (1, 2)
@@ -118,4 +118,4 @@ def test_shared_queue_start_waits_for_claim_implementation():
     session.runs[0].queue_mode = QueueMode.SHARED_QUEUE
     readiness = _readiness(session)
     assert readiness.can_start is False
-    assert "Общая очередь будет доступна после UT112-19" in readiness.warnings
+    assert "Назначьте общей очереди учебную группу" in readiness.warnings

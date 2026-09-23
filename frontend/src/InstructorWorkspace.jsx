@@ -10,7 +10,7 @@ const emptySettings = {
 }
 const emptyGroup = { name: '', dds_profile: '', difficulty: 'Средняя', queue_mode: 'INDIVIDUAL_QUEUE' }
 const steps = ['Параметры', 'Учебный класс', 'Распределение', 'Задания', 'Готовность']
-const emptyScenario = { title: '', training_run_id: '', address: '', description: '', incident_type: '' }
+const emptyScenario = { title: '', target: '', address: '', description: '', incident_type: '' }
 const stateLabels = { DRAFT: 'Черновик', READY: 'Готово к запуску', ACTIVE: 'Активное', COMPLETED: 'Завершённое', CANCELLED: 'Отменённое' }
 const modeLabels = { FLOW: 'Потоковая тренировка', FIXED_SET: 'Набор заданий', MANUAL: 'Управляемая тренировка' }
 
@@ -175,7 +175,10 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     }
     const path = `/api/training/sessions/${session.id}/queue${editingScenarioId ? `/${editingScenarioId}` : ''}`
     const payload = { title: scenarioDraft.title, snapshot }
-    if (!editingScenarioId) payload.training_run_id = Number(scenarioDraft.training_run_id)
+    if (!editingScenarioId) {
+      const [kind, id] = scenarioDraft.target.split(':')
+      payload[kind === 'group' ? 'training_group_id' : 'training_run_id'] = Number(id)
+    }
     setQueue(await api(path, jsonOptions(editingScenarioId ? 'PUT' : 'POST', payload)))
     setScenarioDraft(emptyScenario)
     setEditingScenarioId(null)
@@ -196,7 +199,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   })
   const editScenario = (item) => {
     setEditingScenarioId(item.id)
-    setScenarioDraft({ title: item.title, training_run_id: item.training_run_id, address: item.snapshot.address, description: item.snapshot.description, incident_type: item.snapshot.incident_type })
+    setScenarioDraft({ title: item.title, target: item.training_group_id ? `group:${item.training_group_id}` : `run:${item.training_run_id}`, address: item.snapshot.address, description: item.snapshot.description, incident_type: item.snapshot.incident_type })
   }
 
   const updateSettings = (event) => {
@@ -247,20 +250,20 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
         <h3>Подготовленные задания</h3>
         <p>Карточки подготовлены до старта. Для FLOW требуется примерно {session.mode === 'FLOW' ? Math.ceil(session.duration_minutes * 60 / session.delivery_interval_seconds) : '—'} позиций на АРМ. Случайный порядок фиксируется при запуске.</p>
         {editable && <div className={styles.actions}>
-          <label>На каждое АРМ <input type="number" min="1" max="100" value={generateCount} onChange={(event) => setGenerateCount(event.target.value)} /></label>
+          <label>На каждое АРМ или группу <input type="number" min="1" max="100" value={generateCount} onChange={(event) => setGenerateCount(event.target.value)} /></label>
           <button type="button" disabled={busy || !session.runs.length} onClick={generateQueue}>{queue.length ? 'Перегенерировать набор' : 'Сформировать набор'}</button>
           <button type="button" disabled={busy || !queue.length || queue.every((item) => item.approved)} onClick={approveQueue}>Утвердить набор</button>
         </div>}
         <div className={styles.scenarioList}>{queue.map((item) => <article className={styles.scenario} key={item.id}>
-          <div><strong>{item.position}. {item.title}</strong><small>АРМ {session.runs.find((run) => run.id === item.training_run_id)?.workstation_number || '—'} · {item.approved ? 'Утверждена' : 'Ожидает утверждения'} · {item.delivery_state === 'DELIVERED' ? 'Выдана' : 'Не выдана'}{item.delivery_position ? ` · порядок ${item.delivery_position}` : ''}</small></div>
+          <div><strong>{item.position}. {item.title}</strong><small>{item.training_group_id ? `Группа ${session.groups.find((group) => group.id === item.training_group_id)?.name || '—'}` : `АРМ ${session.runs.find((run) => run.id === item.training_run_id)?.workstation_number || '—'}`} · {item.approved ? 'Утверждена' : 'Ожидает утверждения'} · {item.delivery_state === 'DELIVERED' ? 'Выдана' : 'Не выдана'}{item.delivery_position ? ` · порядок ${item.delivery_position}` : ''}</small></div>
           <p>{item.snapshot.incident_type} · {item.snapshot.address}</p><p>{item.snapshot.description}</p>
           {editable && <div className={styles.actions}><button type="button" onClick={() => editScenario(item)}>Изменить</button><button type="button" onClick={() => replaceScenario(item.id)}>Заменить</button><button type="button" onClick={() => removeScenario(item.id)}>Удалить</button></div>}
         </article>)}</div>
         {!queue.length && <p>Пул пока пуст.</p>}
         {editable && <div className={styles.scenarioForm}><h4>{editingScenarioId ? 'Изменить карточку' : 'Добавить карточку'}</h4>
-          {!editingScenarioId && <label>АРМ <select value={scenarioDraft.training_run_id} onChange={(event) => setScenarioDraft((current) => ({ ...current, training_run_id: event.target.value }))}><option value="">Выберите АРМ</option>{session.runs.map((run) => <option key={run.id} value={run.id}>АРМ {run.workstation_number} · {run.trainee_name}</option>)}</select></label>}
+          {!editingScenarioId && <label>Очередь <select value={scenarioDraft.target} onChange={(event) => setScenarioDraft((current) => ({ ...current, target: event.target.value }))}><option value="">Выберите АРМ или группу</option>{session.runs.filter((run) => run.queue_mode === 'INDIVIDUAL_QUEUE').map((run) => <option key={run.id} value={`run:${run.id}`}>АРМ {run.workstation_number} · {run.trainee_name}</option>)}{session.groups.filter((group) => group.queue_mode === 'SHARED_QUEUE' && group.run_ids.length).map((group) => <option key={group.id} value={`group:${group.id}`}>Группа {group.name}</option>)}</select></label>}
           {['title', 'incident_type', 'address', 'description'].map((field) => <label key={field}>{({ title: 'Название', incident_type: 'Тип происшествия', address: 'Адрес', description: 'Описание' })[field]}<input value={scenarioDraft[field]} onChange={(event) => setScenarioDraft((current) => ({ ...current, [field]: event.target.value }))} /></label>)}
-          <div className={styles.actions}><button type="button" disabled={busy || !scenarioDraft.title || !scenarioDraft.incident_type || !scenarioDraft.address || !scenarioDraft.description || (!editingScenarioId && !scenarioDraft.training_run_id)} onClick={saveScenario}>{editingScenarioId ? 'Сохранить изменение' : 'Добавить'}</button>{editingScenarioId && <button type="button" onClick={() => { setEditingScenarioId(null); setScenarioDraft(emptyScenario) }}>Отмена</button>}</div>
+          <div className={styles.actions}><button type="button" disabled={busy || !scenarioDraft.title || !scenarioDraft.incident_type || !scenarioDraft.address || !scenarioDraft.description || (!editingScenarioId && !scenarioDraft.target)} onClick={saveScenario}>{editingScenarioId ? 'Сохранить изменение' : 'Добавить'}</button>{editingScenarioId && <button type="button" onClick={() => { setEditingScenarioId(null); setScenarioDraft(emptyScenario) }}>Отмена</button>}</div>
         </div>}
         <div className={styles.actions}><button type="button" onClick={() => setStep(4)}>К готовности →</button></div>
       </section>}

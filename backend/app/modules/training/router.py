@@ -85,19 +85,32 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         else 0
     )
     pool_complete = all(
-        sum(queue_item.training_run_id == run.id for queue_item in item.queue_items)
+        sum(
+            (queue_item.training_group_id == run.group_id)
+            if run.queue_mode == QueueMode.SHARED_QUEUE
+            else (queue_item.training_run_id == run.id)
+            for queue_item in item.queue_items
+        )
         >= required_per_run
         for run in runs
     )
-    has_shared_queue = any(run.queue_mode == QueueMode.SHARED_QUEUE for run in runs)
+    shared_runs = [run for run in runs if run.queue_mode == QueueMode.SHARED_QUEUE]
+    invalid_shared = any(
+        run.group_id is None
+        or not any(
+            group.id == run.group_id and group.queue_mode == QueueMode.SHARED_QUEUE
+            for group in item.groups
+        )
+        for run in shared_runs
+    )
     if item.mode != TrainingMode.MANUAL and not prepared:
         warnings.append("Подготовьте пул карточек")
     if not pool_complete:
         warnings.append(f"Для FLOW нужно не менее {required_per_run} карточек на АРМ")
     if prepared != approved:
         warnings.append("Утвердите подготовленные карточки")
-    if has_shared_queue:
-        warnings.append("Общая очередь будет доступна после UT112-19")
+    if invalid_shared:
+        warnings.append("Назначьте общей очереди учебную группу")
     return ReadinessRead(
         participant_count=len(runs),
         workstation_count=item.workstation_count,
@@ -114,7 +127,7 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
             and (item.mode == TrainingMode.MANUAL or bool(prepared))
             and pool_complete
             and prepared == approved
-            and not has_shared_queue
+            and not invalid_shared
         ),
         prepared_count=prepared,
         approved_count=approved,
