@@ -11,6 +11,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -51,6 +52,11 @@ class DeliveryOrder(StrEnum):
 class QueueMode(StrEnum):
     INDIVIDUAL_QUEUE = "INDIVIDUAL_QUEUE"
     SHARED_QUEUE = "SHARED_QUEUE"
+
+
+class DeliveryState(StrEnum):
+    PENDING = "PENDING"
+    DELIVERED = "DELIVERED"
 
 
 training_session_trainees = Table(
@@ -115,6 +121,8 @@ class TrainingSession(Base):
         server_default=func.now(),
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_elapsed_seconds: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    delivery_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     instructor: Mapped[User] = relationship(foreign_keys=[instructor_id])
     trainees: Mapped[list[User]] = relationship(
@@ -130,6 +138,9 @@ class TrainingSession(Base):
         cascade="all, delete-orphan",
     )
     groups: Mapped[list[TrainingGroup]] = relationship(
+        back_populates="training_session", cascade="all, delete-orphan"
+    )
+    queue_items: Mapped[list[ScenarioQueueItem]] = relationship(
         back_populates="training_session", cascade="all, delete-orphan"
     )
 
@@ -203,3 +214,50 @@ class TrainingTemplate(Base):
     name: Mapped[str] = mapped_column(String(200))
     settings: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TrainingScenario(Base):
+    """Сценарий преподавателя; выданные карточки хранят собственный snapshot."""
+
+    __tablename__ = "training_scenarios"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    instructor_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ScenarioQueueItem(Base):
+    """Утверждённая позиция занятия с сохранённым порядком выдачи."""
+
+    __tablename__ = "scenario_queue_items"
+    __table_args__ = (UniqueConstraint("training_session_id", "position"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_session_id: Mapped[int] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
+    )
+    training_run_id: Mapped[int] = mapped_column(
+        ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True
+    )
+    scenario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_scenarios.id", ondelete="SET NULL")
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    position: Mapped[int] = mapped_column(Integer)
+    delivery_position: Mapped[int | None] = mapped_column(Integer)
+    approved: Mapped[bool] = mapped_column(default=False, server_default="false")
+    delivery_state: Mapped[DeliveryState] = mapped_column(
+        Enum(DeliveryState, name="delivery_state"),
+        default=DeliveryState.PENDING,
+        server_default="PENDING",
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    incident_id: Mapped[int | None] = mapped_column(
+        ForeignKey("incidents.id", ondelete="SET NULL"), unique=True
+    )
+    training_session: Mapped[TrainingSession] = relationship(back_populates="queue_items")
+    training_run: Mapped[TrainingRun] = relationship()
+    scenario: Mapped[TrainingScenario | None] = relationship()
