@@ -8,9 +8,22 @@ import pytest
 from fastapi import HTTPException
 
 from app.modules.identity.models import User, UserRole
-from app.modules.training.models import TrainingSession, TrainingSessionState
-from app.modules.training.router import create_training_session, start_session
-from app.modules.training.schemas import TrainingSessionCreate
+from app.modules.training.models import (
+    DeliveryOrder,
+    QueueMode,
+    TrainingMode,
+    TrainingRun,
+    TrainingSession,
+    TrainingSessionState,
+)
+from app.modules.training.router import (
+    _readiness,
+    create_group,
+    create_training_session,
+    prepare_session,
+    start_session,
+)
+from app.modules.training.schemas import GroupWrite, TrainingSessionCreate
 from app.modules.training.workflow import (
     InvalidTrainingSessionTransitionError,
     prepare_training_session,
@@ -32,6 +45,20 @@ def make_training_session() -> TrainingSession:
         instructor_id=2,
         state=TrainingSessionState.DRAFT,
         trainees=[trainee],
+        runs=[
+            TrainingRun(
+                id=1,
+                trainee_id=3,
+                trainee=trainee,
+                dds_profile="ДДС района",
+                queue_mode=QueueMode.INDIVIDUAL_QUEUE,
+                workstation_number=1,
+            )
+        ],
+        groups=[],
+        mode=TrainingMode.MANUAL,
+        delivery_order=DeliveryOrder.SEQUENTIAL,
+        workstation_count=30,
     )
 
 
@@ -128,3 +155,53 @@ def test_instructor_start_command_persists_active_session() -> None:
     assert response.started_at is not None
     assert response.started_at.tzinfo is not None
     database.commit.assert_awaited_once()
+
+
+def test_offline_participant_warns_without_blocking_start() -> None:
+    session = make_training_session()
+    readiness = _readiness(session)
+    assert readiness.can_start is True
+    assert readiness.offline_count == 1
+    assert "Offline: 1" in readiness.warnings
+
+
+def test_preassigned_trainee_must_join_before_start() -> None:
+    session = make_training_session()
+    session.runs = []
+    readiness = _readiness(session)
+    assert readiness.can_start is False
+    assert "Не все назначенные обучаемые заняли АРМ" in readiness.warnings
+
+
+def test_empty_session_cannot_be_prepared() -> None:
+    instructor = User(id=2, username="instructor", role=UserRole.INSTRUCTOR)
+    session = make_training_session()
+    session.runs = []
+    result = MagicMock()
+    result.one_or_none.return_value = session
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=result)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(prepare_session(session.id, instructor, database))
+
+    assert error.value.status_code == 409
+    assert session.state == TrainingSessionState.DRAFT
+    database.commit.assert_not_called()
+
+
+def test_group_cannot_change_after_session_start() -> None:
+    instructor = User(id=2, username="instructor", role=UserRole.INSTRUCTOR)
+    session = make_training_session()
+    session.state = TrainingSessionState.ACTIVE
+    result = MagicMock()
+    result.one_or_none.return_value = session
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=result)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(create_group(session.id, GroupWrite(name="Группа 1"), instructor, database))
+
+    assert error.value.status_code == 409
+    assert session.groups == []
+    database.commit.assert_not_called()

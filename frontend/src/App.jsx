@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import styles from './App.module.css'
+import InstructorWorkspace from './InstructorWorkspace.jsx'
+import TrainingEnrollment from './TrainingEnrollment.jsx'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -360,6 +362,10 @@ function App() {
     }
   }
 
+  if (currentUser?.role === 'INSTRUCTOR') {
+    return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} />
+  }
+
   if (currentUser && currentUser.role !== 'TRAINEE') {
     return (
       <main className={styles.roleScreen}>
@@ -397,6 +403,7 @@ function App() {
 
   return (
     <main className={styles.armShell}>
+      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <strong>Ошибка:</strong> {error}

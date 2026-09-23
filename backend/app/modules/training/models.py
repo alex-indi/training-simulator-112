@@ -6,7 +6,18 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Table, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -24,6 +35,22 @@ class TrainingSessionState(StrEnum):
     ACTIVE = "ACTIVE"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+
+
+class TrainingMode(StrEnum):
+    FLOW = "FLOW"
+    FIXED_SET = "FIXED_SET"
+    MANUAL = "MANUAL"
+
+
+class DeliveryOrder(StrEnum):
+    SEQUENTIAL = "SEQUENTIAL"
+    RANDOM = "RANDOM"
+
+
+class QueueMode(StrEnum):
+    INDIVIDUAL_QUEUE = "INDIVIDUAL_QUEUE"
+    SHARED_QUEUE = "SHARED_QUEUE"
 
 
 training_session_trainees = Table(
@@ -55,6 +82,20 @@ class TrainingSession(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
+    topic: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    mode: Mapped[TrainingMode] = mapped_column(
+        Enum(TrainingMode, name="training_mode"),
+        default=TrainingMode.MANUAL,
+        server_default="MANUAL",
+    )
+    duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    delivery_interval_seconds: Mapped[int | None] = mapped_column(Integer)
+    delivery_order: Mapped[DeliveryOrder] = mapped_column(
+        Enum(DeliveryOrder, name="delivery_order"),
+        default=DeliveryOrder.SEQUENTIAL,
+        server_default="SEQUENTIAL",
+    )
+    workstation_count: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
     instructor_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"),
         index=True,
@@ -88,13 +129,19 @@ class TrainingSession(Base):
         back_populates="training_session",
         cascade="all, delete-orphan",
     )
+    groups: Mapped[list[TrainingGroup]] = relationship(
+        back_populates="training_session", cascade="all, delete-orphan"
+    )
 
 
 class TrainingRun(Base):
     """Участие одного обучаемого во всей учебной сессии."""
 
     __tablename__ = "training_runs"
-    __table_args__ = (UniqueConstraint("training_session_id", "trainee_id"),)
+    __table_args__ = (
+        UniqueConstraint("training_session_id", "trainee_id"),
+        UniqueConstraint("training_session_id", "workstation_number"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     training_session_id: Mapped[int] = mapped_column(
@@ -102,8 +149,57 @@ class TrainingRun(Base):
     )
     trainee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     dds_profile: Mapped[str] = mapped_column(String(120), default="ДДС", server_default="ДДС")
+    workstation_number: Mapped[int | None] = mapped_column(Integer)
+    difficulty: Mapped[str | None] = mapped_column(String(40))
+    queue_mode: Mapped[QueueMode] = mapped_column(
+        Enum(QueueMode, name="queue_mode"),
+        default=QueueMode.INDIVIDUAL_QUEUE,
+        server_default="INDIVIDUAL_QUEUE",
+    )
+    group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_groups.id", ondelete="SET NULL")
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     training_session: Mapped[TrainingSession] = relationship(back_populates="runs")
     trainee: Mapped[User] = relationship()
     incidents: Mapped[list[Incident]] = relationship(back_populates="training_run")
+    group: Mapped[TrainingGroup | None] = relationship(back_populates="runs")
+
+
+class TrainingGroup(Base):
+    """Группа учебной смены, редактируемая только до запуска."""
+
+    __tablename__ = "training_groups"
+    __table_args__ = (UniqueConstraint("training_session_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_session_id: Mapped[int] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    dds_profile: Mapped[str | None] = mapped_column(String(120))
+    difficulty: Mapped[str | None] = mapped_column(String(40))
+    queue_mode: Mapped[QueueMode] = mapped_column(
+        Enum(QueueMode, name="queue_mode"),
+        default=QueueMode.INDIVIDUAL_QUEUE,
+        server_default="INDIVIDUAL_QUEUE",
+    )
+
+    training_session: Mapped[TrainingSession] = relationship(back_populates="groups")
+    runs: Mapped[list[TrainingRun]] = relationship(back_populates="group")
+
+
+class TrainingTemplate(Base):
+    """Настройки занятия и групп без привязки к обучаемым."""
+
+    __tablename__ = "training_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    instructor_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    settings: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
