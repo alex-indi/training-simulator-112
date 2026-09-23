@@ -1,0 +1,7 @@
+.panel { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 10px 18px; background: #e5f1f6; color: #16394d; border-bottom: 1px solid #b7d0dd; font: 14px system-ui, sans-serif; }
+.panel form, .panel label { display: flex; align-items: center; gap: 8px; }
+.panel select, .panel input { padding: 5px; border: 1px solid #8eaebf; border-radius: 4px; background: white; color: #16394d; }
+.panel input { width: 60px; }
+.panel button { border: 0; border-radius: 4px; padding: 7px 12px; background: #1476a8; color: white; cursor: pointer; }
+.panel button:disabled { opacity: .5; }
+.error { color: #a02727; }
