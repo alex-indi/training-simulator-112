@@ -4,6 +4,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +16,7 @@ from app.db.session import (
 )
 from app.modules.identity.router import router as identity_router
 from app.modules.incidents.router import router as incidents_router
+from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
 from app.modules.training.router import router as training_router
 
@@ -27,6 +29,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     engine = create_database_engine(get_settings())
     application.state.database_engine = engine
     application.state.database_session_factory = create_session_factory(engine)
+    configure_realtime(application.state.database_session_factory)
 
     try:
         try:
@@ -63,3 +66,6 @@ app.include_router(response_router)
 async def health() -> dict[str, str]:
     """Подтверждает, что backend запущен и принимает запросы."""
     return {"status": "ok", "service": "training-simulator-112"}
+
+
+asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)

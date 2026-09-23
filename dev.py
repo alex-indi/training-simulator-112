@@ -93,7 +93,7 @@ def run_services(args: argparse.Namespace) -> int:
         uv_command,
         "run",
         "uvicorn",
-        "app.main:app",
+        "app.main:asgi_app",
         "--reload",
         "--host",
         "127.0.0.1",
