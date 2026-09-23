@@ -53,7 +53,10 @@ async def _load_session(
     statement = (
         select(TrainingSession)
         .where(TrainingSession.id == training_session_id)
-        .options(selectinload(TrainingSession.trainees))
+        .options(
+            selectinload(TrainingSession.trainees),
+            selectinload(TrainingSession.runs),
+        )
     )
     if for_update:
         statement = statement.with_for_update()

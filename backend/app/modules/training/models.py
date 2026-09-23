@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Table, func
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Table, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -84,3 +84,26 @@ class TrainingSession(Base):
         back_populates="training_session",
         cascade="all, delete-orphan",
     )
+    runs: Mapped[list[TrainingRun]] = relationship(
+        back_populates="training_session",
+        cascade="all, delete-orphan",
+    )
+
+
+class TrainingRun(Base):
+    """Участие одного обучаемого во всей учебной сессии."""
+
+    __tablename__ = "training_runs"
+    __table_args__ = (UniqueConstraint("training_session_id", "trainee_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_session_id: Mapped[int] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
+    )
+    trainee_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    dds_profile: Mapped[str] = mapped_column(String(120), default="ДДС", server_default="ДДС")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    training_session: Mapped[TrainingSession] = relationship(back_populates="runs")
+    trainee: Mapped[User] = relationship()
+    incidents: Mapped[list[Incident]] = relationship(back_populates="training_run")

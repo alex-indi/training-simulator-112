@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +26,7 @@ from app.modules.incidents.workflow import (
     perform_incident_action,
 )
 from app.modules.training.models import (
+    TrainingRun,
     TrainingSession,
     TrainingSessionState,
     training_session_trainees,
@@ -53,10 +54,12 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
     can_act = (
         user.role == UserRole.TRAINEE
         and incident.training_session.state == TrainingSessionState.ACTIVE
+        and (incident.training_run is None or incident.training_run.trainee_id == user.id)
     )
     return IncidentRead(
         id=incident.id,
         training_session_id=incident.training_session_id,
+        training_run_id=incident.training_run_id,
         incident_number=incident.incident_number,
         reported_at=incident.reported_at,
         source=incident.source,
@@ -90,7 +93,7 @@ def _ensure_incident_visible(incident: Incident, user: User) -> None:
     is_owner = user.role == UserRole.INSTRUCTOR and session.instructor_id == user.id
     is_trainee = user.role == UserRole.TRAINEE and any(
         trainee.id == user.id for trainee in session.trainees
-    )
+    ) and (incident.training_run is None or incident.training_run.trainee_id == user.id)
     if user.role != UserRole.ADMIN and not is_owner and not is_trainee:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -112,6 +115,7 @@ async def _load_incident(
                 TrainingSession.trainees
             ),
             selectinload(Incident.actions),
+            selectinload(Incident.training_run),
         )
     )
     if for_update:
@@ -141,7 +145,7 @@ async def create_incident(
         )
 
     result = await database.scalars(
-        select(TrainingSession).where(
+        select(TrainingSession).options(selectinload(TrainingSession.runs)).where(
             TrainingSession.id == payload.training_session_id,
             TrainingSession.instructor_id == current_user.id,
         )
@@ -158,10 +162,22 @@ async def create_incident(
             detail="Карточку можно доставить только в активную учебную сессию",
         )
 
+    matching_runs = [
+        run for run in training_session.runs
+        if payload.trainee_id is None or run.trainee_id == payload.trainee_id
+    ]
+    if len(matching_runs) > 1 or (payload.trainee_id is not None and not matching_runs):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Укажите обучаемого из текущей учебной сессии",
+        )
+
     incident = create_delivered_incident(
         training_session_id=training_session.id,
         source_snapshot=payload.source_snapshot.model_dump(mode="json"),
     )
+    if matching_runs:
+        incident.training_run = matching_runs[0]
     database.add(incident)
     await database.commit()
     incident.training_session = training_session
@@ -177,6 +193,7 @@ async def list_incidents(
     statement = select(Incident).options(
         selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
         selectinload(Incident.actions),
+        selectinload(Incident.training_run),
     )
     if current_user.role == UserRole.INSTRUCTOR:
         statement = statement.join(TrainingSession).where(
@@ -185,7 +202,10 @@ async def list_incidents(
     elif current_user.role == UserRole.TRAINEE:
         statement = statement.join(TrainingSession).join(
             training_session_trainees
-        ).where(training_session_trainees.c.trainee_id == current_user.id)
+        ).outerjoin(TrainingRun, Incident.training_run_id == TrainingRun.id).where(
+            training_session_trainees.c.trainee_id == current_user.id,
+            or_(Incident.training_run_id.is_(None), TrainingRun.trainee_id == current_user.id),
+        )
 
     result = await database.scalars(statement.order_by(Incident.id.desc()))
     return [_to_read_model(item, current_user) for item in result.unique().all()]

@@ -44,6 +44,16 @@ const historyStatusLabels = {
   ...ddsStatusLabels,
 }
 
+const responseStateLabels = {
+  ASSIGNED: 'Назначена',
+  ACKNOWLEDGED: 'Задание подтверждено',
+  EN_ROUTE: 'Выехала',
+  ARRIVED: 'Прибыла',
+  WORKING: 'Выполняет работы',
+  COMPLETED: 'Работы завершила',
+  CANCELLED: 'Назначение отменено',
+}
+
 const commentRequiredActions = new Set(['REJECT', 'REFUSE_WORK'])
 
 const emptyFilters = {
@@ -133,6 +143,9 @@ function App() {
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
   const [selectedAction, setSelectedAction] = useState('')
   const [actionComment, setActionComment] = useState('')
+  const [responseUnits, setResponseUnits] = useState([])
+  const [responseAssignments, setResponseAssignments] = useState([])
+  const [selectedResponseUnitId, setSelectedResponseUnitId] = useState('')
   const [expandedSearch, setExpandedSearch] = useState(false)
   const [filters, setFilters] = useState(emptyFilters)
   const [now, setNow] = useState(() => new Date())
@@ -204,6 +217,9 @@ function App() {
     setServiceHistoryOpen(false)
     setSelectedAction('')
     setActionComment('')
+    setResponseUnits([])
+    setResponseAssignments([])
+    setSelectedResponseUnitId('')
     setFilters(emptyFilters)
     setLoading(true)
 
@@ -224,12 +240,21 @@ function App() {
         currentUser.username,
         { method: 'POST' },
       )
+      const [units, assignments] = await Promise.all([
+        requestJson(`/api/response/units?incident_id=${incident.id}`, currentUser.username),
+        requestJson(`/api/response/incidents/${incident.id}/assignments`, currentUser.username),
+      ])
       const services = openedIncident.source_snapshot?.notified_services || []
       setSelectedIncident(openedIncident)
       setSelectedService(services[0] || 'Служба ДДС')
       setServiceHistoryOpen(false)
       setSelectedAction(openedIncident.available_actions?.[0] || '')
       setActionComment('')
+      setResponseUnits(units)
+      setResponseAssignments(assignments)
+      setSelectedResponseUnitId(String(units.find(
+        (unit) => !assignments.some((assignment) => assignment.response_unit.id === unit.id),
+      )?.id || ''))
       setIncidents((items) =>
         items.map((item) => (item.id === openedIncident.id ? openedIncident : item)),
       )
@@ -246,6 +271,9 @@ function App() {
     setServiceHistoryOpen(false)
     setSelectedAction('')
     setActionComment('')
+    setResponseUnits([])
+    setResponseAssignments([])
+    setSelectedResponseUnitId('')
   }
 
   const selectService = (service) => {
@@ -293,6 +321,45 @@ function App() {
     }
   }
 
+  const submitResponseAssignment = async (event) => {
+    event.preventDefault()
+    if (!selectedResponseUnitId) return
+    setError('')
+    setLoading(true)
+    try {
+      const assignment = await requestJson(
+        `/api/response/incidents/${selectedIncident.id}/assignments`,
+        currentUser.username,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ response_unit_id: Number(selectedResponseUnitId) }),
+        },
+      )
+      const updated = [...responseAssignments, assignment]
+      setResponseAssignments(updated)
+      setSelectedResponseUnitId(String(responseUnits.find(
+        (unit) => !updated.some((item) => item.response_unit.id === unit.id),
+      )?.id || ''))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const refreshResponseAssignments = async () => {
+    setError('')
+    try {
+      setResponseAssignments(await requestJson(
+        `/api/response/incidents/${selectedIncident.id}/assignments`,
+        currentUser.username,
+      ))
+    } catch (requestError) {
+      setError(requestError.message)
+    }
+  }
+
   if (currentUser && currentUser.role !== 'TRAINEE') {
     return (
       <main className={styles.roleScreen}>
@@ -321,6 +388,12 @@ function App() {
   const latestOwnStatus = ownServiceHistory[ownServiceHistory.length - 1]
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const filtersActive = Object.values(filters).some(Boolean)
+  const canAssignResponse = selectedIncident && [
+    'ACCEPTED', 'RESPONSE_STARTED', 'ARRIVED', 'WORKING',
+  ].includes(selectedIncident.dds_status)
+  const availableResponseUnits = responseUnits.filter(
+    (unit) => !responseAssignments.some((assignment) => assignment.response_unit.id === unit.id),
+  )
 
   return (
     <main className={styles.armShell}>
@@ -445,6 +518,45 @@ function App() {
                     ) : (
                       <p className={styles.statusLocked}>Изменение статусов закрыто. История доступна только для просмотра.</p>
                     )}
+                    <div className={styles.responsePanel}>
+                      <div className={styles.responseHeading}>
+                        <strong>Виртуальная группа реагирования</strong>
+                        <button type="button" onClick={refreshResponseAssignments}>Обновить</button>
+                      </div>
+                      {responseAssignments.map((assignment) => (
+                        <div key={assignment.id} className={styles.responseAssignment}>
+                          <span>{assignment.response_unit.name}</span>
+                          <b>{responseStateLabels[assignment.state]}</b>
+                          <time>{formatDateTime(assignment.state_changed_at)}</time>
+                          <details>
+                            <summary>История группы</summary>
+                            {assignment.events.map((entry) => (
+                              <div key={entry.id}>
+                                {formatDateTime(entry.created_at)} · {responseStateLabels[entry.to_state]}
+                              </div>
+                            ))}
+                          </details>
+                        </div>
+                      ))}
+                      {canAssignResponse && availableResponseUnits.length > 0 && (
+                        <form onSubmit={submitResponseAssignment}>
+                          <select
+                            aria-label="Доступная группа реагирования"
+                            value={selectedResponseUnitId}
+                            onChange={(event) => setSelectedResponseUnitId(event.target.value)}
+                          >
+                            {availableResponseUnits.map((unit) => (
+                              <option key={unit.id} value={unit.id}>{unit.name}</option>
+                            ))}
+                          </select>
+                          <button type="submit" disabled={loading || !selectedResponseUnitId}>Назначить группу</button>
+                        </form>
+                      )}
+                      {!canAssignResponse && <small>Назначение доступно после принятия карточки.</small>}
+                      {canAssignResponse && !availableResponseUnits.length && !responseAssignments.length && (
+                        <small>Для профиля ДДС пока нет доступных групп.</small>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <div className={styles.readOnlyServiceHistory}>
