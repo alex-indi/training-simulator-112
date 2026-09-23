@@ -21,31 +21,55 @@ sender_type = postgresql.ENUM(
 
 
 def upgrade() -> None:
-    sender_type.create(op.get_bind(), checkfirst=False)
-    op.create_table(
-        "response_messages",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column(
+    connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    sender_type.create(connection, checkfirst=True)
+    if inspector.has_table("response_messages"):
+        columns = {column["name"] for column in inspector.get_columns("response_messages")}
+        expected = {
+            "id",
             "response_assignment_id",
-            sa.Integer(),
-            sa.ForeignKey("response_assignments.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column("sender_type", sender_type, nullable=False),
-        sa.Column("body", sa.Text(), nullable=False),
-        sa.Column("actor_user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL")),
-        sa.Column("event_key", sa.String(120)),
-        sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
-        ),
-        sa.Column("read_at", sa.DateTime(timezone=True)),
-        sa.UniqueConstraint("response_assignment_id", "event_key"),
-    )
-    op.create_index(
-        "ix_response_messages_response_assignment_id",
-        "response_messages",
-        ["response_assignment_id"],
-    )
+            "sender_type",
+            "body",
+            "actor_user_id",
+            "event_key",
+            "created_at",
+            "read_at",
+        }
+        if columns != expected:
+            raise RuntimeError("Существующая таблица response_messages имеет несовместимую схему")
+    else:
+        op.create_table(
+            "response_messages",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column(
+                "response_assignment_id",
+                sa.Integer(),
+                sa.ForeignKey("response_assignments.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
+            sa.Column("sender_type", sender_type, nullable=False),
+            sa.Column("body", sa.Text(), nullable=False),
+            sa.Column(
+                "actor_user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL")
+            ),
+            sa.Column("event_key", sa.String(120)),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column("read_at", sa.DateTime(timezone=True)),
+            sa.UniqueConstraint("response_assignment_id", "event_key"),
+        )
+    indexes = {index["name"] for index in sa.inspect(connection).get_indexes("response_messages")}
+    if "ix_response_messages_response_assignment_id" not in indexes:
+        op.create_index(
+            "ix_response_messages_response_assignment_id",
+            "response_messages",
+            ["response_assignment_id"],
+        )
 
 
 def downgrade() -> None:
