@@ -24,15 +24,11 @@ from app.modules.response.router import router as response_router
 from app.modules.training.delivery import router as delivery_router
 from app.modules.training.delivery import scheduler_loop
 from app.modules.training.models import TrainingSession, training_session_trainees
+from app.modules.training.monitor import router as monitor_router
 from app.modules.training.router import router as training_router
 from app.modules.training.router import template_router
 
 logger = logging.getLogger("uvicorn.error")
-sio = socketio.AsyncServer(
-    async_mode="asgi", cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173"]
-)
-
-
 async def notify_delivery(session_id: int, incident_id: int) -> None:
     await sio.emit(
         "incident.delivered",
@@ -57,6 +53,7 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> bool:
     if user is None:
         return False
     await sio.save_session(sid, {"user_id": user.id, "role": user.role.value})
+    await sio.enter_room(sid, f"user:{user.id}")
     return True
 
 
@@ -124,6 +121,7 @@ app.add_middleware(
 )
 app.include_router(identity_router)
 app.include_router(training_router)
+app.include_router(monitor_router)
 app.include_router(template_router)
 app.include_router(delivery_router)
 app.include_router(incidents_router)
@@ -137,3 +135,4 @@ async def health() -> dict[str, str]:
 
 
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+asgi_app = socket_app

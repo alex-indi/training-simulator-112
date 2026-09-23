@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
 import styles from './InstructorWorkspace.module.css'
+import LiveMonitor from './LiveMonitor.jsx'
 
 const emptySettings = {
   title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -59,23 +60,23 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   }, [api])
 
   useEffect(() => {
-    if (!openSessionId) return undefined
+    if (!openSessionId || session?.state === 'ACTIVE') return undefined
     const timer = window.setInterval(() => {
       api(`/api/training/sessions/${openSessionId}`)
         .then((fresh) => setSession((current) => current?.id === fresh.id ? fresh : current))
         .catch(() => {})
     }, 10000)
     return () => window.clearInterval(timer)
-  }, [api, openSessionId])
+  }, [api, openSessionId, session?.state])
 
   useEffect(() => {
-    if (!openSessionId) return undefined
+    if (!openSessionId || session?.state === 'ACTIVE') return undefined
     const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', { auth: { username: user.username } })
     const refresh = () => reload(openSessionId).catch(() => {})
     socket.on('connect', () => { socket.emit('subscribe', { session_id: openSessionId }); refresh() })
     socket.on('incident.delivered', refresh)
     return () => socket.disconnect()
-  }, [openSessionId, reload, user.username])
+  }, [openSessionId, reload, session?.state, user.username])
 
   const runAction = async (action) => {
     setBusy(true)
@@ -209,6 +210,17 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   const toggleRun = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   const editable = session && ['DRAFT', 'READY'].includes(session.state)
   const stationByNumber = new Map(session?.runs?.map((run) => [run.workstation_number, run]) || [])
+
+  if (session?.state === 'ACTIVE') return <main className={styles.shell}>
+    <header className={styles.header}>
+      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Live-монитор</h1></div>
+      <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
+    </header>
+    <div className={styles.content}>
+      <button className={styles.back} type="button" onClick={() => { setSession(null); reload() }}>← Все занятия</button>
+      <LiveMonitor sessionId={session.id} user={user} api={api} />
+    </div>
+  </main>
 
   return <main className={styles.shell}>
     <header className={styles.header}>

@@ -33,10 +33,16 @@ async def connect(sid, environ, auth):
     await sio.enter_room(sid, f"user:{user.id}")
 
 
-async def notify_message_created(message, trainee_id: int) -> None:
+async def notify_message_created(message, trainee_id: int, session_id: int | None = None) -> None:
     """Передаёт только сигнал; полный список frontend перечитывает по REST."""
     await sio.emit(
         "response.message_created",
         {"assignment_id": message.response_assignment_id, "message_id": message.id},
         room=f"user:{trainee_id}",
     )
+    if session_id is not None:
+        await sio.emit(
+            "response.message_created",
+            {"assignment_id": message.response_assignment_id, "message_id": message.id},
+            room=f"session:{session_id}",
+        )
