@@ -1,8 +1,227 @@
+.loginScreen {
+  --training-accent: #ffba52;
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  display: grid;
+  align-items: start;
+  padding: clamp(90px, 13vh, 140px) clamp(24px, 8vw, 144px) 54px;
+  background: #78d4e2 url('./assets/auth-background.svg') center / cover no-repeat;
+  color: #fff;
+  isolation: isolate;
+}
+
+.trainingRibbon {
+  position: absolute;
+  z-index: 5;
+  inset: 0 0 auto;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 20px;
+  border-radius: 0;
+  background: var(--training-accent);
+  color: #18323c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.loginPanel {
+  width: min(100%, 640px);
+  margin-left: auto;
+  padding: 26px 42px 30px;
+  border: 0;
+  background: transparent;
+}
+
+.loginBrand {
+  display: flex;
+  align-items: center;
+  gap: 21px;
+  margin-bottom: 34px;
+}
+
+.loginNumber {
+  padding-right: 21px;
+  border-right: 1px solid rgb(255 255 255 / 40%);
+  font-size: clamp(58px, 7vw, 88px);
+  font-weight: 300;
+  line-height: 0.85;
+  letter-spacing: -0.07em;
+}
+
+.loginBrand > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.loginBrand span {
+  color: var(--training-accent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.loginBrand strong {
+  font-size: clamp(22px, 2.4vw, 31px);
+  font-weight: 400;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.loginForm {
+  display: grid;
+  gap: 22px;
+}
+
+.loginForm label {
+  display: grid;
+  gap: 7px;
+}
+
+.loginForm label > span {
+  color: #147fae;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loginForm input,
+.loginForm select {
+  width: 100%;
+  padding: 5px 0 10px;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+}
+
+.loginForm input:focus,
+.loginForm select:focus {
+  border-bottom-color: var(--training-accent);
+  box-shadow: 0 1px var(--training-accent);
+}
+
+.loginSelectField {
+  position: relative;
+}
+
+.loginSelectField select {
+  padding-right: 34px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.loginSelectField select:disabled {
+  cursor: wait;
+}
+
+.loginSelectField select option {
+  background: #103f4d;
+  color: #fff;
+}
+
+.loginSelectField > span {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  color: var(--training-accent);
+  font-size: 20px;
+  pointer-events: none;
+}
+
+.passwordField {
+  position: relative;
+}
+
+.passwordField input {
+  padding-right: 70px;
+}
+
+.passwordField button {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #147fae;
+  cursor: pointer;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.loginError {
+  margin-top: -7px;
+  padding: 9px 11px;
+  border-left: 3px solid #ff765f;
+  background: rgb(97 21 19 / 48%);
+  color: #ffe4df;
+  font-size: 11px;
+}
+
+.loginButton {
+  min-height: 43px;
+  margin-top: 5px;
+  border: 1px solid var(--training-accent);
+  background: var(--training-accent);
+  color: #17323c;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.loginButton:hover:not(:disabled),
+.loginButton:focus-visible {
+  background: #ffd085;
+}
+
+.loginButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.loginFooter {
+  margin-top: 28px;
+  padding-top: 19px;
+  border-top: 1px solid rgb(255 255 255 / 18%);
+}
+
+.loginFooter div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  color: #147fae;
+  font-size: 10px;
+}
+
+.loginFooter strong {
+  color: #fff;
+}
+
+.loginFooter p {
+  margin: 10px 0 0;
+  color: #147fae;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
 .armShell {
   min-width: 1180px;
   min-height: 100vh;
   overflow: hidden;
-  background: #8d9ba3;
+  background: #838f97;
   color: #172026;
   font-size: 11px;
 }
@@ -125,6 +344,18 @@
   color: #111;
 }
 
+.sessionExit {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #859096;
+  background: transparent;
+  color: #c6ced2;
+  cursor: pointer;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
 .clockPanel > time {
   font-size: 42px;
   font-weight: 700;
@@ -170,7 +401,7 @@
 .registryContent {
   flex: 1;
   padding: 13px 15px 30px;
-  background: #8d9ba3;
+  background: #838f97;
 }
 
 .registryToolbar {
@@ -230,7 +461,7 @@
 }
 
 .registryRows {
-  border-top: 1px solid #78878f;
+  border-top: 1px solid #838f97;
 }
 
 .registryRow {
@@ -238,7 +469,7 @@
   width: 100%;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid #849198;
+  border-bottom: 1px solid #838f97;
   background: #38444b;
   color: #f3f6f7;
   cursor: pointer;
@@ -262,11 +493,29 @@
   align-items: center;
   padding: 4px 6px;
   overflow: hidden;
-  border-right: 1px solid #6e7b82;
+  border-right: 1px solid #838f97;
   font-size: 10px;
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.registryRow > :nth-child(-n + 7),
+.registryRow > :nth-child(9),
+.registryRow > :nth-child(12) {
+  justify-content: center;
+  text-align: center;
+}
+
+.registryRow > :nth-child(1),
+.registryRow > :nth-child(2),
+.registryRow > :nth-child(4),
+.registryRow > :nth-child(5),
+.registryRow > :nth-child(6),
+.registryRow > :nth-child(9),
+.registryRow > :nth-child(11),
+.registryRow > :nth-child(12) {
+  background: #49555d;
 }
 
 .registryRow > time {
@@ -283,7 +532,8 @@
   gap: 4px;
   padding: 3px 7px;
   overflow: hidden;
-  background: #4a5860;
+  border-top: 1px solid #838f97;
+  background: #49555d;
   color: #e5eaec;
   font-size: 9px;
 }
@@ -301,7 +551,8 @@
   box-shadow: inset 4px 0 0 #ec633b;
 }
 
-.registryRowNew .operatorCell {
+.registryRowNew .operatorCell,
+.operatorCellZero {
   background: #81394f;
   color: #fff;
   font-weight: 700;
@@ -309,21 +560,40 @@
 
 .linkCell {
   justify-content: center;
-  font-size: 15px !important;
+}
+
+.chevronDownIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background: #f3f6f7;
+  mask: url('./assets/chevron-down.svg') center / contain no-repeat;
+}
+
+.emergencyBookmark {
+  width: 11px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: -4px;
+  background: #7f8c94;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%);
 }
 
 .registryAddress {
   font-size: 10px !important;
 }
 
-.serviceState {
-  gap: 7px;
+.fileIconCell {
+  justify-content: center;
 }
 
-.serviceState i {
-  color: #f06b42;
-  font-size: 18px;
-  font-style: normal;
+.fileTextIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background: #f3f6f7;
+  mask: url('./assets/file-text.svg') center / contain no-repeat;
 }
 
 .registryEmpty {
@@ -383,8 +653,30 @@
   display: grid;
   place-items: center;
   color: #263238;
-  font-size: 22px;
-  transform: rotate(90deg);
+}
+
+.phoneIcon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  background: currentColor;
+  mask: url('./assets/phone.svg') center / contain no-repeat;
+}
+
+.phoneReceiverIcon {
+  position: relative;
+  width: 22px;
+  height: 18px;
+  display: block;
+}
+
+.phoneReceiverIcon::before {
+  position: absolute;
+  inset: 0;
+  background: #263238;
+  content: '';
+  mask: url('./assets/phone_fill.svg') center / contain no-repeat;
+  transform: rotate(135deg) scale(0.88);
 }
 
 .callState > div:nth-child(2) {
@@ -424,11 +716,9 @@
   display: grid;
   place-items: center;
   color: #717b80;
-  font-size: 22px;
-  transform: rotate(90deg);
 }
 
-.phoneField span {
+.phoneField > span {
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -438,7 +728,7 @@
   font-size: 9px;
 }
 
-.phoneField span strong {
+.phoneField > span strong {
   overflow: hidden;
   color: #303a3f;
   font-size: 12px;
@@ -657,10 +947,15 @@
   cursor: pointer;
 }
 
-.serviceTile > span {
+.serviceChevron {
   position: absolute;
-  top: 3px;
-  font-size: 9px;
+  top: 4px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  mask: url('./assets/chevron-down.svg') center / contain no-repeat;
+  transform: translateX(-50%) rotate(180deg);
 }
 
 .serviceTile strong {
@@ -965,7 +1260,70 @@
   background: #fff;
 }
 
+.roleLogout {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid #68757b;
+  background: transparent;
+  color: #3d494f;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .loginScreen {
+    padding: 78px 18px 130px;
+  }
+
+  .loginPanel {
+    margin: 0;
+    padding: 29px 24px 25px;
+  }
+
+  .loginBrand {
+    gap: 15px;
+    margin-bottom: 28px;
+  }
+
+  .loginNumber {
+    padding-right: 16px;
+  }
+
+  .loginBrand strong {
+    font-size: clamp(18px, 4vw, 25px);
+  }
+
+  .loginFooter div {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+}
+
 @media (max-height: 720px) {
+  .loginScreen {
+    padding-top: 82px;
+    padding-bottom: 28px;
+  }
+
+  .loginPanel {
+    padding-top: 24px;
+    padding-bottom: 20px;
+  }
+
+  .loginBrand {
+    margin-bottom: 23px;
+  }
+
+  .loginForm {
+    gap: 16px;
+  }
+
+  .loginFooter {
+    margin-top: 20px;
+    padding-top: 14px;
+  }
+
   .incidentBody {
     min-height: 340px;
   }
