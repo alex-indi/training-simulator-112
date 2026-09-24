@@ -18,13 +18,24 @@ from app.core.config import get_settings
 from app.db.session import create_database_engine, create_session_factory
 from app.modules.object_registry.models import CityObject, ObjectAttribute, ObjectTag, ObjectType
 from scripts.import_city_objects.mappers.education import map_education
+from scripts.import_city_objects.mappers.healthcare import map_healthcare
 from scripts.import_city_objects.mappers.metro import map_metro
 from seed.import_object_types import load_object_types, upsert_object_types
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_DIR = ROOT / "seed/object_registry/source_data"
 SEED_DIR = ROOT / "seed/city_objects"
-MANAGED_TAGS = {"education", "children", "mass_people", "transport", "underground"}
+HEALTHCARE_DATASETS = {
+    "hospitals_children": (502, "HOSPITAL"),
+    "hospitals_adults": (517, "HOSPITAL"),
+    "polyclinics_adults": (503, "POLYCLINIC"),
+    "polyclinics_children": (505, "POLYCLINIC"),
+    "emergency_stations": (516, "EMERGENCY_STATION"),
+}
+MANAGED_TAGS = {
+    "education", "children", "mass_people", "transport", "underground",
+    "medical", "patients", "visitors", "emergency_response", "24_hours", "daytime",
+}
 MANAGED_ATTRIBUTES = {
     "institution_type",
     "institution_subtype",
@@ -37,6 +48,12 @@ MANAGED_ATTRIBUTES = {
     "lines",
     "districts",
     "administrative_areas",
+    "source_row_id",
+    "source_address_id",
+    "category",
+    "close_flag",
+    "full_name",
+    "working_hours",
 }
 
 
@@ -54,7 +71,25 @@ def build_seed() -> dict:
     metro_rows = _json(SOURCE_DIR / "metro_raw_rows.json")
     education = [map_education(row) for row in education_rows]
     metro, metro_quality = map_metro(metro_rows)
-    objects = sorted(education + metro, key=lambda row: (row["source"], row["external_id"]))
+    healthcare = []
+    healthcare_quality = {}
+    source_rows = {"747": len(education_rows), "624": len(metro_rows)}
+    for name, (dataset_id, type_code) in HEALTHCARE_DATASETS.items():
+        info = _json(SOURCE_DIR / f"{name}_dataset_info.json")
+        rows = _json(SOURCE_DIR / f"{name}_raw_rows.json")
+        fetch_report = _json(SOURCE_DIR / f"{name}_fetch_report.json")
+        if info.get("Id") != dataset_id or fetch_report.get("dataset_id") != dataset_id:
+            raise ValueError(f"Dataset {dataset_id}: паспорт или отчёт от другого набора")
+        if fetch_report.get("rows") != len(rows):
+            raise ValueError(f"Dataset {dataset_id}: число строк не совпадает с отчётом выгрузки")
+        mapped, quality = map_healthcare(rows, dataset_id, type_code)
+        healthcare.extend(mapped)
+        healthcare_quality[str(dataset_id)] = quality
+        source_rows[str(dataset_id)] = len(rows)
+    objects = sorted(
+        education + metro + healthcare,
+        key=lambda row: (row["source"], row["external_id"]),
+    )
     keys = [(row["source"], row["external_id"]) for row in objects]
     if len(keys) != len(set(keys)):
         raise ValueError("Повторяющийся source/external_id в исходных данных")
@@ -94,9 +129,10 @@ def build_seed() -> dict:
     _write(SEED_DIR / "object_tags.json", tags)
     counts = Counter(row["object_type_code"] for row in objects)
     report = {
-        "source_rows": {"747": len(education_rows), "624": len(metro_rows)},
+        "source_rows": source_rows,
         "imported": dict(sorted(counts.items())),
         "metro": metro_quality,
+        "healthcare": healthcare_quality,
         "education_missing_coordinates": sum(row["latitude"] is None for row in education),
         "education_unknown_type": counts["EDUCATION_UNKNOWN"],
         "duplicate_object_keys": 0,
