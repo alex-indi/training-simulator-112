@@ -33,6 +33,7 @@ from app.modules.training.models import (
     TrainingSessionState,
     training_session_trainees,
 )
+from app.realtime import publish_session_event
 
 router = APIRouter(prefix="/api/incidents", tags=["incidents"])
 
@@ -57,6 +58,20 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
         (run for run in incident.training_session.runs if run.trainee_id == user.id), None
     )
     is_shared = incident.training_group_id is not None
+    if user.role == UserRole.TRAINEE:
+        context_run = member_run
+    elif is_shared:
+        context_run = next(
+            (run for run in incident.training_session.runs
+             if run.id == incident.claimed_by_training_run_id),
+            None,
+        ) or next(
+            (run for run in incident.training_session.runs
+             if run.group_id == incident.training_group_id),
+            None,
+        )
+    else:
+        context_run = incident.training_run
     can_act = (
         user.role == UserRole.TRAINEE
         and incident.training_session.state == TrainingSessionState.ACTIVE
@@ -93,6 +108,8 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
             and incident.training_session.state == TrainingSessionState.ACTIVE
         ),
         can_edit=can_act,
+        viewer_dds_profile=context_run.dds_profile if context_run else None,
+        viewer_workstation_number=context_run.workstation_number if context_run else None,
         incident_number=incident.incident_number,
         reported_at=incident.reported_at,
         source=incident.source,
@@ -106,7 +123,7 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
         source_snapshot=incident.source_snapshot,
         lifecycle_state=incident.lifecycle_state,
         dds_status=incident.dds_status,
-        available_actions=get_available_actions(incident) if can_act else [],
+        available_actions=get_available_actions(incident) if can_act and incident.opened_at else [],
         actions=[_to_action_read_model(action) for action in incident.actions],
         created_at=incident.created_at,
         delivered_at=incident.delivered_at,
@@ -252,6 +269,7 @@ async def create_incident(
     database.add(incident)
     await database.commit()
     incident.training_session = training_session
+    await publish_session_event("incident.delivered", training_session.id, incident.id)
     return _to_read_model(incident, current_user)
 
 
@@ -359,13 +377,7 @@ async def claim_incident(
     await database.commit()
     database.expire_all()
     updated = await _load_incident(database, incident_id)
-    from app.main import sio
-
-    await sio.emit(
-        "incident.claimed",
-        {"session_id": updated.training_session_id, "incident_id": incident_id},
-        room=f"session:{updated.training_session_id}",
-    )
+    await publish_session_event("incident.claimed", updated.training_session_id, incident_id)
     return _to_read_model(updated, current_user)
 
 
@@ -384,6 +396,10 @@ async def open_incident(
 
     incident = await _load_incident(database, incident_id, for_update=True)
     _ensure_incident_visible(incident, current_user)
+    if incident.training_session.state != TrainingSessionState.ACTIVE:
+        raise HTTPException(
+            status_code=409, detail="Открыть карточку можно только в активном занятии"
+        )
     if incident.training_group_id is not None and incident.claimed_by_training_run_id != next(
         (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
         None,
@@ -395,6 +411,7 @@ async def open_incident(
         actor_display_name=current_user.full_name,
     )
     await database.commit()
+    await publish_session_event("incident.opened", incident.training_session_id, incident.id)
     return _to_read_model(incident, current_user)
 
 
@@ -426,6 +443,8 @@ async def change_incident_status(
             status_code=status.HTTP_409_CONFLICT,
             detail="Действия доступны только в активной учебной сессии",
         )
+    if incident.opened_at is None:
+        raise HTTPException(status_code=409, detail="Сначала откройте карточку")
 
     try:
         action = perform_incident_action(
@@ -448,12 +467,5 @@ async def change_incident_status(
 
     database.add(action)
     await database.commit()
-    if incident.training_group_id is not None:
-        from app.main import sio
-
-        await sio.emit(
-            "incident.updated",
-            {"session_id": incident.training_session_id, "incident_id": incident.id},
-            room=f"session:{incident.training_session_id}",
-        )
+    await publish_session_event("incident.updated", incident.training_session_id, incident.id)
     return _to_read_model(incident, current_user)

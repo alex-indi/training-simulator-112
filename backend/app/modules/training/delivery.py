@@ -202,6 +202,28 @@ SCENARIOS = [
 ]
 
 
+def generated_snapshot(
+    session_id: int,
+    run_id: int | None,
+    group_id: int | None,
+    sequence: int,
+    label: str | int | None,
+    description: str,
+    incident_type: str,
+) -> dict:
+    """Generated message time is resolved when the queue item is delivered."""
+    snapshot = IncidentSnapshot(
+        incident_number=f"КП-{session_id}-{run_id or 'G' + str(group_id)}-{sequence}",
+        reported_at=datetime.now(UTC),
+        source="Система-112",
+        address=f"Учебный объект, участок {label}",
+        description=description,
+        incident_type=incident_type,
+    ).model_dump(mode="json")
+    snapshot["reported_at_mode"] = "DELIVERY"
+    return snapshot
+
+
 @router.post(
     "/{training_session_id}/queue/{queue_item_id}/replace", response_model=list[QueueItemRead]
 )
@@ -259,14 +281,9 @@ async def generate_queue(
         for index in range(payload.count_per_run):
             title, description, incident_type = SCENARIOS[index % len(SCENARIOS)]
             sequence = index + 1
-            snapshot = IncidentSnapshot(
-                incident_number=f"КП-{session.id}-{run_id or 'G' + str(group_id)}-{sequence}",
-                reported_at=datetime.now(UTC),
-                source="Система-112",
-                address=f"Учебный объект, участок {label}",
-                description=description,
-                incident_type=incident_type,
-            ).model_dump(mode="json")
+            snapshot = generated_snapshot(
+                session.id, run_id, group_id, sequence, label, description, incident_type
+            )
             _new_item(session, run_id, title, snapshot, group_id=group_id)
     _invalidate_readiness(session)
     await database.commit()

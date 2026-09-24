@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     DateTime,
     Enum,
@@ -235,7 +236,13 @@ class ScenarioQueueItem(Base):
     """Утверждённая позиция занятия с сохранённым порядком выдачи."""
 
     __tablename__ = "scenario_queue_items"
-    __table_args__ = (UniqueConstraint("training_session_id", "position"),)
+    __table_args__ = (
+        UniqueConstraint("training_session_id", "position"),
+        CheckConstraint(
+            "(training_run_id IS NULL) <> (training_group_id IS NULL)",
+            name="ck_queue_target",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     training_session_id: Mapped[int] = mapped_column(
         ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
