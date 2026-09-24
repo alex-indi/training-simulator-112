@@ -19,15 +19,25 @@ async def seed_core() -> None:
             "SRC-006 отсутствует в текущей ветке. Сначала объедините UT112-24.1."
         ) from exc
 
+    try:
+        registry = import_module("seed.object_registry.import_seed")
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"seed.object_registry", "seed.object_registry.import_seed"}:
+            raise
+        raise CoreSeedUnavailableError(
+            "Импорт Object Registry ещё не реализован в текущей ветке. "
+            "Сначала совместите UT112-24.3 с актуальным main."
+        ) from exc
+
     await classifier.import_seed(classifier.load_seed())
-    raise CoreSeedUnavailableError(
-        "Object Registry отсутствует в текущей ветке. "
-        "Добавьте его версионированный импорт после объединения UT112-24.3."
-    )
+    await registry.import_seed(registry.load_seed())
 
 
 def main() -> None:
-    asyncio.run(seed_core())
+    try:
+        asyncio.run(seed_core())
+    except CoreSeedUnavailableError as exc:
+        raise SystemExit(str(exc)) from None
 
 
 if __name__ == "__main__":
