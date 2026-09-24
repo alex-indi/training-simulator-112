@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,13 +21,13 @@ from app.modules.training.models import (
     TrainingSession,
     TrainingSessionState,
     TrainingTemplate,
-    training_session_trainees,
 )
 from app.modules.training.schemas import (
     BulkAssignment,
     GroupRead,
     GroupWrite,
     JoinRequest,
+    OwnRunSummary,
     ReadinessRead,
     RunRead,
     SessionSettings,
@@ -35,6 +35,7 @@ from app.modules.training.schemas import (
     TemplateRead,
     TrainingSessionCreate,
     TrainingSessionRead,
+    TrainingSessionSummary,
     TrainingSessionUpdate,
 )
 from app.modules.training.workflow import (
@@ -56,6 +57,11 @@ def _ensure_instructor(user: User) -> None:
 def _editable(item: TrainingSession) -> None:
     if item.state not in (TrainingSessionState.DRAFT, TrainingSessionState.READY):
         raise HTTPException(status_code=409, detail="После запуска настройки занятия неизменяемы")
+
+
+def _invalidate_readiness(item: TrainingSession) -> None:
+    if item.state == TrainingSessionState.READY:
+        item.state = TrainingSessionState.DRAFT
 
 
 def _readiness(item: TrainingSession) -> ReadinessRead:
@@ -84,15 +90,27 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         and item.delivery_interval_seconds
         else 0
     )
+    target_count = (
+        required_per_run
+        if item.mode == TrainingMode.FLOW
+        else (1 if item.mode == TrainingMode.FIXED_SET else 0)
+    )
+    targets = {
+        ("group", run.group_id) if run.queue_mode == QueueMode.SHARED_QUEUE else ("run", run.id)
+        for run in runs
+    }
     pool_complete = all(
         sum(
-            (queue_item.training_group_id == run.group_id)
-            if run.queue_mode == QueueMode.SHARED_QUEUE
-            else (queue_item.training_run_id == run.id)
+            queue_item.approved
+            and (
+                queue_item.training_group_id == target_id
+                if target_type == "group"
+                else queue_item.training_run_id == target_id
+            )
             for queue_item in item.queue_items
         )
-        >= required_per_run
-        for run in runs
+        >= target_count
+        for target_type, target_id in targets
     )
     shared_runs = [run for run in runs if run.queue_mode == QueueMode.SHARED_QUEUE]
     invalid_shared = any(
@@ -106,7 +124,12 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
     if item.mode != TrainingMode.MANUAL and not prepared:
         warnings.append("Подготовьте пул карточек")
     if not pool_complete:
-        warnings.append(f"Для FLOW нужно не менее {required_per_run} карточек на АРМ")
+        if item.mode == TrainingMode.FLOW:
+            warnings.append(
+                f"Для FLOW нужно не менее {required_per_run} карточек на каждую очередь"
+            )
+        else:
+            warnings.append("Для FIXED_SET нужна утверждённая карточка для каждой очереди")
     if prepared != approved:
         warnings.append("Утвердите подготовленные карточки")
     if invalid_shared:
@@ -150,6 +173,10 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
         state=item.state,
         created_at=item.created_at,
         started_at=item.started_at,
+        paused_at=item.paused_at,
+        paused_seconds=item.paused_seconds or 0,
+        finish_mode=item.finish_mode,
+        completed_at=item.completed_at,
         runs=[
             RunRead(
                 id=run.id,
@@ -162,6 +189,7 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
                 group_id=run.group_id,
                 online=bool(run.last_seen_at and now - run.last_seen_at < ONLINE_WINDOW),
                 last_seen_at=run.last_seen_at,
+                paused_at=run.paused_at,
             )
             for run in sorted(item.runs, key=lambda run: run.workstation_number or 0)
         ],
@@ -267,11 +295,53 @@ async def create_training_session(
     return await _save(database, item)
 
 
-@router.get("", response_model=list[TrainingSessionRead])
+@router.get("", response_model=list[TrainingSessionRead | TrainingSessionSummary])
 async def list_training_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     database: Annotated[AsyncSession, Depends(get_database_session)],
-) -> list[TrainingSessionRead]:
+) -> list[TrainingSessionRead | TrainingSessionSummary]:
+    if current_user.role == UserRole.TRAINEE:
+        own_run = TrainingRun
+        statement = (
+            select(TrainingSession, own_run)
+            .outerjoin(
+                own_run,
+                and_(
+                    own_run.training_session_id == TrainingSession.id,
+                    own_run.trainee_id == current_user.id,
+                ),
+            )
+            .where(
+                or_(
+                    TrainingSession.state.in_(
+                        (TrainingSessionState.DRAFT, TrainingSessionState.READY)
+                    ),
+                    own_run.id.is_not(None),
+                )
+            )
+            .order_by(TrainingSession.id.desc())
+        )
+        rows = (await database.execute(statement)).all()
+        now = datetime.now(UTC)
+        return [
+            TrainingSessionSummary(
+                id=item.id,
+                title=item.title,
+                state=item.state,
+                workstation_count=item.workstation_count,
+                paused_at=item.paused_at,
+                own_run=OwnRunSummary(
+                    id=run.id,
+                    workstation_number=run.workstation_number,
+                    dds_profile=run.dds_profile,
+                    online=bool(run.last_seen_at and now - run.last_seen_at < ONLINE_WINDOW),
+                    paused_at=run.paused_at,
+                )
+                if run
+                else None,
+            )
+            for item, run in rows
+        ]
     statement = select(TrainingSession).options(
         selectinload(TrainingSession.trainees),
         selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
@@ -280,13 +350,6 @@ async def list_training_sessions(
     )
     if current_user.role == UserRole.INSTRUCTOR:
         statement = statement.where(TrainingSession.instructor_id == current_user.id)
-    elif current_user.role == UserRole.TRAINEE:
-        statement = statement.outerjoin(training_session_trainees).where(
-            or_(
-                TrainingSession.state.in_((TrainingSessionState.DRAFT, TrainingSessionState.READY)),
-                training_session_trainees.c.trainee_id == current_user.id,
-            )
-        )
     result = await database.scalars(statement.order_by(TrainingSession.id.desc()))
     return [_to_read_model(item) for item in result.unique().all()]
 
@@ -372,18 +435,25 @@ async def join_training_session(
         raise HTTPException(status_code=409, detail="Рабочее место уже занято") from error
 
 
-@router.post("/{training_session_id}/heartbeat", response_model=TrainingSessionRead)
+@router.post("/{training_session_id}/heartbeat", status_code=204)
 async def heartbeat(
     training_session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     database: Annotated[AsyncSession, Depends(get_database_session)],
-) -> TrainingSessionRead:
-    item = await _load_session(database, training_session_id)
-    run = next((run for run in item.runs if run.trainee_id == current_user.id), None)
-    if current_user.role != UserRole.TRAINEE or run is None:
+) -> None:
+    if current_user.role != UserRole.TRAINEE:
         raise HTTPException(status_code=404, detail="Участие не найдено")
-    run.last_seen_at = datetime.now(UTC)
-    return await _save(database, item)
+    result = await database.execute(
+        update(TrainingRun)
+        .where(
+            TrainingRun.training_session_id == training_session_id,
+            TrainingRun.trainee_id == current_user.id,
+        )
+        .values(last_seen_at=datetime.now(UTC))
+    )
+    if result.rowcount != 1:
+        raise HTTPException(status_code=404, detail="Участие не найдено")
+    await database.commit()
 
 
 @router.post("/{training_session_id}/groups", response_model=TrainingSessionRead)
@@ -399,6 +469,7 @@ async def create_group(
     if any(group.name == payload.name for group in item.groups):
         raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
     item.groups.append(TrainingGroup(**payload.model_dump()))
+    _invalidate_readiness(item)
     return await _save(database, item)
 
 
@@ -425,6 +496,7 @@ async def update_group(
             run.dds_profile = group.dds_profile or "ДДС"
             run.difficulty = group.difficulty
             run.queue_mode = group.queue_mode
+    _invalidate_readiness(item)
     return await _save(database, item)
 
 
@@ -444,7 +516,10 @@ async def delete_group(
     for run in item.runs:
         if run.group_id == group_id:
             run.group_id = None
+            if run.queue_mode == QueueMode.SHARED_QUEUE:
+                run.queue_mode = QueueMode.INDIVIDUAL_QUEUE
     item.groups.remove(group)
+    _invalidate_readiness(item)
     return await _save(database, item)
 
 
@@ -467,11 +542,24 @@ async def assign_runs(
         group.id == payload.group_id for group in item.groups
     ):
         raise HTTPException(status_code=422, detail="Группа не найдена в занятии")
+    overrides = {"dds_profile", "difficulty", "queue_mode"} & payload.model_fields_set
+    if payload.group_id is not None and overrides:
+        raise HTTPException(
+            status_code=422, detail="При назначении группы её параметры задаются самой группой"
+        )
+    if payload.group_id is None and payload.queue_mode == QueueMode.SHARED_QUEUE:
+        raise HTTPException(status_code=422, detail="Общая очередь требует назначения группы")
     if not any(
         key in payload.model_fields_set
         for key in ("dds_profile", "difficulty", "queue_mode", "group_id")
     ):
         raise HTTPException(status_code=422, detail="Укажите назначаемые параметры")
+    if (
+        overrides
+        and "group_id" not in payload.model_fields_set
+        and any(run.group_id is not None for run in targets)
+    ):
+        raise HTTPException(status_code=422, detail="Сначала исключите участника из группы")
     for run in targets:
         if payload.group_id is not None:
             group = next(group for group in item.groups if group.id == payload.group_id)
@@ -479,8 +567,11 @@ async def assign_runs(
             run.difficulty = group.difficulty
             run.queue_mode = group.queue_mode
         for key in ("dds_profile", "difficulty", "queue_mode", "group_id"):
-            if key in payload.model_fields_set:
+            if key in payload.model_fields_set and (payload.group_id is None or key == "group_id"):
                 setattr(run, key, getattr(payload, key))
+        if run.group_id is None and run.queue_mode == QueueMode.SHARED_QUEUE:
+            run.queue_mode = QueueMode.INDIVIDUAL_QUEUE
+    _invalidate_readiness(item)
     return await _save(database, item)
 
 

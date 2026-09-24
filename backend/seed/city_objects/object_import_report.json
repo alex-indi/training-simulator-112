@@ -1,0 +1,86 @@
+{
+  "source_rows": {
+    "747": 3492,
+    "624": 1177,
+    "502": 14,
+    "517": 37,
+    "503": 260,
+    "505": 201,
+    "516": 76
+  },
+  "imported": {
+    "EDUCATIONAL_COMPLEX": 30,
+    "EDUCATION_UNKNOWN": 368,
+    "EMERGENCY_STATION": 143,
+    "HOSPITAL": 255,
+    "KINDERGARTEN": 1718,
+    "METRO_STATION": 257,
+    "POLYCLINIC": 491,
+    "SCHOOL": 1376
+  },
+  "metro": {
+    "missing_name": 0,
+    "outside_moscow_entrances": 11,
+    "missing_entrance_coordinates": 0,
+    "stations_with_multiple_districts": 67,
+    "station_count": 257
+  },
+  "healthcare": {
+    "502": {
+      "source_rows": 14,
+      "objects": 66,
+      "closed_rows": 0,
+      "missing_name_rows": 0,
+      "missing_address_rows": 0,
+      "multiple_address_rows": 9,
+      "missing_coordinates": 66,
+      "unknown_status_rows": 2
+    },
+    "517": {
+      "source_rows": 37,
+      "objects": 189,
+      "closed_rows": 1,
+      "missing_name_rows": 0,
+      "missing_address_rows": 0,
+      "multiple_address_rows": 29,
+      "missing_coordinates": 189,
+      "unknown_status_rows": 3
+    },
+    "503": {
+      "source_rows": 260,
+      "objects": 279,
+      "closed_rows": 0,
+      "missing_name_rows": 0,
+      "missing_address_rows": 0,
+      "multiple_address_rows": 15,
+      "missing_coordinates": 279,
+      "unknown_status_rows": 20
+    },
+    "505": {
+      "source_rows": 201,
+      "objects": 212,
+      "closed_rows": 0,
+      "missing_name_rows": 0,
+      "missing_address_rows": 0,
+      "multiple_address_rows": 11,
+      "missing_coordinates": 212,
+      "unknown_status_rows": 6
+    },
+    "516": {
+      "source_rows": 76,
+      "objects": 143,
+      "closed_rows": 0,
+      "missing_name_rows": 0,
+      "missing_address_rows": 0,
+      "multiple_address_rows": 1,
+      "missing_coordinates": 143,
+      "unknown_status_rows": 0
+    }
+  },
+  "education_missing_coordinates": 3492,
+  "education_unknown_type": 368,
+  "duplicate_object_keys": 0,
+  "seed_objects": 4638,
+  "seed_attributes": 21056,
+  "seed_tags": 13378
+}

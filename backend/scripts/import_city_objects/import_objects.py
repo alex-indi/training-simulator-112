@@ -1,0 +1,274 @@
+"""Генерация seed и повторяемая загрузка московских объектов.
+
+Запуск из backend:
+    uv run python -m scripts.import_city_objects.import_objects build
+    uv run python -m scripts.import_city_objects.import_objects load
+"""
+
+import argparse
+import asyncio
+import json
+from collections import Counter
+from pathlib import Path
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.db.session import create_database_engine, create_session_factory
+from app.modules.object_registry.models import (
+    CityObject,
+    ObjectAttribute,
+    ObjectTag,
+    ObjectTagDefinition,
+    ObjectType,
+)
+from scripts.import_city_objects.mappers.education import map_education
+from scripts.import_city_objects.mappers.healthcare import map_healthcare
+from scripts.import_city_objects.mappers.metro import map_metro
+from seed.import_object_tag_classifier_features import load_links, upsert_links
+from seed.import_object_tags import load_object_tags, upsert_object_tags
+from seed.import_object_types import load_object_types, upsert_object_types
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE_DIR = ROOT / "seed/object_registry/source_data"
+SEED_DIR = ROOT / "seed/city_objects"
+HEALTHCARE_DATASETS = {
+    "hospitals_children": (502, "HOSPITAL"),
+    "hospitals_adults": (517, "HOSPITAL"),
+    "polyclinics_adults": (503, "POLYCLINIC"),
+    "polyclinics_children": (505, "POLYCLINIC"),
+    "emergency_stations": (516, "EMERGENCY_STATION"),
+}
+MANAGED_TAGS = {
+    "education",
+    "children",
+    "mass_people",
+    "transport",
+    "underground",
+    "medical",
+    "patients",
+    "visitors",
+    "emergency_response",
+    "24_hours",
+    "daytime",
+}
+MANAGED_ATTRIBUTES = {
+    "institution_type",
+    "institution_subtype",
+    "department",
+    "needs_review",
+    "station_name",
+    "has_underground_area",
+    "entrance_count",
+    "source_entrance_ids",
+    "lines",
+    "districts",
+    "administrative_areas",
+    "source_row_id",
+    "source_address_id",
+    "category",
+    "close_flag",
+    "full_name",
+    "working_hours",
+}
+
+
+def _json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write(path: Path, data: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def build_seed() -> dict:
+    education_rows = _json(SOURCE_DIR / "schools_raw_rows.json")
+    metro_rows = _json(SOURCE_DIR / "metro_raw_rows.json")
+    education = [map_education(row) for row in education_rows]
+    metro, metro_quality = map_metro(metro_rows)
+    healthcare = []
+    healthcare_quality = {}
+    source_rows = {"747": len(education_rows), "624": len(metro_rows)}
+    for name, (dataset_id, type_code) in HEALTHCARE_DATASETS.items():
+        info = _json(SOURCE_DIR / f"{name}_dataset_info.json")
+        rows = _json(SOURCE_DIR / f"{name}_raw_rows.json")
+        fetch_report = _json(SOURCE_DIR / f"{name}_fetch_report.json")
+        if info.get("Id") != dataset_id or fetch_report.get("dataset_id") != dataset_id:
+            raise ValueError(f"Dataset {dataset_id}: паспорт или отчёт от другого набора")
+        if fetch_report.get("rows") != len(rows):
+            raise ValueError(f"Dataset {dataset_id}: число строк не совпадает с отчётом выгрузки")
+        mapped, quality = map_healthcare(rows, dataset_id, type_code)
+        healthcare.extend(mapped)
+        healthcare_quality[str(dataset_id)] = quality
+        source_rows[str(dataset_id)] = len(rows)
+    objects = sorted(
+        education + metro + healthcare,
+        key=lambda row: (row["source"], row["external_id"]),
+    )
+    keys = [(row["source"], row["external_id"]) for row in objects]
+    if len(keys) != len(set(keys)):
+        raise ValueError("Повторяющийся source/external_id в исходных данных")
+    known_types = {row["code"] for row in load_object_types()}
+    if any(row["object_type_code"] not in known_types for row in objects):
+        raise ValueError("Seed содержит неизвестный тип объекта")
+    attributes = [
+        {
+            "source": row["source"],
+            "external_id": row["external_id"],
+            "attribute_code": code,
+            "value": json.dumps(value, ensure_ascii=False, sort_keys=True)
+            if isinstance(value, (bool, list, dict))
+            else str(value),
+            "value_type": "boolean"
+            if isinstance(value, bool)
+            else "json"
+            if isinstance(value, (list, dict))
+            else "integer"
+            if isinstance(value, int)
+            else "text",
+        }
+        for row in objects
+        for code, value in sorted(row["attributes"].items())
+        if value is not None and value != ""
+    ]
+    tags = [
+        {"source": row["source"], "external_id": row["external_id"], "tag": tag}
+        for row in objects
+        for tag in sorted(set(row["tags"]))
+    ]
+    city_objects = [
+        {k: v for k, v in row.items() if k not in ("attributes", "tags")} for row in objects
+    ]
+    _write(SEED_DIR / "city_objects.json", city_objects)
+    _write(SEED_DIR / "object_attributes.json", attributes)
+    _write(SEED_DIR / "object_tags.json", tags)
+    counts = Counter(row["object_type_code"] for row in objects)
+    report = {
+        "source_rows": source_rows,
+        "imported": dict(sorted(counts.items())),
+        "metro": metro_quality,
+        "healthcare": healthcare_quality,
+        "education_missing_coordinates": sum(row["latitude"] is None for row in education),
+        "education_unknown_type": counts["EDUCATION_UNKNOWN"],
+        "duplicate_object_keys": 0,
+        "seed_objects": len(objects),
+        "seed_attributes": len(attributes),
+        "seed_tags": len(tags),
+    }
+    _write(SEED_DIR / "object_import_report.json", report)
+    return report
+
+
+def _validate_seed(objects: list[dict], attributes: list[dict], tags: list[dict]) -> None:
+    keys = set()
+    for row in objects:
+        key = (row.get("source"), row.get("external_id"))
+        if not all(key) or not row.get("source_dataset_id") or not row.get("object_type_code"):
+            raise ValueError(f"Недостаточно данных источника для объекта: {key}")
+        if key in keys:
+            raise ValueError(f"Дубликат объекта: {key}")
+        keys.add(key)
+    for collection in (attributes, tags):
+        for row in collection:
+            if (row["source"], row["external_id"]) not in keys:
+                raise ValueError("Атрибут/тег ссылается на отсутствующий объект")
+
+
+def upsert_objects(
+    session: Session, objects: list[dict], attributes: list[dict], tags: list[dict]
+) -> None:
+    """Обновляет исходные поля; пользовательские атрибуты и теги сохраняет."""
+    _validate_seed(objects, attributes, tags)
+    type_ids = dict(session.execute(select(ObjectType.code, ObjectType.id)).all())
+    missing_types = {row["object_type_code"] for row in objects} - type_ids.keys()
+    if missing_types:
+        raise ValueError(f"Отсутствуют ObjectType: {', '.join(sorted(missing_types))}")
+    known_tags = set(session.scalars(select(ObjectTagDefinition.code)))
+    missing_tags = {row["tag"] for row in tags} - known_tags
+    if missing_tags:
+        raise ValueError(f"Отсутствуют теги в справочнике: {', '.join(sorted(missing_tags))}")
+    keys = {(row["source"], row["external_id"]) for row in objects}
+    existing = {
+        (item.source, item.external_id): item
+        for item in session.scalars(
+            select(CityObject).where(CityObject.source.in_({key[0] for key in keys}))
+        )
+    }
+    for row in objects:
+        key = (row["source"], row["external_id"])
+        item = existing.get(key)
+        if item is None:
+            item = CityObject(source=row["source"], external_id=row["external_id"])
+            session.add(item)
+            existing[key] = item
+        for field in (
+            "name",
+            "address",
+            "district",
+            "administrative_area",
+            "latitude",
+            "longitude",
+            "source_dataset_id",
+        ):
+            setattr(item, field, row[field])
+        item.object_type_id = type_ids[row["object_type_code"]]
+    session.flush()
+    object_ids = {key: existing[key].id for key in keys}
+    existing_attributes = {
+        (row.object_id, row.attribute_code): row
+        for row in session.scalars(
+            select(ObjectAttribute).where(ObjectAttribute.object_id.in_(object_ids.values()))
+        )
+    }
+    for row in attributes:
+        key = (object_ids[(row["source"], row["external_id"])], row["attribute_code"])
+        item = existing_attributes.get(key)
+        if item is None:
+            item = ObjectAttribute(object_id=key[0], attribute_code=key[1])
+            session.add(item)
+            existing_attributes[key] = item
+        item.value = row["value"]
+        item.value_type = row["value_type"]
+    existing_tag_rows = list(
+        session.scalars(select(ObjectTag).where(ObjectTag.object_id.in_(object_ids.values())))
+    )
+    existing_tags = {(row.object_id, row.tag) for row in existing_tag_rows}
+    for row in tags:
+        key = (object_ids[(row["source"], row["external_id"])], row["tag"])
+        if key not in existing_tags:
+            session.add(ObjectTag(object_id=key[0], tag=key[1]))
+            existing_tags.add(key)
+    session.flush()
+
+
+async def load_seed() -> None:
+    objects = _json(SEED_DIR / "city_objects.json")
+    attributes = _json(SEED_DIR / "object_attributes.json")
+    tags = _json(SEED_DIR / "object_tags.json")
+    _validate_seed(objects, attributes, tags)
+    engine = create_database_engine(get_settings())
+    factory = create_session_factory(engine)
+    try:
+        async with factory.begin() as session:
+            await upsert_object_types(session, load_object_types())
+            await session.run_sync(upsert_object_tags, load_object_tags())
+            await session.run_sync(upsert_objects, objects, attributes, tags)
+            await session.run_sync(upsert_links, load_links())
+    finally:
+        await engine.dispose()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=("build", "load"))
+    args = parser.parse_args()
+    if args.command == "build":
+        print(json.dumps(build_seed(), ensure_ascii=False, indent=2))
+    else:
+        asyncio.run(load_seed())
+
+
+if __name__ == "__main__":
+    main()
