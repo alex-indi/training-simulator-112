@@ -18,6 +18,7 @@ from app.db.session import (
 )
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.router import router as identity_router
+from app.modules.incident_classifier.router import router as classifier_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
@@ -122,6 +123,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(identity_router)
+app.include_router(classifier_router)
 app.include_router(training_router)
 app.include_router(control_router)
 app.include_router(assessment_router)
