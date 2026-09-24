@@ -167,14 +167,18 @@ function App() {
 
   useEffect(() => {
     const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
-    Promise.all([
-      requestJson('/api/users/demo'),
-      requestJson('/api/users/me', savedUsername).catch(() => requestJson('/api/users/me')),
-    ])
-      .then(([demoUsers, user]) => {
+    requestJson('/api/users/demo')
+      .then(async (demoUsers) => {
         setUsers(demoUsers)
-        window.sessionStorage.setItem('ut112-demo-username', user.username)
-        setCurrentUser(user)
+        const trainee = demoUsers.find((user) => user.role === 'TRAINEE')
+        setLoginUsername(trainee?.username || demoUsers[0]?.username || '')
+        if (savedUsername) {
+          try {
+            setCurrentUser(await requestJson('/api/users/me', savedUsername))
+          } catch {
+            window.sessionStorage.removeItem('ut112-demo-username')
+          }
+        }
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false))
@@ -271,7 +275,9 @@ function App() {
 
     setLoading(true)
     try {
-      setCurrentUser(await requestJson('/api/users/me', demoUser.username))
+      const user = await requestJson('/api/users/me', demoUser.username)
+      window.sessionStorage.setItem('ut112-demo-username', user.username)
+      setCurrentUser(user)
       setLoginPassword('')
     } catch (requestError) {
       setError(requestError.message)
@@ -281,6 +287,7 @@ function App() {
   }
 
   const logout = () => {
+    window.sessionStorage.removeItem('ut112-demo-username')
     setCurrentUser(null)
     setIncidents([])
     setSelectedIncident(null)
@@ -859,9 +866,9 @@ function App() {
                   type="button"
                   onClick={() => openCard(incident)}
                 >
-                  <span className={styles.linkCell}>⌄</span>
-                  <span>◆</span>
-                  <span className={styles.operatorCell}>{incident.opened_at ? '0' : '!'}</span>
+                  <span className={styles.linkCell}><span className={styles.chevronDownIcon} aria-hidden="true" /></span>
+                  <span><span className={styles.emergencyBookmark} aria-hidden="true" /></span>
+                  <span className={`${styles.operatorCell} ${incident.opened_at ? styles.operatorCellZero : ''}`}>{incident.opened_at ? '0' : '!'}</span>
                   <span>{incident.claimant_workstation_number || '—'}</span>
                   <strong>{incident.incident_number}</strong>
                   <span>{formatDate(incident.reported_at)}</span>
@@ -869,8 +876,8 @@ function App() {
                   <strong>{incident.incident_type}</strong>
                   <span>Нет</span>
                   <strong className={styles.registryAddress}>{incident.address}</strong>
-                  <span className={styles.serviceState}><i>◒</i>{incident.claimant_name ? `${incident.claimant_name} · АРМ ${incident.claimant_workstation_number} · ` : ''}{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
-                  <span>▣</span>
+                  <span className={styles.serviceState}>{incident.claimant_name ? `${incident.claimant_name} · АРМ ${incident.claimant_workstation_number} · ` : ''}{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
+                  <span className={styles.fileIconCell}><span className={styles.fileTextIcon} aria-hidden="true" /></span>
                   <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
                 </button>
               )) : (
