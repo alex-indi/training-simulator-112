@@ -48,6 +48,9 @@ class AsyncAdapter:
     async def scalars(self, statement):
         return self.session.scalars(statement)
 
+    async def execute(self, statement):
+        return self.session.execute(statement)
+
     async def flush(self):
         self.session.flush()
 
