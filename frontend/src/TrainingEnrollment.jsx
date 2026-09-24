@@ -66,6 +66,7 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
   }
 
   if (!sessions.length && !error) return null
+  if (ownRun && !error && !selected?.paused_at && !ownRun.paused_at) return null
   return <section className={styles.panel} aria-label="Учебное занятие">
     <strong>Учебное занятие</strong>
     {error && <span className={styles.error} role="alert">{error}</span>}

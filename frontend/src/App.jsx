@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 
+import informationIcon from './assets/information.svg'
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
 import ResponseChat from './ResponseChat'
+import { previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -198,8 +200,11 @@ function App() {
   const selectedIncidentId = useRef(null)
   const [selectedService, setSelectedService] = useState('')
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
+  const [statusEditorOpen, setStatusEditorOpen] = useState(false)
   const [selectedAction, setSelectedAction] = useState('')
+  const [actionOrderNumber, setActionOrderNumber] = useState('')
   const [actionComment, setActionComment] = useState('')
+  const [previewStatuses, setPreviewStatuses] = useState({})
   const [responseUnits, setResponseUnits] = useState([])
   const [responseAssignments, setResponseAssignments] = useState([])
   const [selectedResponseUnitId, setSelectedResponseUnitId] = useState('')
@@ -367,6 +372,8 @@ function App() {
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
+    setStatusEditorOpen(false)
+    setPreviewStatuses({})
     setFilters(emptyFilters)
     setError('')
   }
@@ -377,8 +384,11 @@ function App() {
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
+    setStatusEditorOpen(false)
     setSelectedAction('')
+    setActionOrderNumber('')
     setActionComment('')
+    setPreviewStatuses({})
     setResponseUnits([])
     setResponseAssignments([])
     setSelectedResponseUnitId('')
@@ -409,11 +419,18 @@ function App() {
         requestJson(`/api/response/units?incident_id=${incident.id}`, currentUser.username),
         requestJson(`/api/response/incidents/${incident.id}/assignments`, currentUser.username),
       ])
-      const services = openedIncident.source_snapshot?.notified_services || []
+      const services = (openedIncident.source_snapshot?.notified_services || [])
+        .filter((service) => service.trim().toUpperCase() !== 'ДДС')
       setSelectedIncident(openedIncident)
-      setSelectedService(openedIncident.viewer_dds_profile || services[0] || '')
+      setPreviewStatuses({})
+      setSelectedService(openedIncident.can_edit && openedIncident.viewer_dds_profile === 'ДДС'
+        ? 'Служба 102'
+        : services.includes(openedIncident.viewer_dds_profile)
+          ? openedIncident.viewer_dds_profile : services[0] || '')
       setServiceHistoryOpen(false)
+      setStatusEditorOpen(false)
       setSelectedAction(openedIncident.available_actions?.[0] || '')
+      setActionOrderNumber('')
       setActionComment('')
       setResponseUnits(units)
       setResponseAssignments(assignments)
@@ -450,29 +467,70 @@ function App() {
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
+    setStatusEditorOpen(false)
     setSelectedAction('')
+    setActionOrderNumber('')
     setActionComment('')
+    setPreviewStatuses({})
     setResponseUnits([])
     setResponseAssignments([])
     setSelectedResponseUnitId('')
   }
 
   const selectService = (service) => {
+    if ((isPreviewMode || service === selectedIncident.viewer_dds_profile) && getServiceStatus(service) === 'AWAITING_DECISION' && getServiceActions(service).includes('ACCEPT')) {
+      setSelectedService(service)
+      setServiceHistoryOpen(false)
+      setSelectedAction('')
+      setActionOrderNumber('')
+      setActionComment('')
+      setStatusEditorOpen(true)
+      return
+    }
     if (selectedService === service) {
       setServiceHistoryOpen((isOpen) => !isOpen)
       return
     }
     setSelectedService(service)
     setServiceHistoryOpen(true)
-    if (service === selectedIncident.viewer_dds_profile) {
-      setSelectedAction(selectedIncident.available_actions?.[0] || '')
-      setActionComment('')
-    }
+  }
+
+  const openStatusEditor = () => {
+    setSelectedAction('')
+    setActionOrderNumber('')
+    setActionComment('')
+    setStatusEditorOpen(true)
   }
 
   const submitIncidentAction = async (event) => {
     event.preventDefault()
     if (!selectedAction) return
+
+    if (isPreviewMode) {
+      if (!getServiceActions(selectedService).includes(selectedAction)) return
+      if (commentRequiredActions.has(selectedAction) && !actionComment.trim()) return
+      const entries = [
+        ...(previewStatuses[selectedService] || []),
+        {
+          id: `preview-${Date.now()}`,
+          action: selectedAction,
+          status: previewActionStatuses[selectedAction],
+          actor_display_name: currentUser.full_name,
+          is_system: false,
+          order_number: actionOrderNumber.trim() || null,
+          comment: actionComment.trim() || null,
+          created_at: new Date().toISOString(),
+        },
+      ]
+      const nextStatuses = { ...previewStatuses, [selectedService]: entries }
+      setPreviewStatuses(nextStatuses)
+      setSelectedAction('')
+      setActionOrderNumber('')
+      setActionComment('')
+      setStatusEditorOpen(false)
+      setServiceHistoryOpen(true)
+      return
+    }
 
     setError('')
     setLoading(true)
@@ -485,13 +543,17 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: selectedAction,
+            order_number: actionOrderNumber || null,
             comment: actionComment || null,
           }),
         },
       )
       setSelectedIncident(updatedIncident)
-      setSelectedAction(updatedIncident.available_actions?.[0] || '')
+      setSelectedAction('')
+      setActionOrderNumber('')
       setActionComment('')
+      setStatusEditorOpen(false)
+      setServiceHistoryOpen(true)
       setIncidents((items) =>
         items.map((item) => (item.id === updatedIncident.id ? updatedIncident : item)),
       )
@@ -637,14 +699,26 @@ function App() {
   }
 
   const snapshot = selectedIncident?.source_snapshot
-  const services = snapshot?.notified_services || []
-  const features = snapshot?.features || []
+  const classifierCode = selectedIncident && registryIncidentType(selectedIncident)
   const ownService = selectedIncident?.viewer_dds_profile
-  const visibleServices = ownService && !services.includes(ownService)
-    ? [...services, ownService] : services
-  const isOwnServiceSelected = selectedService === ownService
-  const ownServiceHistory = selectedIncident?.actions || []
-  const latestOwnStatus = ownServiceHistory[ownServiceHistory.length - 1]
+  const isPreviewMode = selectedIncident?.can_edit && ownService === 'ДДС'
+  const services = isPreviewMode
+    ? previewServiceTiles
+    : (snapshot?.notified_services || []).filter((service) => service.trim().toUpperCase() !== 'ДДС')
+  const features = snapshot?.features || []
+  const hasStatusTile = (service) => isPreviewMode
+    ? Boolean(previewStatuses[service]?.length)
+    : service === ownService && getServiceStatus(service) !== 'AWAITING_DECISION'
+  const getServiceActions = (service) => isPreviewMode
+    ? previewAvailableActions(previewStatuses[service] || [])
+    : service === ownService ? selectedIncident?.available_actions || [] : []
+  const getServiceStatus = (service) => isPreviewMode
+    ? previewCurrentStatus(previewStatuses[service] || [])
+    : selectedIncident?.dds_status
+  const isOwnServiceSelected = isPreviewMode || selectedService === ownService
+  const ownServiceHistory = isPreviewMode
+    ? [...(selectedIncident?.actions || []).filter((entry) => entry.is_system), ...(previewStatuses[selectedService] || [])]
+    : selectedIncident?.actions || []
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const filtersActive = Object.values(filters).some(Boolean)
   const [clockHours, clockMinutes, clockSeconds] = formatTime(now).split(':')
@@ -702,12 +776,16 @@ function App() {
           <div className={styles.incidentInfoStrip}>
             <div><strong>{selectedIncident.applicant_name || 'ФИО заявителя не указано'}</strong><span>заявитель</span></div>
             <div className={styles.incidentIndicators}>
-              <span>Пострадавшие: {operationalValue(snapshot?.victims)}</span>
-              <span>Отказ от скорой: {operationalValue(snapshot?.ambulance_refusal)}</span>
-              <span>Заблокированные: {operationalValue(snapshot?.blocked_people)}</span>
-              <button type="button" disabled title="Признак чрезвычайной ситуации">ЧС ⚡</button>
-              <button className={styles.emergencyButton} type="button" disabled title="Признак чрезвычайного происшествия">ЧП ▲</button>
-              <button className={styles.pencilButton} type="button" disabled title="Редактирование классификации доступно оператору Службы 112">✎</button>
+              <div className={styles.indicatorSummary}>
+                <span>Пострадавшие: {operationalValue(snapshot?.victims)}</span>
+                <span>Отказ от скорой: {operationalValue(snapshot?.ambulance_refusal)}</span>
+                <span>Заблокированные: {operationalValue(snapshot?.blocked_people)}</span>
+              </div>
+              <div className={styles.indicatorActions}>
+                <button type="button" disabled title="Признак чрезвычайной ситуации">ЧС <span className={styles.chsBoltIcon} aria-hidden="true" /></button>
+                <button className={styles.emergencyButton} type="button" disabled title="Признак чрезвычайного происшествия">ЧП <span className={styles.warningIcon} aria-hidden="true" /></button>
+                <button className={styles.pencilButton} type="button" disabled title="Редактирование классификации доступно оператору Службы 112"><span className={styles.editPencilIcon} aria-hidden="true" /></button>
+              </div>
             </div>
           </div>
 
@@ -729,68 +807,56 @@ function App() {
             </section>
 
             <section className={styles.classificationColumn}>
-              <div className={styles.classificationTitle}>Происшествие {selectedIncident.incident_type}</div>
+              <div className={styles.classificationTitle} id={`classification-title-${selectedIncident.id}`}>
+                <a href={`#classifier-${selectedIncident.id}`}>Происшествие {classifierCode}</a>
+              </div>
               <div className={styles.classificationLine}>
                 <strong>{features.length ? features.join(' · ') : selectedIncident.description}</strong>
               </div>
               <div className={styles.classificationLine}>Класс: <strong>{selectedIncident.incident_type}</strong>;</div>
               <div className={styles.classificationLine}>[ВИС] Класс:</div>
+              <section className={styles.classifierDetails} id={`classifier-${selectedIncident.id}`} aria-label={`Тип происшествия ${classifierCode}`}>
+                <div className={styles.classifierDetailsHeader}>
+                  <strong>Тип происшествия {classifierCode}</strong>
+                  <a href={`#classification-title-${selectedIncident.id}`}>Свернуть</a>
+                </div>
+                <dl>
+                  <div><dt>Наименование</dt><dd>{selectedIncident.incident_type}</dd></div>
+                  {snapshot?.classifier_group && <div><dt>Группа</dt><dd>{snapshot.classifier_group}</dd></div>}
+                  {snapshot?.classifier_feature_1 && <div><dt>Признак 1</dt><dd>{snapshot.classifier_feature_1}</dd></div>}
+                  {snapshot?.classifier_feature_2 && <div><dt>Признак 2</dt><dd>{snapshot.classifier_feature_2}</dd></div>}
+                  {snapshot?.classifier_version && <div><dt>Версия классификатора</dt><dd>{snapshot.classifier_version}</dd></div>}
+                </dl>
+              </section>
             </section>
           </div>
 
           <div className={styles.serviceArea}>
             {serviceHistoryOpen && (
-              <div className={styles.serviceHistory}>
+              <div
+                className={`${styles.serviceHistory} ${!hasStatusTile(selectedService) ? styles.serviceHistoryBase : ''}`}
+                style={{ left: `${70 + Math.max(0, services.indexOf(selectedService)) * 104}px` }}
+                aria-label={`История статусов ${selectedService}`}
+              >
                 <button type="button" onClick={() => setServiceHistoryOpen(false)} aria-label="Закрыть историю">×</button>
-                <strong>{selectedService}</strong>
                 {isOwnServiceSelected ? (
                   <>
-                    <div className={styles.currentDdsStatus}>
-                      <span>Текущий статус</span>
-                      <strong>{ddsStatusLabels[selectedIncident.dds_status]}</strong>
-                    </div>
                     <div className={styles.historyList}>
                       {ownServiceHistory.map((entry) => (
-                        <article key={entry.id} className={styles.historyEntry}>
-                          <div>
-                            <em>{historyStatusLabels[entry.status] || entry.status}</em>
-                            <time>{formatDateTime(entry.created_at)}</time>
-                          </div>
-                          <small>{entry.actor_display_name}{entry.is_system ? ' · системное событие' : ''}</small>
+                        <article key={entry.id} className={styles.historyEntry} title={entry.order_number ? `Номер наряда: ${entry.order_number}` : undefined}>
+                          <span className={styles.historyActor} title={entry.actor_display_name}>оп. {selectedIncident.viewer_workstation_number || 0}</span>
+                          <span className={styles.historyArrow} aria-hidden="true">›</span>
+                          <span className={styles.historyEvent}><time>{formatDateTime(entry.created_at)}</time> {historyStatusLabels[entry.status] || entry.status}</span>
+                          {entry.comment && <span className={styles.historyArrow} aria-hidden="true">›</span>}
                           {entry.comment && <p>{entry.comment}</p>}
                         </article>
                       ))}
                     </div>
-                    {selectedIncident.available_actions.length ? (
-                      <form className={styles.statusEditor} onSubmit={submitIncidentAction}>
-                        <label>
-                          Новый статус
-                          <select value={selectedAction} onChange={(event) => setSelectedAction(event.target.value)}>
-                            {selectedIncident.available_actions.map((action) => (
-                              <option key={action} value={action}>{actionLabels[action]}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Комментарий{commentRequiredActions.has(selectedAction) ? ' — обязателен' : ''}
-                          <textarea
-                            value={actionComment}
-                            onChange={(event) => setActionComment(event.target.value)}
-                            placeholder="Укажите факты, причину или результат реагирования"
-                            rows="3"
-                          />
-                        </label>
-                        <button
-                          type="submit"
-                          disabled={loading || (commentRequiredActions.has(selectedAction) && !actionComment.trim())}
-                        >
-                          Сохранить статус
-                        </button>
-                      </form>
-                    ) : (
+                    {!getServiceActions(selectedService).length && (
                       <p className={styles.statusLocked}>Изменение статусов закрыто. История доступна только для просмотра.</p>
                     )}
-                    <div className={styles.responsePanel}>
+                    {!isPreviewMode && <details className={styles.responsePanel}>
+                      <summary>Виртуальная группа реагирования</summary>
                       <div className={styles.responseHeading}>
                         <strong>Виртуальная группа реагирования</strong>
                         <button type="button" onClick={refreshResponseAssignments}>Обновить</button>
@@ -836,7 +902,7 @@ function App() {
                       {canAssignResponse && !availableResponseUnits.length && !responseAssignments.length && (
                         <small>Для профиля ДДС пока нет доступных групп.</small>
                       )}
-                    </div>
+                    </details>}
                   </>
                 ) : (
                   <div className={styles.readOnlyServiceHistory}>
@@ -847,32 +913,69 @@ function App() {
               </div>
             )}
 
+            {statusEditorOpen && isOwnServiceSelected && (
+              <>
+                <div className={styles.statusEditorBackdrop} onClick={() => setStatusEditorOpen(false)} aria-hidden="true" />
+                <form className={styles.statusEditor} onSubmit={submitIncidentAction} role="dialog" aria-modal="true" aria-label="Изменение статуса службы">
+                  <select aria-label="Статус" value={selectedAction} onChange={(event) => setSelectedAction(event.target.value)} required>
+                    <option value="" disabled hidden>Статус</option>
+                    {(getServiceActions(selectedService).includes('ACCEPT')
+                      ? getServiceActions(selectedService).filter((action) => action === 'ACCEPT' || action === 'REJECT')
+                      : statusEditorActions()).map((action) => (
+                      <option key={action} value={action} disabled={!getServiceActions(selectedService).includes(action)}>{actionLabels[action]}</option>
+                    ))}
+                  </select>
+                  <input aria-label="Номер наряда" placeholder="Номер наряда" maxLength="80" value={actionOrderNumber} onChange={(event) => setActionOrderNumber(event.target.value)} />
+                  <input aria-label="Комментарий" placeholder="Комментарий" maxLength="2000" value={actionComment} onChange={(event) => setActionComment(event.target.value)} required={commentRequiredActions.has(selectedAction)} />
+                  <button type="submit" aria-label="Сохранить статус" title="Сохранить статус" disabled={loading || !selectedAction || (commentRequiredActions.has(selectedAction) && !actionComment.trim())}>✓</button>
+                  <button type="button" aria-label="Отменить изменение статуса" title="Отменить" onClick={() => setStatusEditorOpen(false)}>×</button>
+                </form>
+              </>
+            )}
+
             <div className={styles.servicesDock}>
               <div className={styles.servicesLabel}>Службы:</div>
-              {visibleServices.map((service) => (
-                <button
-                  className={`${styles.serviceTile} ${selectedService === service ? styles.serviceTileActive : ''}`}
-                  key={service}
-                  type="button"
-                  onClick={() => selectService(service)}
-                  title="Выбрать службу и показать историю статусов"
-                >
-                  <span className={`${styles.chevronIcon} ${styles.serviceChevron}`} aria-hidden="true" />
-                  <strong>{compactServiceName(service)}</strong>
-                  <small>{service === ownService
-                    ? `${formatTime(latestOwnStatus?.created_at)} ${historyStatusLabels[latestOwnStatus?.status] || 'Добавлена'}`
-                    : `${formatTime(selectedIncident.delivered_at)} Добавлена`}</small>
-                  {selectedService === service && service === ownService && <i title="Изменить статус и открыть историю">✎</i>}
-                </button>
+              {services.map((service) => (
+                <div className={styles.serviceTileWrapper} key={service}>
+                  {hasStatusTile(service) && (
+                    <div className={`${styles.statusTile} ${selectedService === service && getServiceStatus(service) !== 'AWAITING_DECISION' ? styles.statusTileActive : ''}`}>
+                      <button type="button" className={styles.statusTileMain} onClick={() => selectService(service)} title="Показать историю статусов">
+                        <span className={`${styles.chevronIcon} ${styles.serviceChevron}`} aria-hidden="true" />
+                        <strong title={selectedIncident.address}>{selectedIncident.address}</strong>
+                        <small>{formatTime(isPreviewMode ? previewStatuses[service]?.at(-1)?.created_at || selectedIncident.delivered_at : ownServiceHistory.at(-1)?.created_at)} {getServiceStatus(service) === 'AWAITING_DECISION' ? 'Добавлена' : ddsStatusLabels[getServiceStatus(service)]}</small>
+                      </button>
+                      {selectedService === service && getServiceActions(service).length > 0 && (
+                        <button className={styles.serviceEditButton} type="button" onClick={openStatusEditor} aria-label={`Добавить статус службы ${service}`} title="Добавить статус"><span className={styles.serviceEditIcon} aria-hidden="true" /></button>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    className={`${styles.serviceTile} ${selectedService === service && !hasStatusTile(service) ? styles.serviceTileActive : ''} ${service === 'Деп. ЖКХ' ? styles.serviceTileSecondary : ''}`}
+                    type="button"
+                    onClick={() => selectService(service)}
+                    title={(isPreviewMode || service === ownService) && getServiceStatus(service) === 'AWAITING_DECISION' ? 'Выбрать начальный статус' : 'Показать историю статусов'}
+                  >
+                    <span className={`${styles.chevronIcon} ${styles.serviceChevron}`} aria-hidden="true" />
+                    <strong>{compactServiceName(service)}</strong>
+                    <small>{formatTime(selectedIncident.delivered_at)} Добавлена</small>
+                  </button>
+                </div>
               ))}
-              {['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
+              {!isPreviewMode && ['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
                 <button className={`${styles.serviceTile} ${styles.serviceTileMuted}`} key={service} type="button" disabled>
                   <span className={`${styles.chevronIcon} ${styles.serviceChevron}`} aria-hidden="true" /><strong>{service}</strong><small>не оповещена</small>
                 </button>
               ))}
-              <button className={styles.dockControl} type="button" onClick={() => setServiceHistoryOpen((isOpen) => !isOpen)} title="Развернуть или свернуть историю выбранной службы">↕</button>
+              <button className={styles.dockControl} type="button" onClick={() => setServiceHistoryOpen((isOpen) => !isOpen)} title="Развернуть или свернуть историю выбранной службы">
+                <span className={styles.dockChevronPair} aria-hidden="true">
+                  <span className={`${styles.chevronIcon} ${styles.chevronUp}`} />
+                  <span className={styles.chevronIcon} />
+                </span>
+              </button>
               <div className={styles.dockSpacer} />
-              <button className={styles.dockControl} type="button" disabled title="Сообщения по карточке">▣</button>
+              <button className={styles.dockControl} type="button" disabled title="Информация по карточке">
+                <img className={styles.dockInformationIcon} src={informationIcon} alt="" />
+              </button>
               <button className={styles.closeCardButton} type="button" onClick={closeCard} title="Закрыть карточку и вернуться к списку">×</button>
             </div>
           </div>
