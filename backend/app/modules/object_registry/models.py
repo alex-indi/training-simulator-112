@@ -108,6 +108,34 @@ class ObjectTag(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     object_id: Mapped[int] = mapped_column(ForeignKey("city_objects.id", ondelete="CASCADE"))
-    tag: Mapped[str] = mapped_column(String(120))
+    tag: Mapped[str] = mapped_column(
+        String(120), ForeignKey("object_tags_dictionary.code", ondelete="RESTRICT")
+    )
 
     object: Mapped[CityObject] = relationship(back_populates="tags")
+    definition: Mapped[ObjectTagDefinition] = relationship()
+
+
+class ObjectTagDefinition(Base):
+    """Справочник признаков, доступных для отбора объектов сценария."""
+
+    __tablename__ = "object_tags_dictionary"
+
+    code: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str] = mapped_column(String(250))
+    description: Mapped[str | None] = mapped_column(Text)
+
+
+class ObjectTagClassifierFeature(Base):
+    """Проверенное соответствие признака объекта признаку SRC-006."""
+
+    __tablename__ = "object_tag_classifier_features"
+
+    tag_code: Mapped[str] = mapped_column(
+        String(120), ForeignKey("object_tags_dictionary.code", ondelete="CASCADE"), primary_key=True
+    )
+    feature_id: Mapped[int] = mapped_column(
+        ForeignKey("incident_features.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    tag: Mapped[ObjectTagDefinition] = relationship()
