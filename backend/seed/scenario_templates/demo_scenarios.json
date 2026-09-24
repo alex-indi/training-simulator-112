@@ -1,0 +1,28 @@
+[
+  {
+    "seed_code": "DEMO_EDUCATION_FIRE_001",
+    "name": "Задымление в учебном заведении",
+    "description": "Диспетчер ДДС получает карточку о задымлении, уточняет обстановку и отслеживает сообщение группы реагирования.",
+    "difficulty": 3,
+    "classifier_source_reference": "SRC-006-incident-classifier-v046-24.xlsx#Лист1!105",
+    "object_type_code": "EDUCATION",
+    "required_tags": [],
+    "service_source_references": ["СЛУЖБЫ 112.docx#word/media/image1.png/row-01"],
+    "initial_title": "Задымление в учебном заведении",
+    "initial_description": "В учебном здании появился запах дыма. Сотрудник сообщил об эвакуации людей.",
+    "initial_caller_text": "В коридоре пахнет дымом, сотрудники выводят людей из здания.",
+    "events": [
+      {"offset_seconds": 0, "event_type": "INITIAL_REPORT", "title": "Первичное сообщение", "description": "Получена карточка о запахе дыма."},
+      {"offset_seconds": 300, "event_type": "ADDITIONAL_INFO", "title": "Уточнение обстановки", "description": "Сотрудник сообщает, что на этаже виден дым."},
+      {"offset_seconds": 600, "event_type": "RESPONSE_MESSAGE", "title": "Сообщение группы", "description": "Старший группы сообщает о прибытии к объекту."}
+    ],
+    "expected_actions": [
+      {"expected_action_type": "SET_STATUS", "target_status": "ACCEPTED", "deadline_seconds": 30, "is_critical": true, "description": "Принять карточку после первичной оценки."},
+      {"expected_action_type": "SET_STATUS", "target_status": "ARRIVED", "is_critical": false, "description": "Отметить прибытие после сообщения старшего группы."}
+    ],
+    "criteria": [
+      {"name": "Первичная реакция", "description": "Карточка принята в течение 30 секунд учебного времени.", "weight": 20, "is_critical": true},
+      {"name": "Статус прибытия", "description": "Статус установлен на основании сообщения группы.", "weight": 10, "is_critical": false}
+    ]
+  }
+]
