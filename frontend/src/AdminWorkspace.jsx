@@ -60,12 +60,12 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({})
   const [selectedObject, setSelectedObject] = useState(null)
-  const [userDraft, setUserDraft] = useState({ username: '', full_name: '', password: '', role: 'TRAINEE', group_id: null })
-  const [editingUserId, setEditingUserId] = useState(null)
-  const [editUserDraft, setEditUserDraft] = useState(null)
-  const [createTarget, setCreateTarget] = useState(null)
+  const [activeUserRole, setActiveUserRole] = useState('ADMIN')
+  const [userForm, setUserForm] = useState({ username: '', full_name: '', password: '', role: 'ADMIN', group_id: null })
+  const [userModal, setUserModal] = useState(null)
   const [groupDraft, setGroupDraft] = useState({ name: '', description: '' })
-  const [groupFormOpen, setGroupFormOpen] = useState(false)
+  const [groupModal, setGroupModal] = useState(null)
+  const [deleteModal, setDeleteModal] = useState(null)
   const [typeDraft, setTypeDraft] = useState({ code: '', name: '', description: '', parent_id: '' })
   const loadRequestId = useRef(0)
   const username = user.username
@@ -125,33 +125,67 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     }
   }
 
-  const createUser = async (event) => {
+  const submitUser = async (event) => {
     event.preventDefault()
-    const created = await mutate('/api/admin/users', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userDraft),
-    }, 'Пользователь создан и действие записано в аудит.')
-    if (created) {
-      setUserDraft({ username: '', full_name: '', password: '', role: 'TRAINEE', group_id: null })
-      setCreateTarget(null)
+    if (userModal.mode === 'edit') {
+      const changes = { ...userForm }
+      if (!changes.password) delete changes.password
+      if (await patchUser(userModal.item, changes)) setUserModal(null)
+      return
     }
+    const created = await mutate('/api/admin/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userForm),
+    }, 'Пользователь создан и действие записано в аудит.')
+    if (created) setUserModal(null)
   }
 
-  const openCreateUser = (role, groupId, target) => {
-    setUserDraft({ username: '', full_name: '', password: '', role, group_id: groupId })
-    setCreateTarget(target)
+  const openCreateUser = (role, groupId = null) => {
+    setUserForm({ username: '', full_name: '', password: '', role, group_id: groupId })
+    setUserModal({ mode: 'create' })
   }
 
-  const createGroup = async (event) => {
+  const openEditUser = (item) => {
+    setUserForm({
+      username: item.username,
+      full_name: item.full_name,
+      password: '',
+      role: item.role,
+      group_id: item.group_id,
+    })
+    setUserModal({ mode: 'edit', item })
+  }
+
+  const openCreateGroup = () => {
+    setGroupDraft({ name: '', description: '' })
+    setGroupModal({ mode: 'create' })
+  }
+
+  const openEditGroup = (group) => {
+    setGroupDraft({ name: group.name, description: group.description || '' })
+    setGroupModal({ mode: 'edit', group })
+  }
+
+  const submitGroup = async (event) => {
     event.preventDefault()
-    const created = await mutate('/api/admin/user-groups', {
-      method: 'POST',
+    const editing = groupModal.mode === 'edit'
+    const saved = await mutate(editing ? `/api/admin/user-groups/${groupModal.group.id}` : '/api/admin/user-groups', {
+      method: editing ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(groupDraft),
-    }, 'Учебная группа создана.')
-    if (created) {
-      setGroupDraft({ name: '', description: '' })
-      setGroupFormOpen(false)
-    }
+    }, editing ? 'Название и описание группы обновлены.' : 'Учебная группа создана.')
+    if (saved) setGroupModal(null)
+  }
+
+  const confirmDelete = async () => {
+    const isGroup = deleteModal.kind === 'group'
+    const deleted = await mutate(
+      isGroup ? `/api/admin/user-groups/${deleteModal.item.id}` : `/api/admin/users/${deleteModal.item.id}`,
+      { method: 'DELETE' },
+      isGroup
+        ? 'Группа удалена. Диспетчеры перенесены в «Без группы».'
+        : 'Пользователь удалён.',
+    )
+    if (deleted) setDeleteModal(null)
   }
 
   const patchUser = async (item, changes) => {
@@ -178,26 +212,6 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
       return false
     } finally {
       setLoading(false)
-    }
-  }
-
-  const beginUserEdit = (item) => {
-    setEditingUserId(item.id)
-    setEditUserDraft({
-      username: item.username,
-      full_name: item.full_name,
-      password: '',
-      role: item.role,
-      group_id: item.group_id,
-    })
-  }
-
-  const saveUser = async (item) => {
-    const changes = { ...editUserDraft }
-    if (!changes.password) delete changes.password
-    if (await patchUser(item, changes)) {
-      setEditingUserId(null)
-      setEditUserDraft(null)
     }
   }
 
@@ -271,55 +285,66 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </>
   )
 
-  const renderCreateUserForm = (target) => createTarget === target && (
-    <form className={styles.inlineForm} onSubmit={createUser}>
-      <input required placeholder="Логин" value={userDraft.username} onChange={(event) => setUserDraft({ ...userDraft, username: event.target.value })} />
-      <input required placeholder="ФИО" value={userDraft.full_name} onChange={(event) => setUserDraft({ ...userDraft, full_name: event.target.value })} />
-      <input required minLength="8" maxLength="128" type="password" autoComplete="new-password" placeholder="Пароль (минимум 8 символов)" value={userDraft.password} onChange={(event) => setUserDraft({ ...userDraft, password: event.target.value })} />
-      <strong>{roleLabels[userDraft.role]}</strong>
-      <button disabled={loading}>Создать пользователя</button>
-      <button type="button" onClick={() => setCreateTarget(null)}>Отмена</button>
-    </form>
-  )
-
   const renderUserTable = (rows) => !rows.length ? <div className={styles.groupEmpty}>Пользователей в группе нет</div> : <div className={styles.table}>
     <div className={styles.tableHead}><span>ФИО</span><span>Логин</span><span>Роль / группа</span><span>Статус</span><span>Последний вход / пароль</span><span>Действия</span></div>
-    {rows.map((item) => editingUserId === item.id ? (
-      <div className={styles.tableRow} key={item.id}>
-        <input aria-label={`ФИО ${item.username}`} value={editUserDraft.full_name} onChange={(event) => setEditUserDraft({ ...editUserDraft, full_name: event.target.value })} />
-        <input aria-label={`Логин ${item.username}`} value={editUserDraft.username} onChange={(event) => setEditUserDraft({ ...editUserDraft, username: event.target.value })} />
-        <div className={styles.editSelectors}>
-          <select aria-label={`Роль ${item.username}`} value={editUserDraft.role} onChange={(event) => setEditUserDraft({ ...editUserDraft, role: event.target.value, group_id: event.target.value === 'TRAINEE' ? editUserDraft.group_id : null })}>{Object.entries(roleLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
-          {editUserDraft.role === 'TRAINEE' && <select aria-label={`Группа ${item.username}`} value={editUserDraft.group_id ?? ''} onChange={(event) => setEditUserDraft({ ...editUserDraft, group_id: event.target.value ? Number(event.target.value) : null })}><option value="">Без группы</option>{traineeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>}
-        </div>
-        <span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span>
-        <input aria-label={`Новый пароль ${item.username}`} type="password" minLength="8" maxLength="128" autoComplete="new-password" placeholder="Новый пароль" value={editUserDraft.password} onChange={(event) => setEditUserDraft({ ...editUserDraft, password: event.target.value })} />
-        <div className={styles.rowActions}><button disabled={loading} onClick={() => saveUser(item)}>Сохранить</button><button onClick={() => { setEditingUserId(null); setEditUserDraft(null) }}>Отмена</button></div>
-      </div>
-    ) : (
-      <div className={styles.tableRow} key={item.id}><strong>{item.full_name}</strong><code>{item.username}</code><span>{roleLabels[item.role]}</span><span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span><span>{formatDateTime(item.last_login_at)}</span><div className={styles.rowActions}><button onClick={() => beginUserEdit(item)}>Изменить</button><button onClick={() => patchUser(item, { is_active: !item.is_active })}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></div></div>
-    ))}
+    {rows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.full_name}</strong><code>{item.username}</code><span>{roleLabels[item.role]}</span><span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span><span>{formatDateTime(item.last_login_at)}</span><div className={styles.rowActions}><button onClick={() => openEditUser(item)}>Изменить</button><button onClick={() => patchUser(item, { is_active: !item.is_active })}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button><button className={styles.dangerButton} disabled={item.id === user.id} title={item.id === user.id ? 'Нельзя удалить текущую учётную запись' : ''} onClick={() => setDeleteModal({ kind: 'user', item })}>Удалить</button></div></div>)}
   </div>
 
-  const renderUsers = () => !filteredRows.length ? <Empty /> : <div className={styles.userGroups}>
-    {groupedUsers.filter((group) => group.role !== 'TRAINEE').map((group) => (
-      <section className={styles.userGroup} key={group.role}>
-        <header><h3>{group.label}</h3><span>{group.users.length}</span><button onClick={() => openCreateUser(group.role, null, group.role)}>Добавить</button></header>
-        {renderCreateUserForm(group.role)}
-        {renderUserTable(group.users)}
-      </section>
-    ))}
-    <section className={styles.userGroup}>
-      <header><h3>Диспетчеры ДДС</h3><span>{filteredRows.filter((item) => item.role === 'TRAINEE').length}</span><button onClick={() => setGroupFormOpen((value) => !value)}>Создать группу</button></header>
-      {groupFormOpen && <form className={styles.inlineForm} onSubmit={createGroup}><input required placeholder="Название группы" value={groupDraft.name} onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })} /><input placeholder="Описание" value={groupDraft.description} onChange={(event) => setGroupDraft({ ...groupDraft, description: event.target.value })} /><button disabled={loading}>Создать группу</button><button type="button" onClick={() => setGroupFormOpen(false)}>Отмена</button></form>}
-      <div className={styles.traineeGroups}>{traineeBuckets.map((group) => {
-        const target = `TRAINEE:${group.id ?? 'none'}`
-        return <article className={styles.traineeGroup} key={target}>
-          <header><div><h4>{group.name}</h4><p>{group.description || 'Без описания'}</p></div><span>{group.users.length}</span><button onClick={() => openCreateUser('TRAINEE', group.id, target)}>Добавить диспетчера</button></header>
-          {renderCreateUserForm(target)}
-          {renderUserTable(group.users)}
-        </article>
-      })}</div>
+  const renderUsers = () => {
+    const currentGroup = groupedUsers.find((group) => group.role === activeUserRole)
+    return <div className={styles.userGroups}>
+      <div className={styles.userToolbar}>
+        <div className={styles.roleTabs} role="tablist" aria-label="Категории пользователей">
+          {groupedUsers.map((group) => <button type="button" role="tab" aria-selected={activeUserRole === group.role} className={activeUserRole === group.role ? styles.roleTabActive : styles.roleTab} key={group.role} onClick={() => setActiveUserRole(group.role)}><span>{group.label}</span><b>{group.users.length}</b></button>)}
+        </div>
+        <div className={styles.toolbarActions}>
+          {activeUserRole === 'TRAINEE' && <button type="button" onClick={openCreateGroup}>Новая группа</button>}
+          <button type="button" className={styles.primaryButton} onClick={() => openCreateUser(activeUserRole)}>Добавить {activeUserRole === 'ADMIN' ? 'администратора' : activeUserRole === 'INSTRUCTOR' ? 'преподавателя' : 'диспетчера'}</button>
+        </div>
+      </div>
+      {activeUserRole !== 'TRAINEE' ? (
+        <section className={styles.userGroup}><header><div><h3>{currentGroup.label}</h3><p>Управление учётными записями и доступом</p></div></header>{renderUserTable(currentGroup.users)}</section>
+      ) : (
+        <section className={styles.userGroup}>
+          <div className={styles.groupIntro}><div><h3>Учебные группы диспетчеров</h3><p>Создавайте группы, назначайте в них обучаемых и меняйте названия в любое время.</p></div></div>
+          <div className={styles.traineeGroups}>{traineeBuckets.map((group) => <article className={styles.traineeGroup} key={`TRAINEE:${group.id ?? 'none'}`}>
+            <header><div><h4>{group.name}</h4><p>{group.description}</p></div><span>{group.users.length}</span><div className={styles.groupActions}>{group.id !== null && <><button type="button" onClick={() => openEditGroup(group)}>Изменить группу</button><button type="button" className={styles.dangerButton} onClick={() => setDeleteModal({ kind: 'group', item: group })}>Удалить группу</button></>}<button type="button" className={styles.primaryButton} onClick={() => openCreateUser('TRAINEE', group.id)}>Добавить диспетчера</button></div></header>
+            {renderUserTable(group.users)}
+          </article>)}</div>
+        </section>
+      )}
+    </div>
+  }
+
+  const renderUserModal = () => userModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+      <header className={styles.modalHeader}><div><small>{userModal.mode === 'edit' ? 'Редактирование пользователя' : 'Новый пользователь'}</small><h2 id="user-modal-title">{userModal.mode === 'edit' ? userModal.item.full_name : `Добавить: ${roleLabels[userForm.role]}`}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setUserModal(null)}>×</button></header>
+      <form className={styles.modalForm} onSubmit={submitUser}>
+        <label><span>ФИО</span><input required autoFocus placeholder="Например, Иванов Иван Иванович" value={userForm.full_name} onChange={(event) => setUserForm({ ...userForm, full_name: event.target.value })} /></label>
+        <label><span>Логин</span><input required autoComplete="off" placeholder="Логин для входа" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} /></label>
+        <label><span>{userModal.mode === 'edit' ? 'Новый пароль' : 'Пароль'}</span><input required={userModal.mode === 'create'} minLength="8" maxLength="128" type="password" autoComplete="new-password" placeholder={userModal.mode === 'edit' ? 'Оставьте пустым, чтобы не менять' : 'Минимум 8 символов'} value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} /></label>
+        {userModal.mode === 'edit' ? <label><span>Роль</span><select value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value, group_id: event.target.value === 'TRAINEE' ? userForm.group_id : null })}>{Object.entries(roleLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label> : <div className={styles.readonlyField}><span>Тип учётной записи</span><strong>{roleLabels[userForm.role]}</strong></div>}
+        {userForm.role === 'TRAINEE' && <label><span>Учебная группа</span><select value={userForm.group_id ?? ''} onChange={(event) => setUserForm({ ...userForm, group_id: event.target.value ? Number(event.target.value) : null })}><option value="">Без группы</option>{traineeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>}
+        <footer className={styles.modalActions}><button type="button" onClick={() => setUserModal(null)}>Отмена</button><button className={styles.primaryButton} disabled={loading}>{userModal.mode === 'edit' ? 'Сохранить изменения' : 'Создать пользователя'}</button></footer>
+      </form>
+    </section>
+  </div>
+
+  const renderGroupModal = () => groupModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="group-modal-title">
+      <header className={styles.modalHeader}><div><small>Учебные группы</small><h2 id="group-modal-title">{groupModal.mode === 'edit' ? 'Изменить группу' : 'Создать группу'}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setGroupModal(null)}>×</button></header>
+      <form className={styles.modalForm} onSubmit={submitGroup}>
+        <label><span>Название группы</span><input required autoFocus minLength="2" maxLength="160" placeholder="Например, ДДС — осень 2026" value={groupDraft.name} onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })} /></label>
+        <label><span>Описание</span><textarea maxLength="1000" rows="4" placeholder="Курс, поток или другая полезная информация" value={groupDraft.description} onChange={(event) => setGroupDraft({ ...groupDraft, description: event.target.value })} /></label>
+        <footer className={styles.modalActions}><button type="button" onClick={() => setGroupModal(null)}>Отмена</button><button className={styles.primaryButton} disabled={loading}>{groupModal.mode === 'edit' ? 'Сохранить изменения' : 'Создать группу'}</button></footer>
+      </form>
+    </section>
+  </div>
+
+  const renderDeleteModal = () => deleteModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={styles.confirmModal} role="alertdialog" aria-modal="true" aria-labelledby="delete-modal-title">
+      <header className={styles.modalHeader}><div><small>Подтверждение удаления</small><h2 id="delete-modal-title">Удалить {deleteModal.kind === 'group' ? `группу «${deleteModal.item.name}»` : `пользователя «${deleteModal.item.full_name}»`}?</h2></div><button type="button" aria-label="Закрыть" onClick={() => setDeleteModal(null)}>×</button></header>
+      <div className={styles.confirmContent}><p>{deleteModal.kind === 'group' ? 'Пользователи сохранятся и автоматически перейдут в раздел «Без группы».' : 'Учётная запись будет удалена без возможности восстановления. Если с ней связана учебная история, система предложит деактивацию.'}</p><footer className={styles.modalActions}><button type="button" onClick={() => setDeleteModal(null)}>Отмена</button><button type="button" className={styles.dangerPrimaryButton} disabled={loading} onClick={confirmDelete}>Удалить</button></footer></div>
     </section>
   </div>
 
@@ -395,6 +420,9 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         {notice && <div className={styles.notice}>{notice}</div>}
         <div className={styles.content} aria-busy={loading}>{loading && data === null ? <div className={styles.loading}>Загрузка…</div> : content()}</div>
       </section>
+      {renderUserModal()}
+      {renderGroupModal()}
+      {renderDeleteModal()}
     </main>
   )
 }
