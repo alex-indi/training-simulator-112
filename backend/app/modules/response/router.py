@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -39,6 +40,7 @@ from app.modules.response.workflow import (
     create_message,
 )
 from app.modules.training.models import TrainingRun, TrainingSession, TrainingSessionState
+from app.realtime import publish_session_event
 
 router = APIRouter(prefix="/api/response", tags=["response"])
 
@@ -129,6 +131,8 @@ def _ensure_owner_active(assignment: ResponseAssignment, user: User) -> None:
     _ensure_owner(assignment, user)
     if assignment.incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+    if assignment.incident.training_session.paused_at or assignment.training_run.paused_at:
+        raise HTTPException(status_code=409, detail="Работа приостановлена преподавателем")
 
 
 def _ensure_instructor(assignment: ResponseAssignment, user: User) -> None:
@@ -141,6 +145,8 @@ def _ensure_instructor(assignment: ResponseAssignment, user: User) -> None:
         raise HTTPException(status_code=404, detail="Назначение группы не найдено")
     if assignment.incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+    if assignment.incident.training_session.paused_at or assignment.training_run.paused_at:
+        raise HTTPException(status_code=409, detail="Работа приостановлена преподавателем")
 
 
 @router.get("/assignments/{assignment_id}/messages", response_model=list[ResponseMessageRead])
@@ -354,7 +360,16 @@ async def assign_response_unit(
         actor_user_id=current_user.id,
     )
     database.add(assignment)
-    await database.commit()
+    try:
+        await database.commit()
+    except IntegrityError as error:
+        await database.rollback()
+        raise HTTPException(
+            status_code=409, detail="Группа уже назначена на эту карточку"
+        ) from error
+    await publish_session_event(
+        "response.assignment_created", incident.training_session_id, incident.id
+    )
     return _assignment_read(assignment)
 
 
@@ -403,6 +418,8 @@ async def apply_response_scenario_event(
         raise HTTPException(status_code=404, detail="Назначение группы не найдено")
     if session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+    if session.paused_at or assignment.training_run.paused_at:
+        raise HTTPException(status_code=409, detail="Работа приостановлена преподавателем")
     try:
         event = apply_scenario_event(
             assignment,
@@ -423,6 +440,11 @@ async def apply_response_scenario_event(
         server_time=event.created_at,
     )
     await database.commit()
+    await publish_session_event(
+        "response.state_changed",
+        assignment.incident.training_session_id,
+        assignment.incident_id,
+    )
     if existing_message is None:
         await notify_message_created(
             message, assignment.training_run.trainee_id, assignment.incident.training_session_id

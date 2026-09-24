@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     DateTime,
     Enum,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -123,6 +125,10 @@ class TrainingSession(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivery_elapsed_seconds: Mapped[float] = mapped_column(Float, default=0, server_default="0")
     delivery_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paused_seconds: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    finish_mode: Mapped[str | None] = mapped_column(String(20))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     instructor: Mapped[User] = relationship(foreign_keys=[instructor_id])
     trainees: Mapped[list[User]] = relationship(
@@ -143,6 +149,7 @@ class TrainingSession(Base):
     queue_items: Mapped[list[ScenarioQueueItem]] = relationship(
         back_populates="training_session", cascade="all, delete-orphan"
     )
+    pauses: Mapped[list[SessionPause]] = relationship(order_by="SessionPause.started_at")
 
 
 class TrainingRun(Base):
@@ -172,6 +179,8 @@ class TrainingRun(Base):
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paused_seconds: Mapped[float] = mapped_column(Float, default=0, server_default="0")
 
     training_session: Mapped[TrainingSession] = relationship(back_populates="runs")
     trainee: Mapped[User] = relationship()
@@ -179,6 +188,7 @@ class TrainingRun(Base):
         back_populates="training_run", foreign_keys="Incident.training_run_id"
     )
     group: Mapped[TrainingGroup | None] = relationship(back_populates="runs")
+    pauses: Mapped[list[RunPause]] = relationship(order_by="RunPause.started_at")
 
 
 class TrainingGroup(Base):
@@ -235,7 +245,13 @@ class ScenarioQueueItem(Base):
     """Утверждённая позиция занятия с сохранённым порядком выдачи."""
 
     __tablename__ = "scenario_queue_items"
-    __table_args__ = (UniqueConstraint("training_session_id", "position"),)
+    __table_args__ = (
+        UniqueConstraint("training_session_id", "position"),
+        CheckConstraint(
+            "(training_run_id IS NULL) <> (training_group_id IS NULL)",
+            name="ck_queue_target",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     training_session_id: Mapped[int] = mapped_column(
         ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
@@ -266,3 +282,65 @@ class ScenarioQueueItem(Base):
     training_session: Mapped[TrainingSession] = relationship(back_populates="queue_items")
     training_run: Mapped[TrainingRun] = relationship()
     scenario: Mapped[TrainingScenario | None] = relationship()
+
+
+class InstructorAction(Base):
+    """Неизменяемый журнал управления учебной сменой."""
+
+    __tablename__ = "instructor_actions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_session_id: Mapped[int] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
+    )
+    instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    action: Mapped[str] = mapped_column(String(40))
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SessionPause(Base):
+    __tablename__ = "session_pauses"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_session_id: Mapped[int] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
+    )
+    instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+
+
+class RunPause(Base):
+    __tablename__ = "run_pauses"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_run_id: Mapped[int] = mapped_column(
+        ForeignKey("training_runs.id", ondelete="CASCADE"), index=True
+    )
+    instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    reason: Mapped[str] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+
+
+class InstructorNote(Base):
+    __tablename__ = "instructor_notes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_run_id: Mapped[int] = mapped_column(
+        ForeignKey("training_runs.id", ondelete="CASCADE"), index=True
+    )
+    instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ScenarioEvent(Base):
+    __tablename__ = "scenario_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    incident_id: Mapped[int] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"), index=True
+    )
+    instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    kind: Mapped[str] = mapped_column(String(60))
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

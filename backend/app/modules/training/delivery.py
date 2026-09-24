@@ -15,14 +15,17 @@ from sqlalchemy.orm import selectinload
 from app.db.dependencies import get_database_session
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User
+from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentLifecycleState
 from app.modules.incidents.schemas import IncidentSnapshot
 from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.training.clock import active_seconds
 from app.modules.training.models import (
     DeliveryOrder,
     DeliveryState,
     QueueMode,
     ScenarioQueueItem,
     TrainingMode,
+    TrainingRun,
     TrainingScenario,
     TrainingSession,
     TrainingSessionState,
@@ -202,6 +205,28 @@ SCENARIOS = [
 ]
 
 
+def generated_snapshot(
+    session_id: int,
+    run_id: int | None,
+    group_id: int | None,
+    sequence: int,
+    label: str | int | None,
+    description: str,
+    incident_type: str,
+) -> dict:
+    """Generated message time is resolved when the queue item is delivered."""
+    snapshot = IncidentSnapshot(
+        incident_number=f"КП-{session_id}-{run_id or 'G' + str(group_id)}-{sequence}",
+        reported_at=datetime.now(UTC),
+        source="Система-112",
+        address=f"Учебный объект, участок {label}",
+        description=description,
+        incident_type=incident_type,
+    ).model_dump(mode="json")
+    snapshot["reported_at_mode"] = "DELIVERY"
+    return snapshot
+
+
 @router.post(
     "/{training_session_id}/queue/{queue_item_id}/replace", response_model=list[QueueItemRead]
 )
@@ -259,14 +284,9 @@ async def generate_queue(
         for index in range(payload.count_per_run):
             title, description, incident_type = SCENARIOS[index % len(SCENARIOS)]
             sequence = index + 1
-            snapshot = IncidentSnapshot(
-                incident_number=f"КП-{session.id}-{run_id or 'G' + str(group_id)}-{sequence}",
-                reported_at=datetime.now(UTC),
-                source="Система-112",
-                address=f"Учебный объект, участок {label}",
-                description=description,
-                incident_type=incident_type,
-            ).model_dump(mode="json")
+            snapshot = generated_snapshot(
+                session.id, run_id, group_id, sequence, label, description, incident_type
+            )
             _new_item(session, run_id, title, snapshot, group_id=group_id)
     _invalidate_readiness(session)
     await database.commit()
@@ -299,7 +319,12 @@ def finalize_order(session: TrainingSession) -> None:
 
 def due_items(session: TrainingSession, now: datetime) -> list[ScenarioQueueItem]:
     """Определяет карточки по накопленному учебному времени."""
-    if session.state != TrainingSessionState.ACTIVE or session.mode == TrainingMode.MANUAL:
+    if (
+        session.state != TrainingSessionState.ACTIVE
+        or session.mode == TrainingMode.MANUAL
+        or session.paused_at
+        or session.finish_mode
+    ):
         return []
     pending = [item for item in session.queue_items if item.delivery_state == DeliveryState.PENDING]
     if session.mode == TrainingMode.FIXED_SET:
@@ -316,7 +341,21 @@ def due_items(session: TrainingSession, now: datetime) -> list[ScenarioQueueItem
             due_per_run,
             math.ceil(session.duration_minutes * 60 / interval),
         )
-    due = [item for item in pending if (item.delivery_position or item.position) <= due_per_run]
+    runs = {run.id: run for run in session.runs}
+    due = []
+    for item in pending:
+        target_due = due_per_run
+        if item.training_run_id and session.started_at:
+            run = runs.get(item.training_run_id)
+            if run:
+                target_elapsed = active_seconds(session.started_at, now, session.pauses, run.pauses)
+                target_due = int(target_elapsed // interval + 1)
+                if session.duration_minutes:
+                    target_due = min(
+                        target_due, math.ceil(session.duration_minutes * 60 / interval)
+                    )
+        if (item.delivery_position or item.position) <= target_due:
+            due.append(item)
     return sorted(due, key=lambda item: (item.delivery_position or item.position, item.position))
 
 
@@ -326,19 +365,33 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         select(TrainingSession)
         .where(TrainingSession.id == session_id)
         .with_for_update(skip_locked=True, of=TrainingSession)
-        .options(selectinload(TrainingSession.queue_items))
+        .options(
+            selectinload(TrainingSession.queue_items),
+            selectinload(TrainingSession.pauses),
+            selectinload(TrainingSession.runs).selectinload(TrainingRun.pauses),
+        )
     )
     session = (await database.scalars(statement)).one_or_none()
     if session is None or session.state != TrainingSessionState.ACTIVE:
         return []
+    if session.paused_at:
+        return []
     pending = due_items(session, now)
-    if session.delivery_checked_at is not None:
+    if session.delivery_checked_at is not None and not session.finish_mode:
         session.delivery_elapsed_seconds += max(
             0, (now - session.delivery_checked_at).total_seconds()
         )
-    session.delivery_checked_at = now
+    session.delivery_checked_at = None if session.finish_mode else now
     incident_ids = []
     for item in pending:
+        if item.training_run_id and any(
+            run.id == item.training_run_id and run.paused_at for run in session.runs
+        ):
+            continue
+        if item.training_group_id and all(
+            run.paused_at for run in session.runs if run.group_id == item.training_group_id
+        ):
+            continue
         incident = create_delivered_incident(
             training_session_id=session.id, source_snapshot=item.snapshot, server_time=now
         )
@@ -350,6 +403,30 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         item.delivered_at = now
         item.incident_id = incident.id
         incident_ids.append(incident.id)
+    if session.finish_mode == "GRACEFUL":
+        states = (
+            await database.execute(
+                select(
+                    Incident.dds_status,
+                    Incident.lifecycle_state,
+                    Incident.training_group_id,
+                    Incident.claimed_by_training_run_id,
+                ).where(Incident.training_session_id == session.id)
+            )
+        ).all()
+        terminal = {
+            DDSResponseStatus.REJECTED,
+            DDSResponseStatus.COMPLETED,
+            DDSResponseStatus.WORK_REFUSED,
+        }
+        if all(
+            (group_id is not None and claimed_by is None)
+            or state in terminal
+            or lifecycle == IncidentLifecycleState.FINISHED
+            for state, lifecycle, group_id, claimed_by in states
+        ):
+            session.state = TrainingSessionState.COMPLETED
+            session.completed_at = now
     await database.commit()
     return incident_ids
 
