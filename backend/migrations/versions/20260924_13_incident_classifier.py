@@ -1,7 +1,7 @@
 """SRC-006 classifier and customer service catalog.
 
-Revision ID: 20260924_09
-Revises: 20260923_09
+Revision ID: 20260924_13
+Revises: 20260924_12
 """
 
 from collections.abc import Sequence
@@ -9,13 +9,25 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260924_09"
-down_revision: str | None = "20260923_09"
+revision: str = "20260924_13"
+down_revision: str | None = "20260924_12"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    tables = {
+        "incident_classifier_rules",
+        "incident_features",
+        "dispatch_services",
+        "incident_rule_features",
+        "incident_rule_services",
+    }
+    existing = tables & set(sa.inspect(op.get_bind()).get_table_names())
+    if existing == tables:
+        return  # Legacy UT112-24.1 data already exists after migration-history reconciliation.
+    if existing:
+        raise RuntimeError(f"Частично созданный SRC-006: {sorted(existing)}")
     op.create_table(
         "incident_classifier_rules",
         sa.Column("id", sa.Integer(), primary_key=True),

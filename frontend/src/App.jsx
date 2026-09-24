@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
+import TrainingResults from './TrainingResults.jsx'
+import ResponseChat from './ResponseChat'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -116,6 +118,12 @@ function includesText(value, filter) {
   return !filter || (value || '').toLocaleLowerCase('ru-RU').includes(filter.toLocaleLowerCase('ru-RU'))
 }
 
+function operationalValue(value) {
+  if (value === null || value === undefined || value === '') return 'Не указано'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  return String(value)
+}
+
 async function requestJson(path, demoUsername, options = {}) {
   const headers = new Headers(options.headers)
   if (demoUsername) headers.set('X-Demo-User', demoUsername)
@@ -134,6 +142,8 @@ async function requestJson(path, demoUsername, options = {}) {
     throw new Error(detail)
   }
 
+  if (response.status === 204) return null
+
   return response.json()
 }
 
@@ -146,6 +156,7 @@ function App() {
   const [incidents, setIncidents] = useState([])
   const [joinedSessionId, setJoinedSessionId] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
+  const selectedIncidentId = useRef(null)
   const [selectedService, setSelectedService] = useState('')
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
   const [selectedAction, setSelectedAction] = useState('')
@@ -165,11 +176,15 @@ function App() {
   }, [])
 
   useEffect(() => {
-    requestJson('/api/users/demo')
-      .then((demoUsers) => {
+    const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
+    Promise.all([
+      requestJson('/api/users/demo'),
+      requestJson('/api/users/me', savedUsername).catch(() => requestJson('/api/users/me')),
+    ])
+      .then(([demoUsers, user]) => {
         setUsers(demoUsers)
-        const trainee = demoUsers.find((user) => user.role === 'TRAINEE')
-        setLoginUsername(trainee?.username || demoUsers[0]?.username || '')
+        window.sessionStorage.setItem('ut112-demo-username', user.username)
+        setCurrentUser(user)
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false))
@@ -203,31 +218,55 @@ function App() {
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
-    const refresh = () => requestJson('/api/incidents', currentUser.username)
-      .then((items) => { if (active) setIncidents(items) })
-      .catch((cause) => { if (active) setError(cause.message) })
+    const refresh = async () => {
+      try {
+        const items = await requestJson('/api/incidents', currentUser.username)
+        if (!active) return
+        setIncidents(items)
+        if (selectedIncidentId.current) {
+          const fresh = await requestJson(`/api/incidents/${selectedIncidentId.current}`, currentUser.username)
+          if (active) setSelectedIncident(fresh)
+        }
+      } catch (cause) { if (active) setError(cause.message) }
+    }
     const socket = io(apiUrl, { auth: { username: currentUser.username } })
     socket.on('connect', async () => {
       try {
         const sessions = await requestJson('/api/training/sessions', currentUser.username)
         if (!active) return
-        sessions.filter((item) => item.trainee_ids.includes(currentUser.id))
+        sessions.filter((item) => item.own_run)
           .forEach((item) => socket.emit('subscribe', { session_id: item.id }))
         refresh()
       } catch (cause) { if (active) setError(cause.message) }
     })
     socket.on('incident.delivered', refresh)
+    socket.on('incident.opened', refresh)
     socket.on('incident.claimed', refresh)
     socket.on('incident.updated', refresh)
+    socket.on('training.control_changed', refresh)
+    const refreshResponse = (notice) => {
+      refresh()
+      if (notice.incident_id !== selectedIncidentId.current) return
+      requestJson(`/api/response/incidents/${notice.incident_id}/assignments`, currentUser.username)
+        .then((items) => { if (active) setResponseAssignments(items) })
+        .catch((cause) => { if (active) setError(cause.message) })
+    }
+    socket.on('response.assignment_created', refreshResponse)
+    socket.on('response.state_changed', refreshResponse)
     const fallback = window.setInterval(refresh, 30000)
     return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
   }, [currentUser, joinedSessionId])
 
   useEffect(() => {
-    if (!selectedIncident?.training_group_id) return
+    selectedIncidentId.current = selectedIncident?.id || null
+  }, [selectedIncident?.id])
+
+  useEffect(() => {
+    if (!selectedIncident) return
     const current = incidents.find((incident) => incident.id === selectedIncident.id)
     if (current) setSelectedIncident(current)
-  }, [incidents, selectedIncident?.id, selectedIncident?.training_group_id])
+  }, [incidents, selectedIncident])
+
 
   const visibleIncidents = useMemo(() => incidents.filter((incident) => {
     const stateMatches = !filters.state
@@ -300,7 +339,9 @@ function App() {
     setLoading(true)
 
     try {
-      setCurrentUser(await requestJson('/api/users/me', demoUsername))
+      const selected = await requestJson('/api/users/me', demoUsername)
+      window.sessionStorage.setItem('ut112-demo-username', selected.username)
+      setCurrentUser(selected)
     } catch (requestError) {
       setError(requestError.message)
       setLoading(false)
@@ -323,7 +364,7 @@ function App() {
       ])
       const services = openedIncident.source_snapshot?.notified_services || []
       setSelectedIncident(openedIncident)
-      setSelectedService(services[0] || 'Служба ДДС')
+      setSelectedService(openedIncident.viewer_dds_profile || services[0] || '')
       setServiceHistoryOpen(false)
       setSelectedAction(openedIncident.available_actions?.[0] || '')
       setActionComment('')
@@ -376,7 +417,7 @@ function App() {
     }
     setSelectedService(service)
     setServiceHistoryOpen(true)
-    if (service === services[0]) {
+    if (service === selectedIncident.viewer_dds_profile) {
       setSelectedAction(selectedIncident.available_actions?.[0] || '')
       setActionComment('')
     }
@@ -551,13 +592,15 @@ function App() {
   const snapshot = selectedIncident?.source_snapshot
   const services = snapshot?.notified_services || []
   const features = snapshot?.features || []
-  const ownService = services[0] || 'Служба ДДС'
+  const ownService = selectedIncident?.viewer_dds_profile
+  const visibleServices = ownService && !services.includes(ownService)
+    ? [...services, ownService] : services
   const isOwnServiceSelected = selectedService === ownService
   const ownServiceHistory = selectedIncident?.actions || []
   const latestOwnStatus = ownServiceHistory[ownServiceHistory.length - 1]
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const filtersActive = Object.values(filters).some(Boolean)
-  const canAssignResponse = selectedIncident && [
+  const canAssignResponse = selectedIncident?.can_edit && [
     'ACCEPTED', 'RESPONSE_STARTED', 'ARRIVED', 'WORKING',
   ].includes(selectedIncident.dds_status)
   const availableResponseUnits = responseUnits.filter(
@@ -567,6 +610,7 @@ function App() {
   return (
     <main className={styles.armShell}>
       {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} onJoined={setJoinedSessionId} />}
+      {currentUser?.role === 'TRAINEE' && <TrainingResults user={currentUser} requestJson={requestJson} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <strong>Ошибка:</strong> {error}
@@ -599,7 +643,8 @@ function App() {
             <div className={styles.incidentIdentity}>
               <strong>Происшествие {selectedIncident.incident_number}</strong>
               <span>Сохр. {formatDateTime(selectedIncident.delivered_at)}</span>
-              <span>Опер. 0, АРМ 4, УМЦ О.п.</span>
+              <span>{selectedIncident.viewer_workstation_number
+                ? `Учебное АРМ ${selectedIncident.viewer_workstation_number}` : 'Учебное АРМ не указано'}</span>
             </div>
             <div className={styles.viewTabs}>
               <button className={styles.viewTabActive} type="button" title="Режим просмотра сохранённой карточки">просмотр</button>
@@ -610,9 +655,9 @@ function App() {
           <div className={styles.incidentInfoStrip}>
             <div><strong>{selectedIncident.applicant_name || 'ФИО заявителя не указано'}</strong><span>заявитель</span></div>
             <div className={styles.incidentIndicators}>
-              <span>Пострадавшие: нет</span>
-              <span>Отказ от скорой: нет</span>
-              <span>Заблокированные: нет</span>
+              <span>Пострадавшие: {operationalValue(snapshot?.victims)}</span>
+              <span>Отказ от скорой: {operationalValue(snapshot?.ambulance_refusal)}</span>
+              <span>Заблокированные: {operationalValue(snapshot?.blocked_people)}</span>
               <button type="button" disabled title="Признак чрезвычайной ситуации">ЧС ⚡</button>
               <button className={styles.emergencyButton} type="button" disabled title="Признак чрезвычайного происшествия">ЧП ▲</button>
               <button className={styles.pencilButton} type="button" disabled title="Редактирование классификации доступно оператору Службы 112">✎</button>
@@ -625,12 +670,13 @@ function App() {
                 <strong>{selectedIncident.address}</strong>
                 <span>{selectedIncident.latitude !== null && selectedIncident.longitude !== null
                   ? `Координаты: ${selectedIncident.latitude}, ${selectedIncident.longitude}`
-                  : 'Описательный адрес не указан'}</span>
+                  : 'Координаты не указаны'}</span>
                 <button type="button" disabled title="Открыть точку происшествия на карте">⌖</button>
               </div>
               <div className={styles.reportPanel}>
-                <strong>{formatDateTime(selectedIncident.reported_at)} &nbsp; 0 УМЦ О.п.</strong>
+                <strong>{formatDateTime(selectedIncident.reported_at)}</strong>
                 <p>{selectedIncident.description}</p>
+                {selectedIncident.scenario_events?.map((item) => <p key={item.id}><b>Новая вводная · {formatDateTime(item.created_at)}</b><br />{item.body}</p>)}
                 <span>Источник: {selectedIncident.source}</span>
               </div>
             </section>
@@ -715,6 +761,14 @@ function App() {
                               </div>
                             ))}
                           </details>
+                          <ResponseChat
+                            assignment={assignment}
+                            incidentNumber={selectedIncident.incident_number}
+                            username={currentUser.username}
+                            apiUrl={apiUrl}
+                            requestJson={requestJson}
+                            formatDateTime={formatDateTime}
+                          />
                         </div>
                       ))}
                       {canAssignResponse && availableResponseUnits.length > 0 && (
@@ -748,7 +802,7 @@ function App() {
 
             <div className={styles.servicesDock}>
               <div className={styles.servicesLabel}>Службы:</div>
-              {(services.length ? services : ['Служба ДДС']).map((service, index) => (
+              {visibleServices.map((service) => (
                 <button
                   className={`${styles.serviceTile} ${selectedService === service ? styles.serviceTileActive : ''}`}
                   key={service}
@@ -758,15 +812,10 @@ function App() {
                 >
                   <span className={styles.serviceChevron} aria-hidden="true" />
                   <strong>{compactServiceName(service)}</strong>
-                  <small>{index === 0
+                  <small>{service === ownService
                     ? `${formatTime(latestOwnStatus?.created_at)} ${historyStatusLabels[latestOwnStatus?.status] || 'Добавлена'}`
                     : `${formatTime(selectedIncident.delivered_at)} Добавлена`}</small>
-                  {selectedService === service && index === 0 && <i title="Изменить статус и открыть историю">✎</i>}
-                </button>
-              ))}
-              {['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
-                <button className={`${styles.serviceTile} ${styles.serviceTileMuted}`} key={service} type="button" disabled>
-                  <span className={styles.serviceChevron} aria-hidden="true" /><strong>{service}</strong><small>не оповещена</small>
+                  {selectedService === service && service === ownService && <i title="Изменить статус и открыть историю">✎</i>}
                 </button>
               ))}
               <button className={styles.dockControl} type="button" onClick={() => setServiceHistoryOpen((isOpen) => !isOpen)} title="Развернуть или свернуть историю выбранной службы">↕</button>
@@ -846,17 +895,17 @@ function App() {
                 >
                   <span className={styles.linkCell}>⌄</span>
                   <span>◆</span>
-                  <span className={styles.operatorCell}>{incident.opened_at ? '0' : '!'}</span>
-                  <span>{incident.claimant_workstation_number || '—'}</span>
+                  <span className={styles.operatorCell}>—</span>
+                  <span>{incident.viewer_workstation_number || '—'}</span>
                   <strong>{incident.incident_number}</strong>
                   <span>{formatDate(incident.reported_at)}</span>
                   <time>{formatTime(incident.reported_at)}</time>
                   <strong>{incident.incident_type}</strong>
-                  <span>Нет</span>
+                  <span>{operationalValue(incident.source_snapshot?.victims)}</span>
                   <strong className={styles.registryAddress}>{incident.address}</strong>
                   <span className={styles.serviceState}><i>◒</i>{incident.claimant_name ? `${incident.claimant_name} · АРМ ${incident.claimant_workstation_number} · ` : ''}{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
                   <span>▣</span>
-                  <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
+                  <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><strong>{incident.description}</strong></small>
                 </button>
               )) : (
                 <div className={styles.registryEmpty}>{filtersActive ? 'Происшествия не найдены' : 'Происшествий нет'}</div>

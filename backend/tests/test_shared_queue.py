@@ -8,8 +8,15 @@ import pytest
 from fastapi import HTTPException
 
 from app.modules.identity.models import User, UserRole
-from app.modules.incidents.router import _ensure_incident_visible, _to_read_model, list_incidents
-from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.incidents.models import IncidentActionType
+from app.modules.incidents.router import (
+    _ensure_incident_visible,
+    _to_read_model,
+    change_incident_status,
+    list_incidents,
+)
+from app.modules.incidents.schemas import IncidentActionCreate
+from app.modules.incidents.workflow import create_delivered_incident, mark_incident_opened
 from app.modules.training.delivery import due_items, finalize_order
 from app.modules.training.models import (
     DeliveryState,
@@ -62,6 +69,7 @@ def test_shared_card_is_visible_to_group_but_only_owner_can_act():
             group_id=5,
             queue_mode=QueueMode.SHARED_QUEUE,
             workstation_number=5,
+            dds_profile="Пожарная охрана",
         ),
         TrainingRun(
             id=12,
@@ -70,6 +78,7 @@ def test_shared_card_is_visible_to_group_but_only_owner_can_act():
             group_id=5,
             queue_mode=QueueMode.SHARED_QUEUE,
             workstation_number=6,
+            dds_profile="Пожарная охрана",
         ),
         TrainingRun(
             id=13,
@@ -99,6 +108,7 @@ def test_shared_card_is_visible_to_group_but_only_owner_can_act():
 
     _ensure_incident_visible(incident, colleague)
     assert _to_read_model(incident, colleague).can_claim is True
+    assert _to_read_model(incident, colleague).viewer_dds_profile == "Пожарная охрана"
     assert _to_read_model(incident, colleague).available_actions == []
     with pytest.raises(HTTPException) as error:
         _ensure_incident_visible(incident, outsider)
@@ -112,6 +122,44 @@ def test_shared_card_is_visible_to_group_but_only_owner_can_act():
     assert colleague_view.can_edit is False
     assert colleague_view.claimant_name == "Иванов"
     assert colleague_view.claimant_workstation_number == 5
+
+
+def test_shared_status_emits_update(monkeypatch) -> None:
+    owner = User(id=1, username="owner", full_name="Иванов", role=UserRole.TRAINEE)
+    run = TrainingRun(
+        id=11, trainee=owner, trainee_id=1, group_id=5,
+        queue_mode=QueueMode.SHARED_QUEUE, dds_profile="ДДС",
+    )
+    session = TrainingSession(id=10, state=TrainingSessionState.ACTIVE, runs=[run])
+    incident = create_delivered_incident(
+        training_session_id=10,
+        source_snapshot={
+            "incident_number": "КП-1001", "reported_at": datetime.now(UTC).isoformat(),
+            "source": "Система-112", "address": "Учебный объект",
+            "description": "Проверка", "incident_type": "Проверка",
+        },
+    )
+    incident.id = 101
+    incident.training_session = session
+    incident.training_group_id = 5
+    incident.claimed_by_training_run_id = 11
+    incident.training_run = run
+    mark_incident_opened(incident)
+    for index, action in enumerate(incident.actions, 1):
+        action.id = index
+    database = MagicMock()
+    database.commit = AsyncMock(side_effect=lambda: setattr(incident.actions[-1], "id", 3))
+    publish = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.incidents.router._load_incident", AsyncMock(return_value=incident),
+    )
+    monkeypatch.setattr("app.modules.incidents.router.publish_session_event", publish)
+
+    response = asyncio.run(change_incident_status(
+        101, IncidentActionCreate(action=IncidentActionType.ACCEPT), owner, database,
+    ))
+    assert response.can_edit is True
+    publish.assert_awaited_once_with("incident.updated", 10, 101)
 
 
 def test_trainee_list_query_compiles_with_group_membership():

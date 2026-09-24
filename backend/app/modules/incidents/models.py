@@ -15,7 +15,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.modules.identity.models import User
     from app.modules.response.models import ResponseAssignment
-    from app.modules.training.models import TrainingRun, TrainingSession
+    from app.modules.training.models import ScenarioEvent, TrainingRun, TrainingSession
 
 
 class IncidentLifecycleState(StrEnum):
@@ -130,6 +130,9 @@ class Incident(Base):
         back_populates="incident",
         cascade="all, delete-orphan",
         order_by="IncidentAction.created_at, IncidentAction.id",
+    )
+    scenario_events: Mapped[list[ScenarioEvent]] = relationship(
+        "ScenarioEvent", order_by="ScenarioEvent.created_at, ScenarioEvent.id", uselist=True
     )
     response_assignments: Mapped[list[ResponseAssignment]] = relationship(
         back_populates="incident",

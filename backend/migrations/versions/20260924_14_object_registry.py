@@ -1,7 +1,7 @@
 """Extensible city object registry.
 
-Revision ID: 20260924_10
-Revises: 20260924_09
+Revision ID: 20260924_14
+Revises: 20260924_13
 """
 
 from collections.abc import Sequence
@@ -9,13 +9,19 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260924_10"
-down_revision: str | None = "20260924_09"
+revision: str = "20260924_14"
+down_revision: str | None = "20260924_13"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    tables = {"object_types", "city_objects", "object_attributes", "object_tags"}
+    existing = tables & set(sa.inspect(op.get_bind()).get_table_names())
+    if existing == tables:
+        return  # Legacy UT112-24.3 data already exists after migration-history reconciliation.
+    if existing:
+        raise RuntimeError(f"Частично созданный Object Registry: {sorted(existing)}")
     op.create_table(
         "object_types",
         sa.Column("id", sa.Integer(), primary_key=True),

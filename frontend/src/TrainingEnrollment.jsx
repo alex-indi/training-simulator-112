@@ -1,5 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useState } from 'react'
+import { io } from 'socket.io-client'
 
 import styles from './TrainingEnrollment.module.css'
 
@@ -22,14 +23,27 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
   }, [api])
 
   const selected = sessions.find((item) => String(item.id) === sessionId) || sessions[0]
-  const ownRun = selected?.runs.find((run) => run.trainee_id === user.id)
+  const ownRun = selected?.own_run
   const selectedId = selected?.id
   const ownRunId = ownRun?.id
 
   useEffect(() => {
+    if (!selectedId || !ownRunId) return undefined
+    let active = true
+    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+      auth: { username: user.username },
+    })
+    const refresh = () => api('/api/training/sessions')
+      .then((items) => { if (active) setSessions(items) })
+      .catch((cause) => { if (active) setError(cause.message) })
+    socket.on('connect', () => { socket.emit('subscribe', { session_id: selectedId }); refresh() })
+    socket.on('training.control_changed', refresh)
+    return () => { active = false; socket.disconnect() }
+  }, [api, ownRunId, selectedId, user.username])
+
+  useEffect(() => {
     if (!ownRunId || !selectedId) return undefined
     const beat = () => api(`/api/training/sessions/${selectedId}/heartbeat`, { method: 'POST' })
-      .then((item) => setSessions((items) => items.map((previous) => previous.id === item.id ? item : previous)))
       .catch((cause) => setError(cause.message))
     beat()
     const timer = window.setInterval(beat, 20000)
@@ -46,7 +60,7 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workstation_number: Number(station) }),
       })
-      setSessions((items) => items.map((previous) => previous.id === item.id ? item : previous))
+      setSessions(await api('/api/training/sessions'))
       onJoined(item.id)
     } catch (cause) { setError(cause.message) } finally { setBusy(false) }
   }
@@ -61,6 +75,8 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
       </select>
       {ownRun ? <span>АРМ {String(ownRun.workstation_number).padStart(2, '0')} · {ownRun.dds_profile === 'ДДС' ? 'профиль ожидает назначения' : ownRun.dds_profile} · {ownRun.online ? 'online' : 'подключение'}</span>
         : <form onSubmit={join}><label>Рабочее место <input type="number" min="1" max={selected.workstation_count} value={station} onChange={(event) => setStation(event.target.value)} required /></label><button type="submit" disabled={busy || !station}>Занять АРМ</button></form>}
+      {selected?.paused_at && <strong role="status">ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ</strong>}
+      {!selected?.paused_at && ownRun?.paused_at && <strong role="status">ВАШЕ РАБОЧЕЕ МЕСТО ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ</strong>}
     </>}
   </section>
 }
