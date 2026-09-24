@@ -299,6 +299,7 @@ async def create_incident(
         training_session_id=training_session.id,
         source_snapshot=payload.source_snapshot.model_dump(mode="json"),
     )
+    incident.scenario_events = []
     if group:
         incident.training_group_id = group.id
     elif matching_runs:
