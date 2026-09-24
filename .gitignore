@@ -44,6 +44,8 @@ coverage/
 .vite/
 .parcel-cache/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
 
 # Logs and runtime files
 *.log

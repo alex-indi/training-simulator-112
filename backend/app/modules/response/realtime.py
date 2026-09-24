@@ -3,11 +3,12 @@
 import socketio
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.modules.identity.models import User
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    cors_allowed_origins=get_settings().allowed_frontend_origins,
 )
 _session_factory = None
 

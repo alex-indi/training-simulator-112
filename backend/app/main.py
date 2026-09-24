@@ -21,20 +21,22 @@ from app.modules.identity.router import router as identity_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
+from app.modules.training.assessment import router as assessment_router
+from app.modules.training.control import router as control_router
 from app.modules.training.delivery import router as delivery_router
 from app.modules.training.delivery import scheduler_loop
 from app.modules.training.models import TrainingSession, training_session_trainees
 from app.modules.training.monitor import router as monitor_router
 from app.modules.training.router import router as training_router
 from app.modules.training.router import template_router
+from app.realtime import publish_session_event
 
 logger = logging.getLogger("uvicorn.error")
+allowed_origins = get_settings().allowed_frontend_origins
+
+
 async def notify_delivery(session_id: int, incident_id: int) -> None:
-    await sio.emit(
-        "incident.delivered",
-        {"session_id": session_id, "incident_id": incident_id},
-        room=f"session:{session_id}",
-    )
+    await publish_session_event("incident.delivered", session_id, incident_id)
 
 
 @sio.event
@@ -115,12 +117,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(identity_router)
 app.include_router(training_router)
+app.include_router(control_router)
+app.include_router(assessment_router)
 app.include_router(monitor_router)
 app.include_router(template_router)
 app.include_router(delivery_router)

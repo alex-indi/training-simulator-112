@@ -1,0 +1,28 @@
+.shell { min-height: 100vh; padding: 2rem; background: #f4f7f9; color: #172b3a; }
+.shell button { cursor: pointer; border: 1px solid #b7cbd4; border-radius: 8px; background: white; padding: .55rem .8rem; color: #16384a; }
+.shell button:disabled { opacity: .5; cursor: default; }
+.shell h1 { margin: 1rem 0; }
+.summary { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: .7rem; margin: 1.2rem 0; }
+.summary div, .scores div { display: grid; gap: .25rem; padding: 1rem; background: white; border: 1px solid #dce5e9; border-radius: 10px; }
+.summary strong, .scores strong { font-size: 1.5rem; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr); gap: 1rem; align-items: start; }
+.layout section { min-width: 0; background: white; border: 1px solid #dce5e9; border-radius: 10px; padding: 1rem; }
+.tableWrap { overflow-x: auto; }
+.shell table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.shell th, .shell td { text-align: left; padding: .65rem; border-bottom: 1px solid #e3ebef; }
+.shell tbody tr { cursor: pointer; }
+.shell tbody tr:hover, .selected { background: #e9f5f7; }
+.scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+.scores span, .summary span { color: #55717d; font-size: .82rem; }
+.detail h3 { margin: 1.5rem 0 .5rem; }
+.deviation { display: grid; gap: .5rem; border-left: 3px solid #d48939; background: #fff9f0; padding: .7rem; margin: .5rem 0; }
+.deviation div, .inline { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.detail label { display: grid; gap: .3rem; margin: .6rem 0; }
+.detail input, .detail select, .detail textarea { width: 100%; box-sizing: border-box; padding: .5rem; border: 1px solid #b7cbd4; border-radius: 6px; font: inherit; }
+.detail textarea { min-height: 4rem; }
+.inline label { min-width: 90px; }
+.inline input[type='checkbox'] { width: auto; }
+.detail details { border-top: 1px solid #e3ebef; padding: .7rem 0; }
+.error { color: #a52929; }
+@media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } .summary { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .shell { padding: 1rem; } .summary, .scores { grid-template-columns: repeat(2, 1fr); } }
