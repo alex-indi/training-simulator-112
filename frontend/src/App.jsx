@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
+import ResponseChat from './ResponseChat'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -174,11 +175,15 @@ function App() {
   }, [])
 
   useEffect(() => {
-    requestJson('/api/users/demo')
-      .then((demoUsers) => {
+    const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
+    Promise.all([
+      requestJson('/api/users/demo'),
+      requestJson('/api/users/me', savedUsername).catch(() => requestJson('/api/users/me')),
+    ])
+      .then(([demoUsers, user]) => {
         setUsers(demoUsers)
-        const trainee = demoUsers.find((user) => user.role === 'TRAINEE')
-        setLoginUsername(trainee?.username || demoUsers[0]?.username || '')
+        window.sessionStorage.setItem('ut112-demo-username', user.username)
+        setCurrentUser(user)
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false))
@@ -324,7 +329,9 @@ function App() {
     setLoading(true)
 
     try {
-      setCurrentUser(await requestJson('/api/users/me', demoUsername))
+      const selected = await requestJson('/api/users/me', demoUsername)
+      window.sessionStorage.setItem('ut112-demo-username', selected.username)
+      setCurrentUser(selected)
     } catch (requestError) {
       setError(requestError.message)
       setLoading(false)
@@ -742,6 +749,14 @@ function App() {
                               </div>
                             ))}
                           </details>
+                          <ResponseChat
+                            assignment={assignment}
+                            incidentNumber={selectedIncident.incident_number}
+                            username={currentUser.username}
+                            apiUrl={apiUrl}
+                            requestJson={requestJson}
+                            formatDateTime={formatDateTime}
+                          />
                         </div>
                       ))}
                       {canAssignResponse && availableResponseUnits.length > 0 && (
