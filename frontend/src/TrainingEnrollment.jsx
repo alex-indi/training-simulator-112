@@ -22,14 +22,13 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
   }, [api])
 
   const selected = sessions.find((item) => String(item.id) === sessionId) || sessions[0]
-  const ownRun = selected?.runs.find((run) => run.trainee_id === user.id)
+  const ownRun = selected?.own_run
   const selectedId = selected?.id
   const ownRunId = ownRun?.id
 
   useEffect(() => {
     if (!ownRunId || !selectedId) return undefined
     const beat = () => api(`/api/training/sessions/${selectedId}/heartbeat`, { method: 'POST' })
-      .then((item) => setSessions((items) => items.map((previous) => previous.id === item.id ? item : previous)))
       .catch((cause) => setError(cause.message))
     beat()
     const timer = window.setInterval(beat, 20000)
@@ -46,7 +45,7 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ workstation_number: Number(station) }),
       })
-      setSessions((items) => items.map((previous) => previous.id === item.id ? item : previous))
+      setSessions(await api('/api/training/sessions'))
       onJoined(item.id)
     } catch (cause) { setError(cause.message) } finally { setBusy(false) }
   }

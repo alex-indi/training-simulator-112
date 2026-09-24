@@ -117,6 +117,8 @@ class IncidentRead(BaseModel):
     claimant_workstation_number: int | None = None
     can_claim: bool = False
     can_edit: bool = False
+    viewer_dds_profile: str | None = None
+    viewer_workstation_number: int | None = None
     incident_number: str
     reported_at: datetime
     source: str

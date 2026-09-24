@@ -12,9 +12,17 @@ class ResponseUnitCreate(BaseModel):
     dds_profile: str = Field(min_length=1, max_length=120)
     description: str = Field(default="", max_length=2000)
 
-    @field_validator("name", "dds_profile", "description")
+    @field_validator("name", "dds_profile")
     @classmethod
-    def normalize_text(cls, value: str) -> str:
+    def normalize_required_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Обязательное поле не может быть пустым")
+        return normalized
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str) -> str:
         return value.strip()
 
 

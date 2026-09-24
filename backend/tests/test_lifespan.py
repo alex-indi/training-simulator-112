@@ -32,3 +32,10 @@ def test_lifespan_checks_database_and_logs_connection(monkeypatch, caplog) -> No
     check_connection.assert_awaited_once_with(engine)
     engine.dispose.assert_awaited_once()
     assert "Подключение к PostgreSQL установлено" in caplog.messages
+
+
+def test_scheduler_delivery_uses_session_notification(monkeypatch) -> None:
+    publish = AsyncMock()
+    monkeypatch.setattr(main_module, "publish_session_event", publish)
+    asyncio.run(main_module.notify_delivery(12, 7))
+    publish.assert_awaited_once_with("incident.delivered", 12, 7)

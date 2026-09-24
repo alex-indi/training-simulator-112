@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +28,7 @@ from app.modules.response.workflow import (
     create_assignment,
 )
 from app.modules.training.models import TrainingRun, TrainingSession, TrainingSessionState
+from app.realtime import publish_session_event
 
 router = APIRouter(prefix="/api/response", tags=["response"])
 
@@ -170,7 +172,16 @@ async def assign_response_unit(
         actor_user_id=current_user.id,
     )
     database.add(assignment)
-    await database.commit()
+    try:
+        await database.commit()
+    except IntegrityError as error:
+        await database.rollback()
+        raise HTTPException(
+            status_code=409, detail="Группа уже назначена на эту карточку"
+        ) from error
+    await publish_session_event(
+        "response.assignment_created", incident.training_session_id, incident.id
+    )
     return _assignment_read(assignment)
 
 
@@ -230,4 +241,8 @@ async def apply_response_scenario_event(
     except InvalidResponseTransitionError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     await database.commit()
+    await publish_session_event(
+        "response.state_changed", assignment.incident.training_session_id,
+        assignment.incident_id,
+    )
     return _assignment_read(assignment)

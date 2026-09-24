@@ -67,11 +67,36 @@ class RunRead(BaseModel):
     last_seen_at: datetime | None
 
 
+class OwnRunSummary(BaseModel):
+    id: int
+    workstation_number: int | None
+    dds_profile: str | None
+    online: bool
+
+
+class TrainingSessionSummary(BaseModel):
+    id: int
+    title: str
+    state: TrainingSessionState
+    workstation_count: int
+    own_run: OwnRunSummary | None = None
+
+
 class GroupWrite(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     dds_profile: str | None = Field(default=None, max_length=120)
     difficulty: str | None = Field(default=None, max_length=40)
     queue_mode: QueueMode = QueueMode.INDIVIDUAL_QUEUE
+
+    @field_validator("name", "dds_profile", "difficulty")
+    @classmethod
+    def normalize_group_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Поле группы не может быть пустым")
+        return normalized
 
 
 class GroupRead(GroupWrite):
@@ -119,6 +144,14 @@ class TrainingSessionRead(SessionSettings):
 class TemplateCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     training_session_id: int
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Название шаблона не может быть пустым")
+        return normalized
 
 
 class TemplateRead(BaseModel):

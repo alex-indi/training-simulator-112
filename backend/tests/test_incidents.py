@@ -33,7 +33,7 @@ from app.modules.incidents.workflow import (
     mark_incident_opened,
     perform_incident_action,
 )
-from app.modules.training.models import TrainingSession, TrainingSessionState
+from app.modules.training.models import TrainingRun, TrainingSession, TrainingSessionState
 
 
 def make_snapshot() -> IncidentSnapshot:
@@ -97,6 +97,31 @@ def test_delivered_incident_uses_server_time_and_snapshot_copy() -> None:
     assert incident.actions[0].status == DdsServiceEventType.SERVICE_ADDED
     assert incident.actions[0].created_at == server_time
     assert incident.actions[0].is_system is True
+
+
+def test_generated_reported_time_is_delivery_time() -> None:
+    source_snapshot = make_snapshot().model_dump(mode="json")
+    source_snapshot["reported_at_mode"] = "DELIVERY"
+    delivery_time = datetime(2026, 9, 24, 13, 30, tzinfo=UTC)
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=source_snapshot,
+        server_time=delivery_time,
+    )
+    assert incident.reported_at == delivery_time
+    assert incident.source_snapshot["reported_at"] == delivery_time.isoformat()
+    assert "reported_at_mode" not in incident.source_snapshot
+    assert source_snapshot["reported_at"] != delivery_time.isoformat()
+
+
+def test_explicit_historical_reported_time_is_preserved() -> None:
+    source_snapshot = make_snapshot().model_dump(mode="json")
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=source_snapshot,
+        server_time=datetime(2026, 9, 24, 13, 30, tzinfo=UTC),
+    )
+    assert incident.source_snapshot["reported_at"] == source_snapshot["reported_at"]
 
 
 def test_snapshot_rejects_invalid_coordinates() -> None:
@@ -278,6 +303,49 @@ def test_refuse_work_is_available_after_accept_and_requires_comment() -> None:
     assert get_available_actions(incident) == []
 
 
+@pytest.mark.parametrize("terminal_action", [
+    IncidentActionType.COMPLETE_WORK,
+    IncidentActionType.REFUSE_WORK,
+])
+def test_terminal_action_finishes_lifecycle_at_server_time(terminal_action) -> None:
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
+    )
+    perform_incident_action(
+        incident, action=IncidentActionType.ACCEPT,
+        actor_user_id=3, actor_display_name="Диспетчер",
+    )
+    finished_at = datetime(2026, 9, 24, 10, 30, tzinfo=UTC)
+    perform_incident_action(
+        incident, action=terminal_action, actor_user_id=3,
+        actor_display_name="Диспетчер", comment="Завершено",
+        server_time=finished_at,
+    )
+    assert incident.lifecycle_state == IncidentLifecycleState.FINISHED
+    assert incident.finished_at == finished_at
+    with pytest.raises(InvalidIncidentTransitionError):
+        perform_incident_action(
+            incident, action=IncidentActionType.START_WORK,
+            actor_user_id=3, actor_display_name="Диспетчер",
+        )
+    assert incident.finished_at == finished_at
+
+
+def test_rejected_incident_remains_open_for_later_acceptance() -> None:
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
+    )
+    perform_incident_action(
+        incident, action=IncidentActionType.REJECT,
+        actor_user_id=3, actor_display_name="Диспетчер", comment="Проверить адрес",
+    )
+    assert incident.lifecycle_state == IncidentLifecycleState.DELIVERED
+    assert incident.finished_at is None
+    assert get_available_actions(incident) == [IncidentActionType.ACCEPT]
+
+
 def test_only_instructor_can_deliver_incident() -> None:
     """Обучаемый не может сам создать входящую карточку."""
     trainee = User(
@@ -304,7 +372,7 @@ def test_only_instructor_can_deliver_incident() -> None:
     database.add.assert_not_called()
 
 
-def test_instructor_delivers_incident_to_active_owned_session() -> None:
+def test_instructor_delivers_incident_to_active_owned_session(monkeypatch) -> None:
     """Команда доставки сохраняет snapshot в активной сессии преподавателя."""
     instructor = User(
         id=2,
@@ -325,6 +393,8 @@ def test_instructor_delivers_incident_to_active_owned_session() -> None:
     database.scalars = AsyncMock(return_value=scalar_result)
     database.commit = AsyncMock()
     database.add.side_effect = assign_persisted_ids
+    publish = AsyncMock()
+    monkeypatch.setattr("app.modules.incidents.router.publish_session_event", publish)
 
     response = asyncio.run(
         create_incident(
@@ -345,6 +415,7 @@ def test_instructor_delivers_incident_to_active_owned_session() -> None:
         "scenario_event_key": "initial_incident"
     }
     database.commit.assert_awaited_once()
+    publish.assert_awaited_once_with("incident.delivered", 12, 7)
 
 
 def test_assigned_trainee_can_restore_incident_from_api() -> None:
@@ -369,6 +440,10 @@ def test_assigned_trainee_can_restore_incident_from_api() -> None:
     )
     incident.id = 7
     incident.training_session = training_session
+    incident.training_run = TrainingRun(
+        id=4, trainee_id=trainee.id, dds_profile="ДДС района", workstation_number=7
+    )
+    training_session.runs.append(incident.training_run)
     assign_persisted_ids(incident)
     scalar_result = MagicMock()
     scalar_result.one_or_none.return_value = incident
@@ -386,9 +461,11 @@ def test_assigned_trainee_can_restore_incident_from_api() -> None:
     assert response.id == incident.id
     assert response.source_snapshot.features == ["дым", "жилой дом"]
     assert response.source_snapshot.notified_services == ["ДДС пожарной охраны"]
+    assert response.viewer_dds_profile == "ДДС района"
+    assert response.viewer_workstation_number == 7
 
 
-def test_assigned_trainee_opens_incident_and_backend_commits_time() -> None:
+def test_assigned_trainee_opens_incident_and_backend_commits_time(monkeypatch) -> None:
     """Команда открытия сохраняет серверное время в доступной карточке."""
     trainee = User(
         id=3,
@@ -416,6 +493,8 @@ def test_assigned_trainee_opens_incident_and_backend_commits_time() -> None:
     database = MagicMock()
     database.scalars = AsyncMock(return_value=scalar_result)
     database.commit = AsyncMock(side_effect=lambda: assign_persisted_ids(incident))
+    publish = AsyncMock()
+    monkeypatch.setattr("app.modules.incidents.router.publish_session_event", publish)
 
     response = asyncio.run(
         open_incident(
@@ -432,9 +511,10 @@ def test_assigned_trainee_opens_incident_and_backend_commits_time() -> None:
         DdsServiceEventType.SERVICE_RECEIVED,
     ]
     database.commit.assert_awaited_once()
+    publish.assert_awaited_once_with("incident.opened", 12, 7)
 
 
-def test_assigned_trainee_changes_status_through_api() -> None:
+def test_assigned_trainee_changes_status_through_api(monkeypatch) -> None:
     """API повторно проверяет доступность и возвращает сохранённую историю."""
     trainee = User(
         id=3,
@@ -455,12 +535,15 @@ def test_assigned_trainee_changes_status_through_api() -> None:
         server_time=datetime(2026, 9, 22, 9, 0, tzinfo=UTC),
     )
     incident.training_session = training_session
+    mark_incident_opened(incident)
     assign_persisted_ids(incident)
     scalar_result = MagicMock()
     scalar_result.one_or_none.return_value = incident
     database = MagicMock()
     database.scalars = AsyncMock(return_value=scalar_result)
     database.commit = AsyncMock(side_effect=lambda: assign_persisted_ids(incident))
+    publish = AsyncMock()
+    monkeypatch.setattr("app.modules.incidents.router.publish_session_event", publish)
 
     response = asyncio.run(
         change_incident_status(
@@ -482,6 +565,61 @@ def test_assigned_trainee_changes_status_through_api() -> None:
     assert response.actions[-1].actor_display_name == trainee.full_name
     assert response.actions[-1].comment == "Объект вне зоны ответственности"
     database.commit.assert_awaited_once()
+    publish.assert_awaited_once_with("incident.updated", 12, 7)
+
+
+def test_action_before_open_is_rejected_by_api() -> None:
+    trainee = User(id=3, username="trainee", role=UserRole.TRAINEE)
+    training_session = TrainingSession(
+        id=12, title="Учебная смена", instructor_id=2,
+        state=TrainingSessionState.ACTIVE, trainees=[trainee],
+    )
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
+    )
+    incident.training_session = training_session
+    assign_persisted_ids(incident)
+    scalar_result = MagicMock()
+    scalar_result.one_or_none.return_value = incident
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=scalar_result)
+    database.commit = AsyncMock()
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(change_incident_status(
+            incident.id, IncidentActionCreate(action=IncidentActionType.ACCEPT),
+            trainee, database,
+        ))
+    assert error.value.status_code == 409
+    assert incident.dds_status == DDSResponseStatus.AWAITING_DECISION
+    assert len(incident.actions) == 1
+    database.commit.assert_not_awaited()
+
+
+def test_open_requires_active_session() -> None:
+    trainee = User(id=3, username="trainee", role=UserRole.TRAINEE)
+    training_session = TrainingSession(
+        id=12, title="Учебная смена", instructor_id=2,
+        state=TrainingSessionState.READY, trainees=[trainee],
+    )
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
+    )
+    incident.training_session = training_session
+    assign_persisted_ids(incident)
+    scalar_result = MagicMock()
+    scalar_result.one_or_none.return_value = incident
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=scalar_result)
+    database.commit = AsyncMock()
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(open_incident(incident.id, trainee, database))
+    assert error.value.status_code == 409
+    assert incident.opened_at is None
+    database.commit.assert_not_awaited()
 
 
 def test_unassigned_trainee_cannot_change_incident_status() -> None:
