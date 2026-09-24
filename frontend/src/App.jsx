@@ -3,6 +3,7 @@ import { io } from 'socket.io-client'
 
 import informationIcon from './assets/information.svg'
 import styles from './App.module.css'
+import AdminWorkspace from './AdminWorkspace.jsx'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
 import TrainingResults from './TrainingResults.jsx'
@@ -221,15 +222,27 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!currentUser) return
+    const target = currentUser.role === 'ADMIN' ? '/admin' : '/'
+    if (window.location.pathname !== target) window.history.replaceState(null, '', target)
+  }, [currentUser])
+
+  useEffect(() => {
     const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
     requestJson('/api/users/demo')
       .then(async (demoUsers) => {
         setUsers(demoUsers)
         const trainee = demoUsers.find((user) => user.role === 'TRAINEE')
         setLoginUsername(trainee?.username || demoUsers[0]?.username || '')
-        if (savedUsername) {
+        const admin = demoUsers.find((user) => user.role === 'ADMIN')
+        const preferredUsername = window.location.pathname === '/admin'
+          ? admin?.username
+          : savedUsername
+        if (preferredUsername) {
           try {
-            setCurrentUser(await requestJson('/api/users/me', savedUsername))
+            const selected = await requestJson('/api/users/me', preferredUsername)
+            window.sessionStorage.setItem('ut112-demo-username', selected.username)
+            setCurrentUser(selected)
           } catch {
             window.sessionStorage.removeItem('ut112-demo-username')
           }
@@ -606,6 +619,10 @@ function App() {
 
   if (currentUser?.role === 'INSTRUCTOR') {
     return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} />
+  }
+
+  if (currentUser?.role === 'ADMIN') {
+    return <AdminWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} onLogout={logout} />
   }
 
   if (!currentUser) {

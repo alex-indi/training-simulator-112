@@ -16,6 +16,7 @@ from app.db.session import (
     create_database_engine,
     create_session_factory,
 )
+from app.modules.admin.router import router as admin_router
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.router import router as identity_router
 from app.modules.incident_classifier.router import router as classifier_router
@@ -124,6 +125,7 @@ app.add_middleware(
 )
 app.include_router(identity_router)
 app.include_router(classifier_router)
+app.include_router(admin_router)
 app.include_router(training_router)
 app.include_router(control_router)
 app.include_router(assessment_router)
