@@ -1,0 +1,5 @@
+[
+  {"username": "admin", "full_name": "Администратор стенда", "role": "ADMIN", "is_active": true},
+  {"username": "instructor", "full_name": "Преподаватель", "role": "INSTRUCTOR", "is_active": true},
+  {"username": "trainee", "full_name": "Диспетчер ДДС", "role": "TRAINEE", "is_active": true}
+]
