@@ -1,12 +1,10 @@
 {
   "schools": {
     "dataset_id": 747,
-    "type": "SCHOOL",
     "count": 3492
   },
   "metro": {
     "dataset_id": 624,
-    "type": "METRO_STATION",
     "count": 1177
   }
 }
