@@ -50,6 +50,7 @@ class ResponseUnit(Base):
     __tablename__ = "response_units"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    seed_code: Mapped[str | None] = mapped_column(String(100), unique=True)
     name: Mapped[str] = mapped_column(String(160))
     dds_profile: Mapped[str] = mapped_column(String(120), index=True)
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
