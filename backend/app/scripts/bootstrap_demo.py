@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.core.config import get_settings
 from app.db.session import check_database_connection, create_database_engine
 from app.scripts.seed_all import seed_all
+from app.scripts.seed_core import CoreSeedUnavailableError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -59,7 +60,10 @@ def main() -> None:
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
     command.upgrade(config, "head")
-    asyncio.run(seed_all())
+    try:
+        asyncio.run(seed_all())
+    except CoreSeedUnavailableError as exc:
+        raise SystemExit(str(exc)) from None
     counts = asyncio.run(integrity_check())
     print("Database bootstrap completed")
     for label, count in counts.items():

@@ -2,7 +2,7 @@
 
 import asyncio
 
-from app.scripts.seed_core import seed_core
+from app.scripts.seed_core import CoreSeedUnavailableError, seed_core
 from app.scripts.seed_demo import seed_demo
 
 
@@ -13,4 +13,7 @@ async def seed_all() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(seed_all())
+    try:
+        asyncio.run(seed_all())
+    except CoreSeedUnavailableError as exc:
+        raise SystemExit(str(exc)) from None
