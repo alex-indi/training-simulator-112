@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.core.config import get_settings
 from app.db.session import create_database_engine
 from app.scripts.seed_core import seed_core
+from seed.import_object_types import load_object_types
 
 TABLES = (
     "incident_classifier_rules",
@@ -44,5 +45,28 @@ def test_seed_core_twice_keeps_counts() -> None:
         assert all(first.values())
         await seed_core()
         assert await counts() == first
+
+        engine = create_database_engine(get_settings())
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text("UPDATE object_types SET name = 'Временное имя' WHERE code = 'BUILDING'")
+                )
+        finally:
+            await engine.dispose()
+        await seed_core()
+        assert await counts() == first
+        expected_name = next(
+            row["name"] for row in load_object_types() if row["code"] == "BUILDING"
+        )
+        engine = create_database_engine(get_settings())
+        try:
+            async with engine.connect() as connection:
+                restored = await connection.scalar(
+                    text("SELECT name FROM object_types WHERE code = 'BUILDING'")
+                )
+                assert restored == expected_name
+        finally:
+            await engine.dispose()
 
     asyncio.run(run())
