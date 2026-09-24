@@ -1,0 +1,26 @@
+{
+  "source_rows": {
+    "747": 3492,
+    "624": 1177
+  },
+  "imported": {
+    "EDUCATIONAL_COMPLEX": 30,
+    "EDUCATION_UNKNOWN": 368,
+    "KINDERGARTEN": 1718,
+    "METRO_STATION": 257,
+    "SCHOOL": 1376
+  },
+  "metro": {
+    "missing_name": 0,
+    "outside_moscow_entrances": 11,
+    "missing_entrance_coordinates": 0,
+    "stations_with_multiple_districts": 67,
+    "station_count": 257
+  },
+  "education_missing_coordinates": 3492,
+  "education_unknown_type": 368,
+  "duplicate_object_keys": 0,
+  "seed_objects": 3749,
+  "seed_attributes": 15767,
+  "seed_tags": 10511
+}

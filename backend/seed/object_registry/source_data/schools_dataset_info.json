@@ -1,0 +1,95 @@
+{
+  "Id": 747,
+  "IdentificationNumber": "7710878000-educationalinstitutionsOverview",
+  "CategoryId": 6,
+  "CategoryCaption": "Образование",
+  "DepartmentId": 8652,
+  "DepartmentCaption": "Департамент информационных технологий города Москвы",
+  "Caption": "Реестр образовательных учреждений. Общие сведения",
+  "Description": "Реестр образовательных учреждений. Общие сведения",
+  "FullDescription": null,
+  "Keywords": "реестр образовательных учреждений; реестр дошкольных образовательных учреждений; реестр аккредитованных образовательных учреждений; список образовательных учреждени",
+  "ContainsGeodata": false,
+  "VersionNumber": "1.1",
+  "VersionDate": "31.01.2014 00:00:00",
+  "ItemsCount": 3492,
+  "Columns": [
+    {
+      "Name": "global_id",
+      "Caption": "global_id",
+      "Visible": true,
+      "Type": null,
+      "SubColumns": null
+    },
+    {
+      "Name": "poln_name",
+      "Caption": "Полное наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "kratk_name",
+      "Caption": "Краткое наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "nomer",
+      "Caption": "Номер",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "tipe_uchrezhden",
+      "Caption": "Тип учреждения",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "vid_uchrezhdeniya",
+      "Caption": "Вид учреждения",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "organiz_pravov_forma",
+      "Caption": "Организационно-правовая форма",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "podchinenie",
+      "Caption": "Подчинение",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "yuridich_adress",
+      "Caption": "Юридический адрес",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "telephone",
+      "Caption": "Телефон",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "email",
+      "Caption": "Адрес электронной почты",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    }
+  ]
+}
