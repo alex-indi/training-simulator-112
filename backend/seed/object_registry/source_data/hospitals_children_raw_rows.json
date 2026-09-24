@@ -1,0 +1,2244 @@
+[
+  {
+    "global_id": 2845448510,
+    "Number": 1,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Городская клиническая больница № 67 имени Л. А. Ворохобова Департамента здравоохранения города Москвы». Детское отделение",
+      "ShortName": "ГБУЗ ГКБ № 67 им. Л. А. Ворохобова ДЗМ. Детское отделение",
+      "OrgInfo": [
+        {
+          "global_id": 338718,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Городская клиническая больница № 67 имени Л. А. Ворохобова Департамента здравоохранения города Москвы»",
+          "INN": "7734091519",
+          "KPP": "773401001",
+          "OGRN": "1037734010467",
+          "LegalAddress": "123423, г. Москва, улица Саляма Адиля, дом 2/44",
+          "ChiefName": "Войновский Александр Евгеньевич",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 384213,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Западный административный округ",
+          "District": "район Хорошёво-Мнёвники",
+          "PostalCode": "123154",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Хорошево-Мневники, улица Саляма Адиля, дом 2/44",
+          "Extrainfo": ""
+        }
+      ],
+      "ChiefName": "Войновский Александр Евгеньевич",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 355453,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 199-79-56"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 386989,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 530-33-88"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347871,
+          "is_deleted": 0,
+          "Fax": "(495) 530-33-53"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350863,
+          "is_deleted": 0,
+          "Email": "gkb67@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "90",
+      "PaidServiceInfo": "отсутствуют",
+      "WorkingHours": [
+        {
+          "global_id": 2507230,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507748,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507842,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508689,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510385,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2511213,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2512393,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Педиатрическая кардиология",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845448510,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": null,
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845448427,
+    "Number": 2,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Городская клиническая больница им. М.П. Кончаловского Департамента здравоохранения города Москвы». Детское отделение",
+      "ShortName": "ГБУЗ ГКБ им. М.П. Кончаловского ДЗМ. Детское отделение",
+      "OrgInfo": [
+        {
+          "global_id": 338783,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Городская клиническая больница им. М.П. Кончаловского Департамента здравоохранения города Москвы»",
+          "INN": "7735069192",
+          "KPP": "773501001",
+          "OGRN": "1037739064285",
+          "LegalAddress": "124489, г. Москва, г. Зеленоград, Каштановая аллея, дом 2, строение 1",
+          "ChiefName": "Погонин Алексей Владимирович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "женский"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 384013,
+          "is_deleted": 0,
+          "AdmArea": "Зеленоградский административный округ",
+          "District": "район Савёлки",
+          "PostalCode": "124489",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Савелки, город Зеленоград, Каштановая аллея, дом 2, строение 4",
+          "Extrainfo": "Здание закрыто на капитальный ремонт.\nДетский корпус - лечебное. "
+        }
+      ],
+      "ChiefName": "Погонин Алексей Владимирович",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "женский",
+      "ChiefPhone": [
+        {
+          "global_id": 354672,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 735-64-29"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387623,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 735-64-29"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 348239,
+          "is_deleted": 0,
+          "Fax": "(499) 735-32-06"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350449,
+          "is_deleted": 0,
+          "Email": "gb3@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "1242",
+      "PaidServiceInfo": "отсутствуют",
+      "WorkingHours": [
+        {
+          "global_id": 2507703,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509152,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2511227,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2511417,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2512395,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514437,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514438,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Многопрофильный стационар",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845448427,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": null,
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449236,
+    "Number": 3,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница № 9 имени Г. Н. Сперанского Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ДГКБ № 9 им. Г. Н. Сперанского ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 338977,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница № 9 имени Г. Н. Сперанского Департамента здравоохранения города Москвы»",
+          "INN": "7703027320",
+          "KPP": "770301001",
+          "OGRN": "1027739190050",
+          "LegalAddress": "123317, г. Москва, Шмитовский проезд, дом 29",
+          "ChiefName": "Афуков Иван Игоревич",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 383087,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123317",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Шмитовский проезд, дом 29, строение 10",
+          "Extrainfo": "Корпус № 1"
+        },
+        {
+          "global_id": 383789,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123317",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Шмитовский проезд, дом 29, строение 7",
+          "Extrainfo": "Корпус № 3"
+        },
+        {
+          "global_id": 384385,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123317",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Шмитовский проезд, дом 29, строение 11",
+          "Extrainfo": "Корпус № 4"
+        },
+        {
+          "global_id": 384640,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123317",
+          "Address": "город Москва, Шмитовский проезд, дом 29, строение 2",
+          "Extrainfo": "Иммунология"
+        },
+        {
+          "global_id": 384892,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123317",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Шмитовский проезд, дом 29, строение 1",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384909,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123317",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Шмитовский проезд, дом 29, строение 8",
+          "Extrainfo": "Корпус № 6"
+        }
+      ],
+      "ChiefName": "Афуков Иван Игоревич",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 354440,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 256-21-62"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 386782,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 259-47-32"
+        },
+        {
+          "global_id": 386990,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 259-13-07"
+        },
+        {
+          "global_id": 387821,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 259-01-08"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 348073,
+          "is_deleted": 0,
+          "Fax": "(499) 256-61-27"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 349761,
+          "is_deleted": 0,
+          "Email": "dgkb9@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "оказываются",
+      "WorkingHours": [
+        {
+          "global_id": 2507749,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508768,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509070,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510759,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514967,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515107,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515366,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Многопрофильное детское медицинское учреждение",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449236,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845448696,
+    "Number": 4,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница № 9 имени Г. Н. Сперанского филиал № 2 Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ДГКБ № 9 им. Г. Н. Сперанского Филиал № 2 ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 338514,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница № 9 имени Г. Н. Сперанского Департамента здравоохранения города Москвы»",
+          "INN": "7703027320",
+          "KPP": "770301001",
+          "OGRN": "1027739190050",
+          "LegalAddress": "123317, г. Москва, Шмитовский проезд, дом 29",
+          "ChiefName": "Афуков Иван Игоревич",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 382983,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Восточный административный округ",
+          "District": "район Свиблово",
+          "PostalCode": "129329",
+          "Address": "город Москва, Ивовая улица, дом 3, строение 1",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 385368,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Восточный административный округ",
+          "District": "район Свиблово",
+          "PostalCode": "129329",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Свиблово, Ивовая улица, дом 3, строение 2",
+          "Extrainfo": "Стационар, поликлиника"
+        }
+      ],
+      "ChiefName": "Долгушина Ольга Анатольевна",
+      "ChiefPosition": "заведующий филиалом",
+      "ChiefGender": "женский",
+      "ChiefPhone": [
+        {
+          "global_id": 354912,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 186-82-97"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387622,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 186-83-37"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 348026,
+          "is_deleted": 0,
+          "Fax": "(499) 186-83-37"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 349968,
+          "is_deleted": 0,
+          "Email": "dgkb9@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "отсутствуют",
+      "WorkingHours": [
+        {
+          "global_id": 2506868,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509069,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509487,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509677,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510863,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2512394,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2516206,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Детская инфекционная больница",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845448696,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449229,
+    "Number": 5,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница имени З. А. Башляевой Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ДГКБ им. З. А. Башляевой ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 338847,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница имени З. А. Башляевой Департамента здравоохранения города Москвы»",
+          "INN": "7733024083",
+          "KPP": "773301001",
+          "OGRN": "1037739022727",
+          "LegalAddress": "125373, г.Москва, улица Героев Панфиловцев, дом 28",
+          "ChiefName": "Османов Исмаил Магомедтагирович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 382974,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Западный административный округ",
+          "District": "район Северное Тушино",
+          "PostalCode": "125373",
+          "Address": "город Москва, улица Героев Панфиловцев, дом 28, строение 4",
+          "Extrainfo": "Конференц-зал, стоматологическая поликлиника"
+        },
+        {
+          "global_id": 384511,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Западный административный округ",
+          "District": "район Северное Тушино",
+          "PostalCode": "125373",
+          "Address": "город Москва, улица Героев Панфиловцев, дом 28",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384735,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Западный административный округ",
+          "District": "район Северное Тушино",
+          "PostalCode": "125373",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Северное Тушино, улица Героев Панфиловцев, дом 28, строение 3",
+          "Extrainfo": "ПАК"
+        },
+        {
+          "global_id": 385346,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Западный административный округ",
+          "District": "район Северное Тушино",
+          "PostalCode": "125373",
+          "Address": "город Москва, улица Героев Панфиловцев, дом 28, строение 6",
+          "Extrainfo": "Консультативно - диагностическое поликлиническое отделение"
+        },
+        {
+          "global_id": 385549,
+          "is_deleted": 0,
+          "AdmArea": "Северо-Западный административный округ",
+          "District": "район Северное Тушино",
+          "PostalCode": "125373",
+          "Address": "город Москва, улица Героев Панфиловцев, дом 28, строение 2",
+          "Extrainfo": "Лечебный корпус(инфекционный)"
+        }
+      ],
+      "ChiefName": "Османов Исмаил Магомедтагирович",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 354402,
+          "is_deleted": 0,
+          "ChiefPhone": "(495) 496-91-00"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 386734,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 496-74-90"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347306,
+          "is_deleted": 0,
+          "Fax": "(495) 496-91-00"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350557,
+          "is_deleted": 0,
+          "Email": "tdgb@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "971",
+      "PaidServiceInfo": "оказываются",
+      "WorkingHours": [
+        {
+          "global_id": 2505649,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2506488,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508575,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510386,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510757,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514598,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515762,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Многопрофильное детское медицинское учреждение",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449229,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449742,
+    "Number": 6,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница имени Н. Ф. Филатова Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ДГКБ им. Н. Ф. Филатова ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 338809,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница имени Н. Ф. Филатова Департамента здравоохранения города Москвы»",
+          "INN": "7703111067",
+          "KPP": "770301001",
+          "OGRN": "1027739341519",
+          "LegalAddress": "123001, г. Москва, улица Садовая-Кудринская, дом 15",
+          "ChiefName": "Чубарова Антонина Игоревна",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "женский"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 383117,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123001",
+          "Address": "город Москва, Садовая-Кудринская улица, дом 15, строение 3А",
+          "Extrainfo": "Хирургический корпус"
+        },
+        {
+          "global_id": 383237,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123001",
+          "Address": "город Москва, Садовая-Кудринская улица, дом 15, строение 6",
+          "Extrainfo": "Терапевтический корпус"
+        },
+        {
+          "global_id": 383736,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123056",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, улица Красина, дом 27, строение 3",
+          "Extrainfo": "Корпус педиатрии и патологии новорожденных"
+        },
+        {
+          "global_id": 383966,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123001",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Садовая-Кудринская улица, дом 15, строение 3Б",
+          "Extrainfo": "Хирургический корпус, отделение урологии"
+        },
+        {
+          "global_id": 383967,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123001",
+          "Address": "город Москва, Садовая-Кудринская улица, дом 15, строение 4",
+          "Extrainfo": "аптека, архив"
+        },
+        {
+          "global_id": 384897,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123001",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Садовая-Кудринская улица, дом 15, строение 2",
+          "Extrainfo": "Центр лабораторной диагностики"
+        },
+        {
+          "global_id": 385391,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "Пресненский район",
+          "PostalCode": "123001",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Пресненский, Садовая-Кудринская улица, дом 15, строение 11",
+          "Extrainfo": "консультативно-диагностический центр"
+        }
+      ],
+      "ChiefName": "Чубарова Антонина Игоревна",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "женский",
+      "ChiefPhone": [
+        {
+          "global_id": 355215,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 254-52-92"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387259,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 254-25-26"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347062,
+          "is_deleted": 0,
+          "Fax": "(499) 254-52-92"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350944,
+          "is_deleted": 0,
+          "Email": "dgkb13@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "700",
+      "PaidServiceInfo": "оказываются",
+      "WorkingHours": [
+        {
+          "global_id": 2507119,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507231,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508690,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508934,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509068,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514735,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515609,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Многопрофильное детское медицинское учреждение",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449742,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845448806,
+    "Number": 7,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница Святого Владимира Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ДГКБ Св. Владимира ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 337761,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница Святого Владимира Департамента здравоохранения города Москвы»",
+          "INN": "7718113194",
+          "KPP": "771801001",
+          "OGRN": "1037739765645",
+          "LegalAddress": "107014, г.Москва, улица Рубцовско-Дворцовая, дом 1/3",
+          "ChiefName": "Заварохин Сергей Иванович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 383359,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 1",
+          "Extrainfo": "Здание не используется"
+        },
+        {
+          "global_id": 383471,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 5",
+          "Extrainfo": "Здание не используется "
+        },
+        {
+          "global_id": 383627,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 13",
+          "Extrainfo": "Здание не используется"
+        },
+        {
+          "global_id": 383971,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 9",
+          "Extrainfo": "Объект в процессе сноса. Лечебный корпус"
+        },
+        {
+          "global_id": 384957,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 2А",
+          "Extrainfo": "Приемное отделение"
+        },
+        {
+          "global_id": 385094,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 3",
+          "Extrainfo": "Здание не используется"
+        },
+        {
+          "global_id": 385347,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, Рубцовско-Дворцовая улица, дом 1/3, корпус 10",
+          "Extrainfo": "Здание не используется "
+        },
+        {
+          "global_id": 500001439698,
+          "is_deleted": 0,
+          "AdmArea": "Восточный административный округ",
+          "District": "район Сокольники",
+          "PostalCode": "107014",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Сокольники, улица Матросская Тишина, дом 12А",
+          "Extrainfo": "Основное здание"
+        }
+      ],
+      "ChiefName": "Заварохин Сергей Иванович",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 355167,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 268-22-31"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 386585,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 268-22-25"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 348388,
+          "is_deleted": 0,
+          "Fax": "(499) 268-22-31"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350628,
+          "is_deleted": 0,
+          "Email": "dgkbsv@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "845 и 20 коек дневного стационара",
+      "PaidServiceInfo": "оказываются",
+      "WorkingHours": [
+        {
+          "global_id": 2506867,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507829,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509486,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514656,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514966,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515106,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515205,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Многопрофильное детское медицинское учреждение",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845448806,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449789,
+    "Number": 8,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница Святого Владимира Департамента здравоохранения города Москвы» Филиал",
+      "ShortName": "ГБУЗ ДГКБ св. Владимира ДЗМ Филиал",
+      "OrgInfo": [
+        {
+          "global_id": 338114,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Детская городская клиническая больница Святого Владимира Департамента здравоохранения города Москвы»",
+          "INN": "7718113194",
+          "KPP": "771801001",
+          "OGRN": "1037739765645",
+          "LegalAddress": "107014, г.Москва, улица Рубцовско-Дворцовая, дом 1/3",
+          "ChiefName": "Заварохин Сергей Иванович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 382968,
+          "is_deleted": 0,
+          "AdmArea": null,
+          "District": null,
+          "PostalCode": "141850",
+          "Address": "Московская область, Дмитровский район, поселок Деденево, улица Больничная, владение 4",
+          "Extrainfo": ""
+        }
+      ],
+      "ChiefName": "Мальченко Олег Анатольевич",
+      "ChiefPosition": "заместитель главного врача",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 354224,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 748-04-96"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387169,
+          "is_deleted": 0,
+          "PublicPhone": "(499) 748-04-96"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347478,
+          "is_deleted": 0,
+          "Fax": "(499) 748-04-96"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350843,
+          "is_deleted": 0,
+          "Email": "dgkbsv@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "",
+      "WorkingHours": [
+        {
+          "global_id": 2506794,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508227,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508745,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2511633,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2513036,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2513510,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514136,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449789,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449170,
+    "Number": 9,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Морозовская детская городская клиническая больница Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ Морозовская ДГКБ ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 337832,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Морозовская детская городская клиническая больница Департамента здравоохранения города Москвы»",
+          "INN": "7705039232",
+          "KPP": "770501001",
+          "OGRN": "1027739783620",
+          "LegalAddress": "119049,г.Москва, 4-ый Добрынинский переулок, дом 1/9",
+          "ChiefName": "Горев Валерий Викторович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 382964,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 7",
+          "Extrainfo": "Консультативный центр"
+        },
+        {
+          "global_id": 383030,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 18",
+          "Extrainfo": "Патологоанатомическое отделение"
+        },
+        {
+          "global_id": 383435,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 12",
+          "Extrainfo": "Педиатрическое отделение сочетанной патологии"
+        },
+        {
+          "global_id": 383549,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 13",
+          "Extrainfo": "Бухгалтерия, ОМС"
+        },
+        {
+          "global_id": 383738,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 1",
+          "Extrainfo": "Отделение педиатрическое, гематологии, онкологии, офтальмологии."
+        },
+        {
+          "global_id": 383739,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 11",
+          "Extrainfo": "Здание закрыто на капитальный ремонт. Хирургическое боксированное отделение сочетанной патологии."
+        },
+        {
+          "global_id": 383849,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 9",
+          "Extrainfo": "Отделение онкологии и гематологии"
+        },
+        {
+          "global_id": 384000,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 22А",
+          "Extrainfo": "Здание закрыто на капитальный ремонт.\nОРИТ; ОРИТ для новорожденных; Инфекционно-боксированное отделение для детей младшего возраста. "
+        },
+        {
+          "global_id": 384527,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 21",
+          "Extrainfo": "Отделение лучевой диагностики; Отделение кардиоревматологии и пульмонологии."
+        },
+        {
+          "global_id": 384540,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 16",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 385005,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 14",
+          "Extrainfo": "Запланирован снос объекта"
+        },
+        {
+          "global_id": 385006,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 17",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 385345,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 10",
+          "Extrainfo": "Закрыто на капитальный ремонт (Администрация, аптека, КДЛ)"
+        },
+        {
+          "global_id": 385348,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 8",
+          "Extrainfo": "Отделение анестезиологии-реанимации, ОРИТ для хирургических больных, травматологии."
+        },
+        {
+          "global_id": 385424,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Замоскворечье, 4-й Добрынинский переулок, дом 1/9, строение 15",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 385425,
+          "is_deleted": 0,
+          "AdmArea": "Центральный административный округ",
+          "District": "район Замоскворечье",
+          "PostalCode": "119049",
+          "Address": "город Москва, 4-й Добрынинский переулок, дом 1/9, строение 1А",
+          "Extrainfo": "Лечебно-административный корпус"
+        }
+      ],
+      "ChiefName": "Горев Валерий Викторович",
+      "ChiefPosition": "главный врач",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 354277,
+          "is_deleted": 0,
+          "ChiefPhone": "(499) 236-24-02"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387604,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 959-88-00"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347872,
+          "is_deleted": 0,
+          "Fax": "(499) 236-22-13"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350629,
+          "is_deleted": 0,
+          "Email": "info@mdgkb.mosgorzdrav.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "1044",
+      "PaidServiceInfo": "оказываются",
+      "WorkingHours": [
+        {
+          "global_id": 2506932,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507764,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507765,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509985,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2512112,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515105,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515344,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Многопрофильное детское медицинское учреждение",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449170,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845450010,
+    "Number": 10,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Московский многопрофильный клинический центр «Коммунарка» Департамента здравоохранения города Москвы». Детский стационар",
+      "ShortName": "ГБУЗ «ММКЦ «Коммунарка» ДЗМ. Детский стационар",
+      "OrgInfo": [
+        {
+          "global_id": 338844,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Московский многопрофильный клинический центр «Коммунарка» Департамента здравоохранения города Москвы»",
+          "INN": "7716099554",
+          "KPP": "775101001",
+          "OGRN": "1027739691352",
+          "LegalAddress": "129301, г. Москва, улица Касаткина, дом 7",
+          "ChiefName": "Проценко Денис Николаевич",
+          "ChiefPosition": "директор",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 385045,
+          "is_deleted": 0,
+          "AdmArea": "Новомосковский административный округ",
+          "District": "район Коммунарка",
+          "PostalCode": "108814",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Коммунарка, посёлок Коммунарка, улица Сосенский Стан, дом 8, строение 2",
+          "Extrainfo": ""
+        }
+      ],
+      "ChiefName": "Солодовникова Ольга Николаевна",
+      "ChiefPosition": "руководитель подразделения",
+      "ChiefGender": "женский",
+      "ChiefPhone": [
+        {
+          "global_id": 354104,
+          "is_deleted": 0,
+          "ChiefPhone": "(495) 744-07-03"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387721,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 744-07-03"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347546,
+          "is_deleted": 0,
+          "Fax": "(495) 744-07-03"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 351056,
+          "is_deleted": 0,
+          "Email": "mmcc@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": null,
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "180",
+      "PaidServiceInfo": "",
+      "WorkingHours": [
+        {
+          "global_id": 2507775,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507776,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508527,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508683,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509982,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510278,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515981,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845450010,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "детское",
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449284,
+    "Number": 11,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Научно-практический центр детской психоневрологии Департамента здравоохранения города Москвы». Отделение дневной стационар № 2",
+      "ShortName": "ГБУЗ НПЦ ДП ДЗМ. Отделение дневной стационар № 2.",
+      "OrgInfo": [
+        {
+          "global_id": 339396,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Научно-практический центр детской психоневрологии Департамента здравоохранения города Москвы»",
+          "INN": "7729152967",
+          "KPP": "772901001",
+          "OGRN": "1037739184240",
+          "LegalAddress": "119602, г. Москва, Мичуринский проспект, дом 74",
+          "ChiefName": "Батышева Татьяна Тимофеевна",
+          "ChiefPosition": "директор",
+          "ChiefGender": "женский"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 384001,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Лефортово",
+          "PostalCode": "111116",
+          "Address": "город Москва, Энергетическая улица, дом 8, корпус 2, строение 1",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384286,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Лефортово",
+          "PostalCode": "111116",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Лефортово, Энергетическая улица, дом 8, корпус 2, строение 2",
+          "Extrainfo": ""
+        }
+      ],
+      "ChiefName": "Батышева Татьяна Тимофеевна",
+      "ChiefPosition": "директор",
+      "ChiefGender": "женский",
+      "ChiefPhone": [
+        {
+          "global_id": 353930,
+          "is_deleted": 0,
+          "ChiefPhone": "(495) 362-55-60"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387820,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 362-55-60"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 348117,
+          "is_deleted": 0,
+          "Fax": "(495) 362-55-60"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350104,
+          "is_deleted": 0,
+          "Email": "npcdp@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "отсутствуют",
+      "WorkingHours": [
+        {
+          "global_id": 2508344,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508530,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508767,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510758,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510864,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2511791,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514436,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "Психоневрологическая помощь детям 1-го года жизни",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449284,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": null,
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449334,
+    "Number": 12,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Психиатрическая больница № 14 филиал Психиатрической клинической больницы № 1 имени Н. А. Алексеева Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ПБ № 14 филиал ПКБ № 1 им. Н. А. Алексеева ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 339099,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Психиатрическая клиническая больница № 1 им. Н. А. Алексеева Департамента здравоохранения города Москвы»",
+          "INN": "7726050389",
+          "KPP": "772601001",
+          "OGRN": "1037726005514",
+          "LegalAddress": "117152, г. Москва, Загородное шоссе, дом. 2",
+          "ChiefName": "Костюк Георгий Петрович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 383523,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15, строение 4",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384073,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15, строение 3",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384499,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15, строение 7",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384703,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15, строение 5",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384805,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15, строение 2",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 384991,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15, строение 6",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 385051,
+          "is_deleted": 0,
+          "AdmArea": "Южный административный округ",
+          "District": "район Царицыно",
+          "PostalCode": "115477",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Царицыно, улица Бехтерева, дом 15",
+          "Extrainfo": ""
+        }
+      ],
+      "ChiefName": "Чумаков Дмитрий Вячеславович",
+      "ChiefPosition": "заведующий филиалом",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 354055,
+          "is_deleted": 0,
+          "ChiefPhone": "(495) 325-39-20"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387137,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 325-45-22"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347301,
+          "is_deleted": 0,
+          "Fax": "(495) 325-28-33"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 349921,
+          "is_deleted": 0,
+          "Email": "pb14@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "",
+      "WorkingHours": [
+        {
+          "global_id": 2505910,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507636,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508914,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509034,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510590,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2512823,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515462,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449334,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": null,
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845449330,
+    "Number": 13,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Психиатрическая больница № 17 филиал Психиатрической клинической больницы № 1 имени Н. А. Алексеева Департамента здравоохранения города Москвы»",
+      "ShortName": "ГБУЗ ПБ № 17 филиал ПКБ № 1 им. Н. А. Алексеева ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 338266,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Психиатрическая клиническая больница № 1 им. Н. А. Алексеева Департамента здравоохранения города Москвы»",
+          "INN": "7726050389",
+          "KPP": "772601001",
+          "OGRN": "1037726005514",
+          "LegalAddress": "117152, г. Москва, Загородное шоссе, дом. 2",
+          "ChiefName": "Костюк Георгий Петрович",
+          "ChiefPosition": "главный врач",
+          "ChiefGender": "мужской"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 384858,
+          "is_deleted": 0,
+          "AdmArea": "Троицкий административный округ",
+          "District": "Краснопахорский район",
+          "PostalCode": "108827",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Краснопахорский, посёлок Курилово, Центральная улица, дом 2Б",
+          "Extrainfo": ""
+        }
+      ],
+      "ChiefName": "Чумаков Дмитрий Вячеславович",
+      "ChiefPosition": "заведующий филиалом",
+      "ChiefGender": "мужской",
+      "ChiefPhone": [
+        {
+          "global_id": 354059,
+          "is_deleted": 0,
+          "ChiefPhone": "(495) 865-89-81"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387503,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 865-89-80"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347507,
+          "is_deleted": 0,
+          "Fax": "(495) 865-89-81"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 350122,
+          "is_deleted": 0,
+          "Email": "pkb1@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": "действует",
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "",
+      "WorkingHours": [
+        {
+          "global_id": 2505430,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2509899,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510874,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2512029,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2513262,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2514140,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2516032,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845449330,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": null,
+      "DrugStoreType": null
+    }
+  },
+  {
+    "global_id": 2845448491,
+    "Number": 14,
+    "Cells": {
+      "Category": "Больница детская и специализированная",
+      "FullName": "Государственное бюджетное учреждение здравоохранения «Психиатрическая клиническая больница № 13 Департамента здравоохранения города Москвы",
+      "ShortName": "ГБУЗ ПКБ № 13 ДЗМ",
+      "OrgInfo": [
+        {
+          "global_id": 337835,
+          "is_deleted": 0,
+          "FullName": "Государственное бюджетное учреждение здравоохранения города Москвы «Психиатрическая клиническая больница № 13 Департамента здравоохранения города Москвы»",
+          "INN": "7723040720",
+          "KPP": "772301001",
+          "OGRN": "1027739601449",
+          "LegalAddress": "109559, г. Москва, улица Ставропольская, дом 27",
+          "ChiefName": "Пыжова Виктория Владимировна",
+          "ChiefPosition": "исполняющий обязанности главного врача",
+          "ChiefGender": "женский"
+        }
+      ],
+      "ObjectAddress": [
+        {
+          "global_id": 382998,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 3",
+          "Extrainfo": "Администрация"
+        },
+        {
+          "global_id": 383236,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 4",
+          "Extrainfo": "консультативно-диагностическое отделение"
+        },
+        {
+          "global_id": 383507,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "город Москва, Ставропольская улица, дом 27, строение 2",
+          "Extrainfo": "Администраций, аптека"
+        },
+        {
+          "global_id": 383969,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 5",
+          "Extrainfo": "Физиотерапевтическое отделение"
+        },
+        {
+          "global_id": 384330,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 1",
+          "Extrainfo": "Лечебный корпус"
+        },
+        {
+          "global_id": 384442,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 6",
+          "Extrainfo": "Приемное отделение"
+        },
+        {
+          "global_id": 384697,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 8",
+          "Extrainfo": ""
+        },
+        {
+          "global_id": 385504,
+          "is_deleted": 0,
+          "AdmArea": "Юго-Восточный административный округ",
+          "District": "район Люблино",
+          "PostalCode": "109387",
+          "Address": "Российская Федерация, город Москва, внутригородская территория муниципальный округ Люблино, Ставропольская улица, дом 27, строение 35",
+          "Extrainfo": "Дневной стационар"
+        }
+      ],
+      "ChiefName": "Пыжова Виктория Владимировна",
+      "ChiefPosition": "исполняющий обязанности главного врача",
+      "ChiefGender": "женский",
+      "ChiefPhone": [
+        {
+          "global_id": 355406,
+          "is_deleted": 0,
+          "ChiefPhone": "(495) 350-35-80"
+        }
+      ],
+      "PublicPhone": [
+        {
+          "global_id": 387078,
+          "is_deleted": 0,
+          "PublicPhone": "(495) 358-35-57"
+        }
+      ],
+      "Fax": [
+        {
+          "global_id": 347923,
+          "is_deleted": 0,
+          "Fax": "(495) 350-35-80"
+        }
+      ],
+      "Email": [
+        {
+          "global_id": 349765,
+          "is_deleted": 0,
+          "Email": "pb13@zdrav.mos.ru"
+        }
+      ],
+      "CloseFlag": null,
+      "CloseReason": null,
+      "CloseDate": "",
+      "ReopenDate": "",
+      "BedSpace": "",
+      "PaidServiceInfo": "оказывают",
+      "WorkingHours": [
+        {
+          "global_id": 2507517,
+          "is_deleted": 0,
+          "DayWeek": "среда",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507518,
+          "is_deleted": 0,
+          "DayWeek": "воскресенье",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2507929,
+          "is_deleted": 0,
+          "DayWeek": "понедельник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2508006,
+          "is_deleted": 0,
+          "DayWeek": "четверг",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2510342,
+          "is_deleted": 0,
+          "DayWeek": "вторник",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2511399,
+          "is_deleted": 0,
+          "DayWeek": "пятница",
+          "WorkHours": "круглосуточно"
+        },
+        {
+          "global_id": 2515154,
+          "is_deleted": 0,
+          "DayWeek": "суббота",
+          "WorkHours": "круглосуточно"
+        }
+      ],
+      "ClarificationWorkingHours": "",
+      "Specialization": "",
+      "BeneficialDrugPrescription": "",
+      "DrugStore": null,
+      "global_id": 2845448491,
+      "AmbulanceStation": null,
+      "AmbulanceStationPhone": [],
+      "DoctorsSpecialtiesListForSelfRecording": null,
+      "Extrainfo": "",
+      "AgeRestriction": "взрослое",
+      "DrugStoreType": null
+    }
+  }
+]

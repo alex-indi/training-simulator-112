@@ -70,6 +70,12 @@ def test_new_type_uses_existing_schema_and_hierarchy(session: Session) -> None:
     assert {"BUILDING", "EDUCATION", "SCHOOL", "SHOPPING_CENTER"} <= building_codes
     assert "SCHOOL" in education_codes
     assert "METRO_STATION" not in building_codes
+    healthcare_codes = set(
+        session.scalars(
+            select(ObjectType.code).where(ObjectType.id.in_(descendant_type_ids("HEALTHCARE")))
+        )
+    )
+    assert healthcare_codes == {"HEALTHCARE", "HOSPITAL", "POLYCLINIC", "EMERGENCY_STATION"}
     assert shopping.id is not None
 
 
