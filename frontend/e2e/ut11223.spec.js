@@ -17,9 +17,16 @@ async function json(response) {
 
 async function login(page, username) {
   await page.goto('/')
-  await page.getByLabel('Пользователь').selectOption(username)
-  await page.locator('input[type="password"]').fill('учебный')
-  await page.getByRole('button', { name: 'Войти' }).click()
+  const password = page.locator('input[type="password"]')
+  const currentUser = page.getByRole('combobox', { name: 'Текущий пользователь' })
+  await expect(password.or(currentUser).first()).toBeVisible()
+  if (await password.isVisible()) {
+    await page.getByLabel('Пользователь').selectOption(username)
+    await password.fill('учебный')
+    await page.getByRole('button', { name: 'Войти' }).click()
+  } else {
+    await currentUser.selectOption(username)
+  }
 }
 
 async function join(page, title, workstation) {
