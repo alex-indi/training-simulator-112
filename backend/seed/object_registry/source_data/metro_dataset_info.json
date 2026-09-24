@@ -1,0 +1,223 @@
+{
+  "Id": 624,
+  "IdentificationNumber": "7704786030-metro",
+  "CategoryId": 12,
+  "CategoryCaption": "Дороги и транспорт",
+  "DepartmentId": 1157,
+  "DepartmentCaption": "Департамент транспорта и развития дорожно-транспортной инфраструктуры города Москвы",
+  "Caption": "Входы и выходы вестибюлей станций Московского метрополитена",
+  "Description": "Входы и выходы вестибюлей станций Московского метрополитена",
+  "FullDescription": "<p>Набор данных содержит подробную информацию о входах и выходах станций Московского метрополитена, которая позволяет легко найти вход в метро на карте Москвы. Кроме этого, в наборе данных приведены названия линий московского метро, режим работы станций с указанием времени отправления первых и последних поездов по всем станциям, данные о режиме работы эскалаторов и наличии в вестибюлях станций автоматов по продаже билетов. Также в наборе приведены WGS координаты каждого из выходов.</p>\n<p><strong>Современная ситуация в Москве</strong></p>\n<p>Московский метрополитен - основа транспортной системы столицы. Он надежно связывает центр города с промышленными районами и жилыми массивами.</p>\n<p>Московский метрополитен продолжает реализацию проектов, направленных на повышение безопасности и улучшение комфортности проезда. Ориентированность на пассажиров в настоящее время стала важнейшим принципом качества предоставляемых услуг.</p>\n",
+  "Keywords": "вход, входы, вестибюль, вестибюли, станция, станции, метро, метрополитен, выход, выходы",
+  "ContainsGeodata": true,
+  "VersionNumber": "6.8",
+  "VersionDate": "11.09.2026 15:00:47",
+  "ItemsCount": 1177,
+  "Columns": [
+    {
+      "Name": "system_object_id",
+      "Caption": "system_object_id",
+      "Visible": false,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "signature_date",
+      "Caption": "Дата подписания",
+      "Visible": false,
+      "Type": "DATE",
+      "SubColumns": null
+    },
+    {
+      "Name": "Name",
+      "Caption": "Наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "ExitNumber",
+      "Caption": "Номер входа/выхода",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "OnTerritoryOfMoscow",
+      "Caption": "На территории Москвы",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "AdmArea",
+      "Caption": "Административный округ",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "District",
+      "Caption": "Район",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "Longitude_WGS84",
+      "Caption": "Долгота в WGS-84",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "Latitude_WGS84",
+      "Caption": "Широта в WGS-84",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "VestibuleType",
+      "Caption": "Тип вестибюля",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "NameOfStation",
+      "Caption": "Станция метрополитена",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "Line",
+      "Caption": "Линия",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "CulturalHeritageSiteStatus",
+      "Caption": "Статус объекта культурного наследия",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "ModeOnEvenDays",
+      "Caption": "Режим работы по чётным дням",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "ModeOnOddDays",
+      "Caption": "Режим работы по нечётным дням",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "FullFeaturedBPAAmount",
+      "Caption": "Количество полнофункциональных БПА (все типы билетов)",
+      "Visible": true,
+      "Type": "INTEGER",
+      "SubColumns": null
+    },
+    {
+      "Name": "LittleFunctionalBPAAmount",
+      "Caption": "Количество малофункциональных БПА (билеты на 1 и 2 поездки)",
+      "Visible": true,
+      "Type": "INTEGER",
+      "SubColumns": null
+    },
+    {
+      "Name": "BPAAmount",
+      "Caption": "Общее количество БПА",
+      "Visible": true,
+      "Type": "INTEGER",
+      "SubColumns": null
+    },
+    {
+      "Name": "RepairOfEscalators",
+      "Caption": "Ремонт эскалаторов",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "global_id",
+          "Caption": "global_id",
+          "Visible": true,
+          "Type": "INTEGER",
+          "SubColumns": null
+        },
+        {
+          "Name": "system_object_id",
+          "Caption": "system_object_id",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "global_object_id",
+          "Caption": "global_object_id",
+          "Visible": true,
+          "Type": "INTEGER",
+          "SubColumns": null
+        },
+        {
+          "Name": "RepairOfEscalators",
+          "Caption": "Ремонт эскалаторов",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "ObjectStatus",
+      "Caption": "Статус объекта",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "geoData",
+      "Caption": "Геоданные",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "coordinates",
+          "Caption": "Координаты",
+          "Visible": true,
+          "Type": "ARRAY",
+          "SubColumns": null
+        },
+        {
+          "Name": "type",
+          "Caption": "Тип геоданных",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "geodata_center",
+      "Caption": "Центроид",
+      "Visible": true,
+      "Type": "ARRAY",
+      "SubColumns": null
+    },
+    {
+      "Name": "global_id",
+      "Caption": "global_id",
+      "Visible": true,
+      "Type": "INTEGER",
+      "SubColumns": null
+    }
+  ]
+}
