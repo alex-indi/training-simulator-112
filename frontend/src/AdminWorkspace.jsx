@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 
 import styles from './AdminWorkspace.module.css'
@@ -32,6 +32,11 @@ const endpoints = {
 }
 
 const roleLabels = { ADMIN: 'Администратор', INSTRUCTOR: 'Преподаватель', TRAINEE: 'Диспетчер ДДС' }
+const userGroups = [
+  ['ADMIN', 'Администраторы'],
+  ['INSTRUCTOR', 'Преподаватели'],
+  ['TRAINEE', 'Диспетчеры ДДС'],
+]
 
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value)) : '—'
@@ -43,22 +48,30 @@ function Empty({ children = 'Данных пока нет' }) {
 
 Empty.propTypes = { children: PropTypes.node }
 
-function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
+function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurrentUserUpdated }) {
   const [section, setSection] = useState('overview')
   const [data, setData] = useState(null)
   const [quality, setQuality] = useState([])
   const [usage, setUsage] = useState([])
+  const [traineeGroups, setTraineeGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({})
   const [selectedObject, setSelectedObject] = useState(null)
-  const [userDraft, setUserDraft] = useState({ username: '', full_name: '', role: 'TRAINEE' })
+  const [userDraft, setUserDraft] = useState({ username: '', full_name: '', password: '', role: 'TRAINEE', group_id: null })
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [editUserDraft, setEditUserDraft] = useState(null)
+  const [createTarget, setCreateTarget] = useState(null)
+  const [groupDraft, setGroupDraft] = useState({ name: '', description: '' })
+  const [groupFormOpen, setGroupFormOpen] = useState(false)
   const [typeDraft, setTypeDraft] = useState({ code: '', name: '', description: '', parent_id: '' })
+  const loadRequestId = useRef(0)
   const username = user.username
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestId.current
     setLoading(true)
     setError('')
     setNotice('')
@@ -68,18 +81,29 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
       Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value) })
       const suffix = params.size ? `?${params}` : ''
       const payload = await requestJson(`${endpoints[section]}${suffix}`, username)
+      if (requestId !== loadRequestId.current) return
       setData(payload)
+      if (section === 'users') {
+        const nextGroups = await requestJson('/api/admin/user-groups', username)
+        if (requestId !== loadRequestId.current) return
+        setTraineeGroups(nextGroups)
+      }
       if (section === 'imports') {
-        setQuality(await requestJson('/api/admin/data-quality', username))
+        const nextQuality = await requestJson('/api/admin/data-quality', username)
+        if (requestId !== loadRequestId.current) return
+        setQuality(nextQuality)
       }
       if (section === 'ai') {
-        setUsage(await requestJson('/api/admin/ai/usage', username))
+        const nextUsage = await requestJson('/api/admin/ai/usage', username)
+        if (requestId !== loadRequestId.current) return
+        setUsage(nextUsage)
       }
     } catch (cause) {
+      if (requestId !== loadRequestId.current) return
       setError(cause.message)
       setData(null)
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestId.current) setLoading(false)
     }
   }, [filters, requestJson, search, section, username])
 
@@ -92,8 +116,10 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
       await requestJson(path, username, options)
       await load()
       setNotice(message)
+      return true
     } catch (cause) {
       setError(cause.message)
+      return false
     } finally {
       setLoading(false)
     }
@@ -101,15 +127,79 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
 
   const createUser = async (event) => {
     event.preventDefault()
-    await mutate('/api/admin/users', {
+    const created = await mutate('/api/admin/users', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userDraft),
     }, 'Пользователь создан и действие записано в аудит.')
-    setUserDraft({ username: '', full_name: '', role: 'TRAINEE' })
+    if (created) {
+      setUserDraft({ username: '', full_name: '', password: '', role: 'TRAINEE', group_id: null })
+      setCreateTarget(null)
+    }
   }
 
-  const patchUser = (item, changes) => mutate(`/api/admin/users/${item.id}`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes),
-  }, 'Пользователь обновлён.')
+  const openCreateUser = (role, groupId, target) => {
+    setUserDraft({ username: '', full_name: '', password: '', role, group_id: groupId })
+    setCreateTarget(target)
+  }
+
+  const createGroup = async (event) => {
+    event.preventDefault()
+    const created = await mutate('/api/admin/user-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(groupDraft),
+    }, 'Учебная группа создана.')
+    if (created) {
+      setGroupDraft({ name: '', description: '' })
+      setGroupFormOpen(false)
+    }
+  }
+
+  const patchUser = async (item, changes) => {
+    setLoading(true)
+    setError('')
+    try {
+      const updated = await requestJson(`/api/admin/users/${item.id}`, username, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes),
+      })
+      if (item.id === user.id) {
+        setData((current) => Array.isArray(current)
+          ? current.map((entry) => entry.id === updated.id ? updated : entry)
+          : current)
+        onCurrentUserUpdated(updated)
+      } else {
+        await load()
+      }
+      setNotice('Пользователь обновлён.')
+      return true
+    } catch (cause) {
+      setError(cause.message)
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const beginUserEdit = (item) => {
+    setEditingUserId(item.id)
+    setEditUserDraft({
+      username: item.username,
+      full_name: item.full_name,
+      password: '',
+      role: item.role,
+      group_id: item.group_id,
+    })
+  }
+
+  const saveUser = async (item) => {
+    const changes = { ...editUserDraft }
+    if (!changes.password) delete changes.password
+    if (await patchUser(item, changes)) {
+      setEditingUserId(null)
+      setEditUserDraft(null)
+    }
+  }
 
   const createType = async (event) => {
     event.preventDefault()
@@ -134,6 +224,26 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
   }
 
   const filteredRows = useMemo(() => Array.isArray(data) ? data : [], [data])
+  const groupedUsers = useMemo(
+    () => userGroups.map(([role, label]) => ({
+      role,
+      label,
+      users: filteredRows.filter((item) => item.role === role),
+    })),
+    [filteredRows],
+  )
+  const traineeBuckets = useMemo(() => [
+    ...traineeGroups.map((group) => ({
+      ...group,
+      users: filteredRows.filter((item) => item.role === 'TRAINEE' && item.group_id === group.id),
+    })),
+    {
+      id: null,
+      name: 'Без группы',
+      description: 'Диспетчеры, которым учебная группа ещё не назначена',
+      users: filteredRows.filter((item) => item.role === 'TRAINEE' && item.group_id === null),
+    },
+  ], [filteredRows, traineeGroups])
 
   const updateFilter = (event) => setFilters({ ...filters, [event.target.name]: event.target.value })
 
@@ -161,17 +271,57 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
     </>
   )
 
-  const renderUsers = () => (
-    <>
-      <form className={styles.inlineForm} onSubmit={createUser}>
-        <input required placeholder="Логин" value={userDraft.username} onChange={(event) => setUserDraft({ ...userDraft, username: event.target.value })} />
-        <input required placeholder="ФИО" value={userDraft.full_name} onChange={(event) => setUserDraft({ ...userDraft, full_name: event.target.value })} />
-        <select value={userDraft.role} onChange={(event) => setUserDraft({ ...userDraft, role: event.target.value })}>{Object.keys(roleLabels).map((role) => <option key={role}>{role}</option>)}</select>
-        <button disabled={loading}>Создать пользователя</button>
-      </form>
-      {!filteredRows.length ? <Empty /> : <div className={styles.table}><div className={styles.tableHead}><span>ФИО</span><span>Логин</span><span>Роль</span><span>Статус</span><span>Последний вход</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.full_name}</strong><code>{item.username}</code><select aria-label={`Роль ${item.username}`} value={item.role} onChange={(event) => patchUser(item, { role: event.target.value })}>{Object.entries(roleLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span><span>{formatDateTime(item.last_login_at)}</span><button onClick={() => patchUser(item, { is_active: !item.is_active })}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></div>)}</div>}
-    </>
+  const renderCreateUserForm = (target) => createTarget === target && (
+    <form className={styles.inlineForm} onSubmit={createUser}>
+      <input required placeholder="Логин" value={userDraft.username} onChange={(event) => setUserDraft({ ...userDraft, username: event.target.value })} />
+      <input required placeholder="ФИО" value={userDraft.full_name} onChange={(event) => setUserDraft({ ...userDraft, full_name: event.target.value })} />
+      <input required minLength="8" maxLength="128" type="password" autoComplete="new-password" placeholder="Пароль (минимум 8 символов)" value={userDraft.password} onChange={(event) => setUserDraft({ ...userDraft, password: event.target.value })} />
+      <strong>{roleLabels[userDraft.role]}</strong>
+      <button disabled={loading}>Создать пользователя</button>
+      <button type="button" onClick={() => setCreateTarget(null)}>Отмена</button>
+    </form>
   )
+
+  const renderUserTable = (rows) => !rows.length ? <div className={styles.groupEmpty}>Пользователей в группе нет</div> : <div className={styles.table}>
+    <div className={styles.tableHead}><span>ФИО</span><span>Логин</span><span>Роль / группа</span><span>Статус</span><span>Последний вход / пароль</span><span>Действия</span></div>
+    {rows.map((item) => editingUserId === item.id ? (
+      <div className={styles.tableRow} key={item.id}>
+        <input aria-label={`ФИО ${item.username}`} value={editUserDraft.full_name} onChange={(event) => setEditUserDraft({ ...editUserDraft, full_name: event.target.value })} />
+        <input aria-label={`Логин ${item.username}`} value={editUserDraft.username} onChange={(event) => setEditUserDraft({ ...editUserDraft, username: event.target.value })} />
+        <div className={styles.editSelectors}>
+          <select aria-label={`Роль ${item.username}`} value={editUserDraft.role} onChange={(event) => setEditUserDraft({ ...editUserDraft, role: event.target.value, group_id: event.target.value === 'TRAINEE' ? editUserDraft.group_id : null })}>{Object.entries(roleLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+          {editUserDraft.role === 'TRAINEE' && <select aria-label={`Группа ${item.username}`} value={editUserDraft.group_id ?? ''} onChange={(event) => setEditUserDraft({ ...editUserDraft, group_id: event.target.value ? Number(event.target.value) : null })}><option value="">Без группы</option>{traineeGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>}
+        </div>
+        <span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span>
+        <input aria-label={`Новый пароль ${item.username}`} type="password" minLength="8" maxLength="128" autoComplete="new-password" placeholder="Новый пароль" value={editUserDraft.password} onChange={(event) => setEditUserDraft({ ...editUserDraft, password: event.target.value })} />
+        <div className={styles.rowActions}><button disabled={loading} onClick={() => saveUser(item)}>Сохранить</button><button onClick={() => { setEditingUserId(null); setEditUserDraft(null) }}>Отмена</button></div>
+      </div>
+    ) : (
+      <div className={styles.tableRow} key={item.id}><strong>{item.full_name}</strong><code>{item.username}</code><span>{roleLabels[item.role]}</span><span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span><span>{formatDateTime(item.last_login_at)}</span><div className={styles.rowActions}><button onClick={() => beginUserEdit(item)}>Изменить</button><button onClick={() => patchUser(item, { is_active: !item.is_active })}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></div></div>
+    ))}
+  </div>
+
+  const renderUsers = () => !filteredRows.length ? <Empty /> : <div className={styles.userGroups}>
+    {groupedUsers.filter((group) => group.role !== 'TRAINEE').map((group) => (
+      <section className={styles.userGroup} key={group.role}>
+        <header><h3>{group.label}</h3><span>{group.users.length}</span><button onClick={() => openCreateUser(group.role, null, group.role)}>Добавить</button></header>
+        {renderCreateUserForm(group.role)}
+        {renderUserTable(group.users)}
+      </section>
+    ))}
+    <section className={styles.userGroup}>
+      <header><h3>Диспетчеры ДДС</h3><span>{filteredRows.filter((item) => item.role === 'TRAINEE').length}</span><button onClick={() => setGroupFormOpen((value) => !value)}>Создать группу</button></header>
+      {groupFormOpen && <form className={styles.inlineForm} onSubmit={createGroup}><input required placeholder="Название группы" value={groupDraft.name} onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })} /><input placeholder="Описание" value={groupDraft.description} onChange={(event) => setGroupDraft({ ...groupDraft, description: event.target.value })} /><button disabled={loading}>Создать группу</button><button type="button" onClick={() => setGroupFormOpen(false)}>Отмена</button></form>}
+      <div className={styles.traineeGroups}>{traineeBuckets.map((group) => {
+        const target = `TRAINEE:${group.id ?? 'none'}`
+        return <article className={styles.traineeGroup} key={target}>
+          <header><div><h4>{group.name}</h4><p>{group.description || 'Без описания'}</p></div><span>{group.users.length}</span><button onClick={() => openCreateUser('TRAINEE', group.id, target)}>Добавить диспетчера</button></header>
+          {renderCreateUserForm(target)}
+          {renderUserTable(group.users)}
+        </article>
+      })}</div>
+    </section>
+  </div>
 
   const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span></div>)}</div>
 
@@ -236,7 +386,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout }) {
     <main className={styles.shell}>
       <aside className={styles.sidebar}>
         <header><span>112</span><div><small>Учебный тренажёр</small><strong>Администрирование</strong></div></header>
-        <nav>{sections.map(([key, label]) => <button className={section === key ? styles.active : ''} key={key} onClick={() => { setSection(key); setSearch(''); setFilters({}); setSelectedObject(null) }}>{label}</button>)}</nav>
+        <nav>{sections.map(([key, label]) => <button className={section === key ? styles.active : ''} key={key} onClick={() => { loadRequestId.current += 1; setData(null); setQuality([]); setUsage([]); setSection(key); setSearch(''); setFilters({}); setSelectedObject(null) }}>{label}</button>)}</nav>
         <footer><select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select><small>{roleLabels[user.role]}</small><button type="button" onClick={onLogout}>Выйти</button></footer>
       </aside>
       <section className={styles.workspace}>
@@ -255,6 +405,7 @@ AdminWorkspace.propTypes = {
   selectUser: PropTypes.func.isRequired,
   requestJson: PropTypes.func.isRequired,
   onLogout: PropTypes.func.isRequired,
+  onCurrentUserUpdated: PropTypes.func.isRequired,
 }
 
 export default AdminWorkspace

@@ -368,7 +368,11 @@ function App() {
 
     setLoading(true)
     try {
-      const user = await requestJson('/api/users/me', demoUser.username)
+      const user = await requestJson('/api/users/login', null, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: demoUser.username, password: loginPassword }),
+      })
       window.sessionStorage.setItem('ut112-demo-username', user.username)
       setCurrentUser(user)
       setLoginPassword('')
@@ -390,6 +394,14 @@ function App() {
     setPreviewStatuses({})
     setFilters(emptyFilters)
     setError('')
+  }
+
+  const updateCurrentUser = (updatedUser) => {
+    window.sessionStorage.setItem('ut112-demo-username', updatedUser.username)
+    setUsers((current) => current.map((item) => (
+      item.id === updatedUser.id ? { ...item, ...updatedUser } : item
+    )))
+    setCurrentUser(updatedUser)
   }
 
   const selectUser = async (event) => {
@@ -622,7 +634,7 @@ function App() {
   }
 
   if (currentUser?.role === 'ADMIN') {
-    return <AdminWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} onLogout={logout} />
+    return <AdminWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} onLogout={logout} onCurrentUserUpdated={updateCurrentUser} />
   }
 
   if (!currentUser) {
