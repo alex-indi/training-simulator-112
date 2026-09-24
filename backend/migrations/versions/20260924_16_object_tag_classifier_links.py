@@ -16,6 +16,27 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    if inspector.has_table("object_tag_classifier_features"):
+        columns = {
+            column["name"] for column in inspector.get_columns("object_tag_classifier_features")
+        }
+        references = {
+            key["referred_table"]
+            for key in inspector.get_foreign_keys("object_tag_classifier_features")
+        }
+        indexes = {
+            index["name"] for index in inspector.get_indexes("object_tag_classifier_features")
+        }
+        if (
+            columns != {"tag_code", "feature_id"}
+            or references != {"object_tags_dictionary", "incident_features"}
+            or "ix_object_tag_classifier_features_feature_id" not in indexes
+        ):
+            raise RuntimeError(
+                "Существующая связь тегов и SRC-006 неполна; требуется ручная сверка"
+            )
+        return  # Схема уже создана в локальной истории параллельной задачи.
     op.create_table(
         "object_tag_classifier_features",
         sa.Column(

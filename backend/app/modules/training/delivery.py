@@ -18,6 +18,8 @@ from app.modules.identity.models import User
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentLifecycleState
 from app.modules.incidents.schemas import IncidentSnapshot
 from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.response.realtime import notify_message_created
+from app.modules.scenario_library.runtime import prepare_runtime_events, release_due_events
 from app.modules.training.clock import active_seconds
 from app.modules.training.models import (
     DeliveryOrder,
@@ -37,6 +39,7 @@ from app.modules.training.schemas import (
     QueueItemUpdate,
     QueueItemWrite,
 )
+from app.realtime import publish_session_event
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/api/training/sessions", tags=["scenario queue"])
@@ -138,6 +141,8 @@ async def update_queue_item(
     item = next((entry for entry in session.queue_items if entry.id == queue_item_id), None)
     if item is None:
         raise HTTPException(404, "Позиция не найдена")
+    if item.scenario_instance_id is not None:
+        raise HTTPException(409, "Подготовленный экземпляр неизменяем; создайте новый")
     snapshot = payload.snapshot.model_dump(mode="json")
     item.title = payload.title.strip()
     item.snapshot = snapshot
@@ -241,6 +246,8 @@ async def replace_queue_item(
     item = next((entry for entry in session.queue_items if entry.id == queue_item_id), None)
     if item is None:
         raise HTTPException(404, "Позиция не найдена")
+    if item.scenario_instance_id is not None:
+        raise HTTPException(409, "Подготовленный экземпляр неизменяем; создайте новый")
     current_index = next(
         (index for index, candidate in enumerate(SCENARIOS) if candidate[0] == item.title),
         -1,
@@ -267,6 +274,8 @@ async def generate_queue(
     _editable(session, current_user)
     if not session.runs:
         raise HTTPException(409, "Сначала подключите участников")
+    if any(item.scenario_instance_id is not None for item in session.queue_items):
+        raise HTTPException(409, "Сначала удалите подготовленные экземпляры из очереди")
     session.queue_items.clear()
     await database.flush()
     targets = [
@@ -397,12 +406,15 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         )
         incident.training_run_id = item.training_run_id
         incident.training_group_id = item.training_group_id
+        incident.scenario_instance_id = item.scenario_instance_id
         database.add(incident)
         await database.flush()
+        await prepare_runtime_events(database, incident)
         item.delivery_state = DeliveryState.DELIVERED
         item.delivered_at = now
         item.incident_id = incident.id
         incident_ids.append(incident.id)
+    released_ids, messages = await release_due_events(database, session, now)
     if session.finish_mode == "GRACEFUL":
         states = (
             await database.execute(
@@ -428,6 +440,10 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
             session.state = TrainingSessionState.COMPLETED
             session.completed_at = now
     await database.commit()
+    for incident_id in released_ids:
+        await publish_session_event("incident.updated", session.id, incident_id)
+    for message, trainee_id in messages:
+        await notify_message_created(message, trainee_id, session.id)
     return incident_ids
 
 
