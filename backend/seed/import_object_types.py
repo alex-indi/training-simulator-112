@@ -36,25 +36,24 @@ def load_object_types(path: Path = SEED_PATH) -> list[dict]:
 
 
 async def upsert_object_types(session: AsyncSession, rows: list[dict]) -> None:
-    """Добавляет отсутствующие типы; существующие пользовательские записи не изменяет."""
+    """Обновляет только типы из того же seed-источника, сохраняя чужие записи."""
 
     existing = {row.code: row for row in (await session.scalars(select(ObjectType))).all()}
     for row in rows:
-        if row["code"] in existing:
-            continue
         parent_code = row.get("parent_code")
         if parent_code is not None and parent_code not in existing:
             raise ValueError(f"Неизвестный родитель: {parent_code}")
-        item = ObjectType(
-            code=row["code"],
-            name=row["name"],
-            parent_id=existing[parent_code].id if parent_code else None,
-            description=row.get("description"),
-            source=row["source"],
-        )
-        session.add(item)
+        item = existing.get(row["code"])
+        if item is None:
+            item = ObjectType(code=row["code"], source=row["source"])
+            session.add(item)
+            existing[item.code] = item
+        elif item.source != row["source"]:
+            raise ValueError(f"Код типа занят другим источником: {row['code']}")
+        item.name = row["name"]
+        item.parent_id = existing[parent_code].id if parent_code else None
+        item.description = row.get("description")
         await session.flush()
-        existing[item.code] = item
 
 
 async def import_object_types() -> None:

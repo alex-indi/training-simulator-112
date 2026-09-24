@@ -17,13 +17,28 @@ FRONTEND_DIR = PROJECT_ROOT / "frontend"
 SHUTDOWN_TIMEOUT_SECONDS = 5
 
 
+def dev_setting(name: str, fallback: str) -> str:
+    """Reads launcher settings from process env or the root .env file."""
+    if name in os.environ:
+        return os.environ[name]
+    env_file = PROJECT_ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == name:
+                return value.strip().strip('"\'')
+    return fallback
+
+
 def parse_args() -> argparse.Namespace:
     """Читает параметры локального запуска."""
     parser = argparse.ArgumentParser(
         description="Запустить FastAPI backend и Vite frontend.",
     )
-    parser.add_argument("--backend-port", type=int, default=8000)
-    parser.add_argument("--frontend-port", type=int, default=5173)
+    parser.add_argument("--backend-host", default=dev_setting("BACKEND_HOST", "127.0.0.1"))
+    parser.add_argument("--frontend-host", default=dev_setting("FRONTEND_HOST", "127.0.0.1"))
+    parser.add_argument("--backend-port", type=int, default=int(dev_setting("BACKEND_PORT", "8000")))
+    parser.add_argument("--frontend-port", type=int, default=int(dev_setting("FRONTEND_PORT", "5173")))
     parser.add_argument(
         "--skip-install",
         action="store_true",
@@ -96,7 +111,7 @@ def run_services(args: argparse.Namespace) -> int:
         "app.main:socket_app",
         "--reload",
         "--host",
-        "127.0.0.1",
+        getattr(args, "backend_host", "127.0.0.1"),
         "--port",
         str(args.backend_port),
     ]
@@ -106,13 +121,13 @@ def run_services(args: argparse.Namespace) -> int:
         "dev",
         "--",
         "--host",
-        "127.0.0.1",
+        getattr(args, "frontend_host", "127.0.0.1"),
         "--port",
         str(args.frontend_port),
     ]
 
-    print(f"[dev] Backend:  http://127.0.0.1:{args.backend_port}", flush=True)
-    print(f"[dev] Frontend: http://127.0.0.1:{args.frontend_port}", flush=True)
+    print(f"[dev] Backend bind:  {getattr(args, 'backend_host', '127.0.0.1')}:{args.backend_port}", flush=True)
+    print(f"[dev] Frontend bind: {getattr(args, 'frontend_host', '127.0.0.1')}:{args.frontend_port}", flush=True)
     print("[dev] Для остановки нажмите Ctrl+C.\n", flush=True)
 
     backend = start_process(backend_command, BACKEND_DIR)

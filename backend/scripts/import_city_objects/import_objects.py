@@ -231,21 +231,10 @@ def upsert_objects(
             existing_attributes[key] = item
         item.value = row["value"]
         item.value_type = row["value_type"]
-    desired_attributes = {
-        (object_ids[(row["source"], row["external_id"])], row["attribute_code"])
-        for row in attributes
-    }
-    for key, item in existing_attributes.items():
-        if key[1] in MANAGED_ATTRIBUTES and key not in desired_attributes:
-            session.delete(item)
     existing_tag_rows = list(
         session.scalars(select(ObjectTag).where(ObjectTag.object_id.in_(object_ids.values())))
     )
     existing_tags = {(row.object_id, row.tag) for row in existing_tag_rows}
-    desired_tags = {(object_ids[(row["source"], row["external_id"])], row["tag"]) for row in tags}
-    for item in existing_tag_rows:
-        if item.tag in MANAGED_TAGS and (item.object_id, item.tag) not in desired_tags:
-            session.delete(item)
     for row in tags:
         key = (object_ids[(row["source"], row["external_id"])], row["tag"])
         if key not in existing_tags:

@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 revision: str = "20260923_09"
 down_revision: str | None = "20260923_08"
 branch_labels: str | Sequence[str] | None = None
-depends_on: str | None = None
+depends_on: str | Sequence[str] | None = None
 
 sender_type = postgresql.ENUM(
     "DISPATCHER", "RESPONSE_UNIT", "SYSTEM", name="response_message_sender", create_type=False

@@ -188,8 +188,8 @@ def test_upsert_updates_without_duplicates() -> None:
         session.add(ObjectTag(object_id=first_id, tag="custom"))
         session.flush()
         upsert_objects(session, objects, [], [])
-        assert session.scalars(select(ObjectTag.tag)).all() == ["custom"]
-        assert session.scalar(select(func.count()).select_from(ObjectAttribute)) == 0
+        assert set(session.scalars(select(ObjectTag.tag)).all()) == {"custom", "education"}
+        assert session.scalar(select(func.count()).select_from(ObjectAttribute)) == 1
     engine.dispose()
 
 
