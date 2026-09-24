@@ -13,6 +13,7 @@ from app.db.base import Base
 from app.modules.identity import models as identity_models  # noqa: F401
 from app.modules.incident_classifier import models as classifier_models  # noqa: F401
 from app.modules.incidents import models as incident_models  # noqa: F401
+from app.modules.object_registry import models as object_registry_models  # noqa: F401
 from app.modules.response import models as response_models  # noqa: F401
 from app.modules.training import models as training_models  # noqa: F401
 

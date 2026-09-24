@@ -16,6 +16,7 @@ FastAPI
   ├── identity
   ├── organizations
   ├── training
+  ├── object_registry
   ├── incidents
   ├── response
   ├── assessment
@@ -54,6 +55,14 @@ Frontend:
 - Playwright.
 
 ## Основные модули
+
+### Object Registry Layer
+
+```text
+Open Data Sources → Object Registry → Scenario Generator → Training Incident
+```
+
+`object_registry` хранит типы объектов как дерево записей БД, конкретные объекты с происхождением данных, свободные атрибуты и поисковые теги. Запросы по типу охватывают потомков; запросы по тегам помогают подобрать место для будущего сценария. Реестр не связывает объекты напрямую с происшествиями или службами. Схема и границы описаны в [документе реестра](object-registry.md).
 
 ### incidents
 
