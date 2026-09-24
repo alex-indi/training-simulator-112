@@ -12,12 +12,22 @@ class UserCreate(BaseModel):
     username: str = Field(min_length=2, max_length=50, pattern=r"^[a-zA-Z0-9._-]+$")
     full_name: str = Field(min_length=2, max_length=120)
     role: UserRole
+    password: str = Field(min_length=8, max_length=128)
+    group_id: int | None = None
 
 
 class UserUpdate(BaseModel):
+    username: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9._-]+$",
+    )
     full_name: str | None = Field(default=None, min_length=2, max_length=120)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
     role: UserRole | None = None
     is_active: bool | None = None
+    group_id: int | None = None
 
 
 class AdminUserRead(BaseModel):
@@ -28,7 +38,18 @@ class AdminUserRead(BaseModel):
     is_active: bool
     created_at: datetime
     last_login_at: datetime | None = None
+    group_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserGroupCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    description: str = Field(default="", max_length=1000)
+
+
+class UserGroupRead(UserGroupCreate):
+    id: int
+    member_count: int
 
 
 class ObjectTypeWrite(BaseModel):

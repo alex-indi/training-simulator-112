@@ -17,6 +17,7 @@ from app.modules.admin.models import (
     AIUsageDaily,
     DataQualityIssue,
     ImportRun,
+    UserGroup,
 )
 from app.modules.admin.schemas import (
     AdminUserRead,
@@ -34,9 +35,12 @@ from app.modules.admin.schemas import (
     ScenarioAdminRead,
     ServiceRead,
     UserCreate,
+    UserGroupCreate,
+    UserGroupRead,
     UserUpdate,
 )
 from app.modules.identity.models import User, UserRole
+from app.modules.identity.passwords import hash_password
 from app.modules.incident_classifier.models import (
     DispatchService,
     IncidentClassifierRule,
@@ -80,6 +84,7 @@ def _user_snapshot(user: User) -> dict[str, Any]:
         "full_name": user.full_name,
         "role": user.role.value,
         "is_active": user.is_active,
+        "group_id": user.group_id,
     }
 
 
@@ -105,6 +110,7 @@ async def dashboard(session: Database) -> dict[str, Any]:
     return {
         "users": await count(User),
         "active_users": await count(User, User.is_active.is_(True)),
+        "user_groups": await count(UserGroup),
         "ready_scenarios": await count(
             TrainingSession, TrainingSession.state == TrainingSessionState.READY
         ),
@@ -127,12 +133,77 @@ async def list_users(session: Database) -> list[User]:
     return list((await session.scalars(select(User).order_by(User.id))).all())
 
 
+@router.get("/user-groups", response_model=list[UserGroupRead])
+async def list_user_groups(session: Database) -> list[UserGroupRead]:
+    rows = (
+        await session.execute(
+            select(UserGroup, func.count(User.id))
+            .outerjoin(User, User.group_id == UserGroup.id)
+            .group_by(UserGroup.id)
+            .order_by(UserGroup.name)
+        )
+    ).all()
+    return [
+        UserGroupRead(
+            id=group.id,
+            name=group.name,
+            description=group.description,
+            member_count=int(member_count),
+        )
+        for group, member_count in rows
+    ]
+
+
+@router.post("/user-groups", response_model=UserGroupRead, status_code=status.HTTP_201_CREATED)
+async def create_user_group(
+    payload: UserGroupCreate, session: Database, admin: Admin
+) -> UserGroupRead:
+    name = payload.name.strip()
+    if await session.scalar(select(UserGroup.id).where(func.lower(UserGroup.name) == name.lower())):
+        raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
+    group = UserGroup(name=name, description=payload.description.strip())
+    session.add(group)
+    await session.flush()
+    session.add(
+        _audit(
+            admin,
+            "USER_GROUP_CREATED",
+            "USER_GROUP",
+            group.id,
+            after={"name": group.name, "description": group.description},
+        )
+    )
+    await session.commit()
+    return UserGroupRead(
+        id=group.id,
+        name=group.name,
+        description=group.description,
+        member_count=0,
+    )
+
+
+async def _validate_user_group(
+    session: AsyncSession, role: UserRole, group_id: int | None
+) -> None:
+    if group_id is not None and role != UserRole.TRAINEE:
+        raise HTTPException(status_code=422, detail="Группы доступны только диспетчерам ДДС")
+    if group_id is not None and await session.get(UserGroup, group_id) is None:
+        raise HTTPException(status_code=404, detail="Группа пользователей не найдена")
+
+
 @router.post("/users", response_model=AdminUserRead, status_code=status.HTTP_201_CREATED)
 async def create_user(payload: UserCreate, session: Database, admin: Admin) -> User:
     username = payload.username.strip().lower()
     if await session.scalar(select(User.id).where(User.username == username)):
         raise HTTPException(status_code=409, detail="Пользователь с таким логином уже существует")
-    user = User(username=username, full_name=payload.full_name.strip(), role=payload.role)
+    await _validate_user_group(session, payload.role, payload.group_id)
+    user = User(
+        username=username,
+        full_name=payload.full_name.strip(),
+        role=payload.role,
+        password_hash=hash_password(payload.password),
+        group_id=payload.group_id,
+    )
     session.add(user)
     await session.flush()
     session.add(_audit(admin, "USER_CREATED", "USER", user.id, after=_user_snapshot(user)))
@@ -145,7 +216,18 @@ async def create_user(payload: UserCreate, session: Database, admin: Admin) -> U
 async def update_user(user_id: int, payload: UserUpdate, session: Database, admin: Admin) -> User:
     user: User = await _one_or_404(session, User, user_id)
     before = _user_snapshot(user)
+    next_username = (
+        payload.username.strip().lower() if payload.username is not None else user.username
+    )
+    if next_username != user.username and await session.scalar(
+        select(User.id).where(User.username == next_username, User.id != user.id)
+    ):
+        raise HTTPException(status_code=409, detail="Пользователь с таким логином уже существует")
     next_role = payload.role if payload.role is not None else user.role
+    next_group_id = payload.group_id if "group_id" in payload.model_fields_set else user.group_id
+    if next_role != UserRole.TRAINEE:
+        next_group_id = None
+    await _validate_user_group(session, next_role, next_group_id)
     next_active = payload.is_active if payload.is_active is not None else user.is_active
     removes_active_admin = (
         user.role == UserRole.ADMIN
@@ -165,10 +247,15 @@ async def update_user(user_id: int, payload: UserUpdate, session: Database, admi
             raise HTTPException(
                 status_code=409, detail="Нельзя отключить последнего активного администратора"
             )
+    if payload.username is not None:
+        user.username = next_username
     if payload.full_name is not None:
         user.full_name = payload.full_name.strip()
+    if payload.password is not None:
+        user.password_hash = hash_password(payload.password)
     if payload.role is not None:
         user.role = payload.role
+    user.group_id = next_group_id
     if payload.is_active is not None:
         user.is_active = payload.is_active
     after = _user_snapshot(user)
@@ -177,6 +264,8 @@ async def update_user(user_id: int, payload: UserUpdate, session: Database, admi
         action = "USER_ROLE_CHANGED"
     elif before["is_active"] != after["is_active"]:
         action = "USER_ACTIVATION_CHANGED"
+    elif before["username"] != after["username"] or payload.password is not None:
+        action = "USER_CREDENTIALS_CHANGED"
     session.add(_audit(admin, action, "USER", user.id, before, after))
     await session.commit()
     await session.refresh(user)
@@ -557,7 +646,7 @@ async def system(session: Database) -> dict[str, Any]:
         },
         "version": "0.1.0",
         "git_commit": getenv("APP_GIT_COMMIT", "unknown"),
-        "db_revision": "20260924_16",
+        "db_revision": "20260924_18",
         "environment": getenv("APP_ENVIRONMENT", "development"),
         "server_time": datetime.now(UTC),
     }

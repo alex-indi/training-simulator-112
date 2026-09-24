@@ -8,10 +8,11 @@ from fastapi import HTTPException
 
 from app.main import app
 from app.modules.admin.dependencies import require_admin
-from app.modules.admin.models import AdminAudit
-from app.modules.admin.router import update_user
-from app.modules.admin.schemas import AIConfigRead, UserUpdate
+from app.modules.admin.models import AdminAudit, UserGroup
+from app.modules.admin.router import create_user, create_user_group, update_user
+from app.modules.admin.schemas import AIConfigRead, UserCreate, UserGroupCreate, UserUpdate
 from app.modules.identity.models import User, UserRole
+from app.modules.identity.passwords import verify_password
 from app.modules.object_registry.models import ObjectType
 
 
@@ -83,6 +84,147 @@ def test_admin_can_deactivate_user_and_action_is_audited() -> None:
     assert audit.before["is_active"] is True
     assert audit.after["is_active"] is False
     session.commit.assert_awaited_once()
+
+
+def test_admin_can_change_login_name_and_password_without_auditing_secret() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    trainee = make_user(3, UserRole.TRAINEE)
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = trainee
+    session.scalar.return_value = None
+
+    result = asyncio.run(
+        update_user(
+            user_id=trainee.id,
+            payload=UserUpdate(
+                username="dispatcher-2",
+                full_name="Второй диспетчер",
+                password="new-training-secret",
+            ),
+            session=session,
+            admin=admin,
+        )
+    )
+
+    assert result.username == "dispatcher-2"
+    assert result.full_name == "Второй диспетчер"
+    assert verify_password("new-training-secret", result.password_hash)
+    audit = session.add.call_args.args[0]
+    assert audit.action == "USER_CREDENTIALS_CHANGED"
+    assert "password" not in audit.before
+    assert "password" not in audit.after
+
+
+def test_admin_cannot_reuse_existing_login() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    trainee = make_user(3, UserRole.TRAINEE)
+    session = AsyncMock()
+    session.get.return_value = trainee
+    session.scalar.return_value = 2
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            update_user(
+                user_id=trainee.id,
+                payload=UserUpdate(username="instructor"),
+                session=session,
+                admin=admin,
+            )
+        )
+
+    assert error.value.status_code == 409
+    session.commit.assert_not_awaited()
+
+
+def test_admin_created_user_gets_hashed_password_without_audit_secret() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.scalar.return_value = None
+    payload = UserCreate(
+        username="new-trainee",
+        full_name="Новый диспетчер",
+        role=UserRole.TRAINEE,
+        password="training-secret",
+    )
+
+    user = asyncio.run(create_user(payload=payload, session=session, admin=admin))
+
+    assert user.password_hash != payload.password
+    assert verify_password(payload.password, user.password_hash)
+    audit = session.add.call_args_list[-1].args[0]
+    assert "password" not in audit.after
+
+
+def test_non_trainee_cannot_be_created_inside_trainee_group() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.scalar.return_value = None
+    payload = UserCreate(
+        username="grouped-admin",
+        full_name="Администратор группы",
+        role=UserRole.ADMIN,
+        password="training-secret",
+        group_id=7,
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(create_user(payload=payload, session=session, admin=admin))
+
+    assert error.value.status_code == 422
+    session.add.assert_not_called()
+
+
+def test_changing_trainee_role_removes_group_membership() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    trainee = make_user(3, UserRole.TRAINEE)
+    trainee.group_id = 7
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = trainee
+
+    updated = asyncio.run(
+        update_user(
+            user_id=trainee.id,
+            payload=UserUpdate(role=UserRole.INSTRUCTOR),
+            session=session,
+            admin=admin,
+        )
+    )
+
+    assert updated.role == UserRole.INSTRUCTOR
+    assert updated.group_id is None
+
+
+def test_admin_can_create_named_trainee_group_with_audit() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.scalar.return_value = None
+
+    async def assign_group_id() -> None:
+        group = next(
+            call.args[0]
+            for call in session.add.call_args_list
+            if isinstance(call.args[0], UserGroup)
+        )
+        group.id = 7
+
+    session.flush.side_effect = assign_group_id
+    result = asyncio.run(
+        create_user_group(
+            payload=UserGroupCreate(name="Группа ДДС-24", description="Вечерний поток"),
+            session=session,
+            admin=admin,
+        )
+    )
+
+    assert result.id == 7
+    assert result.name == "Группа ДДС-24"
+    audit = session.add.call_args_list[-1].args[0]
+    assert audit.action == "USER_GROUP_CREATED"
 
 
 def test_ai_contract_never_contains_secret_value() -> None:

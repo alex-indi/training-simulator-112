@@ -90,3 +90,16 @@ class AdminAudit(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+class UserGroup(Base):
+    """Named cohort used to organize trainee accounts in the admin panel."""
+
+    __tablename__ = "user_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
