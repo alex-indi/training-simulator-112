@@ -13,6 +13,7 @@ from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentLifecycleState
 from app.modules.response.models import ResponseAssignment
+from app.modules.training.clock import active_seconds
 from app.modules.training.models import TrainingRun, TrainingSession
 
 router = APIRouter(prefix="/api/training/sessions", tags=["training monitor"])
@@ -29,6 +30,10 @@ async def _session(database: AsyncSession, session_id: int, user: User) -> Train
         select(TrainingSession)
         .where(TrainingSession.id == session_id)
         .options(selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee))
+        .options(
+            selectinload(TrainingSession.pauses),
+            selectinload(TrainingSession.runs).selectinload(TrainingRun.pauses),
+        )
     )
     if item is None or (
         user.role != UserRole.ADMIN
@@ -44,6 +49,7 @@ async def _incidents(database: AsyncSession, session_id: int) -> list[Incident]:
         .where(Incident.training_session_id == session_id)
         .options(
             selectinload(Incident.actions),
+            selectinload(Incident.scenario_events),
             selectinload(Incident.response_assignments).selectinload(
                 ResponseAssignment.response_unit
             ),
@@ -73,7 +79,12 @@ def _is_done(incident: Incident) -> bool:
     }
 
 
-def _incident_read(incident: Incident, now: datetime) -> dict:
+def _incident_read(
+    incident: Incident,
+    now: datetime,
+    session_pauses: list | None = None,
+    run_pauses: list | None = None,
+) -> dict:
     return {
         "id": incident.id,
         "incident_number": incident.incident_number,
@@ -90,7 +101,9 @@ def _incident_read(incident: Incident, now: datetime) -> dict:
         "delivered_at": incident.delivered_at,
         "opened_at": incident.opened_at,
         "finished_at": incident.finished_at,
-        "elapsed_seconds": max(0, int((now - _aware(incident.delivered_at)).total_seconds()))
+        "elapsed_seconds": int(
+            active_seconds(incident.delivered_at, now, session_pauses, run_pauses)
+        )
         if incident.delivered_at
         else 0,
         "actions": [
@@ -102,6 +115,10 @@ def _incident_read(incident: Incident, now: datetime) -> dict:
                 "created_at": action.created_at,
             }
             for action in incident.actions
+        ],
+        "scenario_events": [
+            {"id": event.id, "kind": event.kind, "body": event.body, "created_at": event.created_at}
+            for event in (incident.scenario_events or [])
         ],
         "response_assignments": [
             {
@@ -128,7 +145,9 @@ def _incident_read(incident: Incident, now: datetime) -> dict:
     }
 
 
-def _run_snapshot(run: TrainingRun, incidents: list[Incident], now: datetime) -> dict:
+def _run_snapshot(
+    run: TrainingRun, incidents: list[Incident], now: datetime, session_pauses: list | None = None
+) -> dict:
     owned = [incident for incident in incidents if _owner(incident) == run.id]
     available = [
         incident
@@ -151,7 +170,8 @@ def _run_snapshot(run: TrainingRun, incidents: list[Incident], now: datetime) ->
             _is_new(incident)
             and incident.primary_status_at is None
             and incident.delivered_at
-            and now - _aware(incident.delivered_at) >= PRIMARY_STATUS_LIMIT
+            and active_seconds(incident.delivered_at, now, session_pauses, run.pauses)
+            >= PRIMARY_STATUS_LIMIT.total_seconds()
         ):
             signals.append(
                 {
@@ -260,6 +280,7 @@ def _run_snapshot(run: TrainingRun, incidents: list[Incident], now: datetime) ->
         "group_id": run.group_id,
         "online": online,
         "last_seen_at": run.last_seen_at,
+        "paused_at": run.paused_at,
         "counts": {
             "new": new_count,
             "working": sum(not _is_done(incident) and not _is_new(incident) for incident in owned),
@@ -267,9 +288,11 @@ def _run_snapshot(run: TrainingRun, incidents: list[Incident], now: datetime) ->
             "refusals": refusals,
             "deviations": len([signal for signal in signals if signal["kind"] != "offline"]),
         },
-        "current": _incident_read(current, now) if current else None,
+        "current": _incident_read(current, now, session_pauses, run.pauses) if current else None,
         "active_incidents": [
-            _incident_read(incident, now) for incident in visible if not _is_done(incident)
+            _incident_read(incident, now, session_pauses, run.pauses)
+            for incident in visible
+            if not _is_done(incident)
         ],
         "signals": signals,
         "timeline": timeline[:30],
@@ -287,7 +310,7 @@ async def get_monitor(
     incidents = await _incidents(database, session.id)
     now = datetime.now(UTC)
     runs = [
-        _run_snapshot(run, incidents, now)
+        _run_snapshot(run, incidents, now, session.pauses)
         for run in sorted(session.runs, key=lambda run: (run.workstation_number or 9999, run.id))
     ]
     attention = [
@@ -309,6 +332,12 @@ async def get_monitor(
             "topic": session.topic,
             "state": session.state,
             "started_at": session.started_at,
+            "paused_at": session.paused_at,
+            "paused_seconds": session.paused_seconds or 0,
+            "finish_mode": session.finish_mode,
+            "completed_at": session.completed_at,
+            "delivery_elapsed_seconds": session.delivery_elapsed_seconds or 0,
+            "delivery_checked_at": session.delivery_checked_at,
             "duration_minutes": session.duration_minutes,
         },
         "server_time": now,
@@ -341,16 +370,15 @@ async def get_workstation(
         raise HTTPException(status_code=404, detail="Участие не найдено")
     incidents = await _incidents(database, session.id)
     now = datetime.now(UTC)
-    snapshot = _run_snapshot(run, incidents, now)
+    snapshot = _run_snapshot(run, incidents, now, session.pauses)
     owned = [incident for incident in incidents if _owner(incident) == run.id]
     shared = [
         incident
         for incident in incidents
-        if (
-            incident.training_group_id is not None
-            and incident.training_group_id == run.group_id
-        )
+        if (incident.training_group_id is not None and incident.training_group_id == run.group_id)
     ]
     visible = {incident.id: incident for incident in owned + shared}
-    snapshot["incidents"] = [_incident_read(incident, now) for incident in visible.values()]
+    snapshot["incidents"] = [
+        _incident_read(incident, now, session.pauses, run.pauses) for incident in visible.values()
+    ]
     return snapshot

@@ -3,7 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 from app.modules.identity.models import User, UserRole
-from app.modules.training.delivery import due_items, finalize_order
+from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.training.delivery import due_items, finalize_order, generated_snapshot
 from app.modules.training.models import (
     DeliveryOrder,
     DeliveryState,
@@ -119,3 +120,16 @@ def test_shared_queue_requires_group():
     readiness = _readiness(session)
     assert readiness.can_start is False
     assert "Назначьте общей очереди учебную группу" in readiness.warnings
+
+
+def test_generated_queue_resolves_reported_time_when_delivered_later():
+    prepared = generated_snapshot(
+        10, 1, None, 1, 1, "Учебное сообщение", "Проверка"
+    )
+    later = datetime(2026, 9, 24, 15, tzinfo=UTC)
+    incident = create_delivered_incident(
+        training_session_id=10, source_snapshot=prepared, server_time=later
+    )
+    assert incident.reported_at == later
+    assert incident.source_snapshot["reported_at"] == later.isoformat()
+    assert prepared["reported_at"] != later.isoformat()

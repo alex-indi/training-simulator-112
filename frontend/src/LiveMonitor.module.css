@@ -9,7 +9,21 @@
 .clock strong { display: block; font-size: 27px; font-variant-numeric: tabular-nums; }
 .clock strong span { color: #8db4c8; font-size: 16px; }
 .controls { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; max-width: 340px; }
-.controls button { border: 1px solid #638395; border-radius: 8px; padding: 8px 10px; color: #b5cbd6; background: #193c55; cursor: not-allowed; }
+.controls button { border: 1px solid #638395; border-radius: 8px; padding: 8px 10px; color: white; background: #193c55; cursor: pointer; }
+.controls button:disabled { opacity: .5; cursor: not-allowed; }
+.pauseBanner { padding: 12px 16px; background: #fff0d6; border: 1px solid #d99d32; border-radius: 10px; color: #70470b; font-weight: 700; }
+.runControls { display: flex; gap: 8px; margin-top: 10px; }
+.runControls button { flex: 1; padding: 10px; border: 1px solid #a6bdc9; border-radius: 8px; background: #edf5f9; color: #174762; cursor: pointer; }
+.dialogBackdrop { position: fixed; inset: 0; z-index: 50; background: #0c1d2a88; display: grid; place-items: center; padding: 18px; }
+.dialog { width: min(480px, 100%); max-height: 90vh; overflow: auto; background: white; border-radius: 14px; padding: 22px; box-shadow: 0 14px 50px #081b2d40; }
+.dialog header, .dialog footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.dialog header h3 { margin: 0 0 14px; }
+.dialog header button { border: 0; background: none; font-size: 24px; cursor: pointer; }
+.dialog label { display: block; margin: 12px 0; font-size: 13px; font-weight: 700; }
+.dialog select, .dialog textarea { display: block; width: 100%; margin-top: 5px; border: 1px solid #b8cad3; border-radius: 7px; padding: 9px; font: inherit; }
+.dialog textarea { min-height: 90px; resize: vertical; }
+.dialog fieldset { border: 0; padding: 0; }.dialog fieldset label { font-weight: 400; }
+.dialog footer { justify-content: flex-end; margin-top: 20px; }.dialog footer button { padding: 9px 15px; border: 1px solid #93b1c0; border-radius: 7px; background: #eff5f7; cursor: pointer; }.dialog footer button[type=submit] { background: #176b96; color: white; border-color: #176b96; }
 .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 14px 0 22px; }
 .metrics div { background: white; border: 1px solid #dce5e9; border-radius: 12px; padding: 14px 16px; min-height: 94px; }
 .metrics span, .metrics small { display: block; color: #668091; font-size: 12px; }
