@@ -6,6 +6,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select, text
+from sqlalchemy import update as sql_update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,6 +39,7 @@ from app.modules.admin.schemas import (
     UserCreate,
     UserGroupCreate,
     UserGroupRead,
+    UserGroupUpdate,
     UserUpdate,
 )
 from app.modules.identity.models import User, UserRole
@@ -182,6 +185,50 @@ async def create_user_group(
     )
 
 
+@router.patch("/user-groups/{group_id}", response_model=UserGroupRead)
+async def update_user_group(
+    group_id: int, payload: UserGroupUpdate, session: Database, admin: Admin
+) -> UserGroupRead:
+    group: UserGroup = await _one_or_404(session, UserGroup, group_id)
+    before = {"name": group.name, "description": group.description}
+    if payload.name is not None:
+        name = payload.name.strip()
+        duplicate = await session.scalar(
+            select(UserGroup.id).where(
+                func.lower(UserGroup.name) == name.lower(),
+                UserGroup.id != group.id,
+            )
+        )
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
+        group.name = name
+    if payload.description is not None:
+        group.description = payload.description.strip()
+    after = {"name": group.name, "description": group.description}
+    session.add(_audit(admin, "USER_GROUP_UPDATED", "USER_GROUP", group.id, before, after))
+    await session.commit()
+    member_count_query = select(func.count()).select_from(User).where(User.group_id == group.id)
+    member_count = int((await session.scalar(member_count_query)) or 0)
+    return UserGroupRead(
+        id=group.id,
+        name=group.name,
+        description=group.description,
+        member_count=member_count,
+    )
+
+
+@router.delete("/user-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_group(group_id: int, session: Database, admin: Admin) -> None:
+    group: UserGroup = await _one_or_404(session, UserGroup, group_id)
+    before = {"name": group.name, "description": group.description}
+    await session.execute(
+        sql_update(User).where(User.group_id == group.id).values(group_id=None)
+    )
+    await session.delete(group)
+    session.add(_audit(admin, "USER_GROUP_DELETED", "USER_GROUP", group.id, before=before))
+    await session.commit()
+
+
 async def _validate_user_group(
     session: AsyncSession, role: UserRole, group_id: int | None
 ) -> None:
@@ -270,6 +317,30 @@ async def update_user(user_id: int, payload: UserUpdate, session: Database, admi
     await session.commit()
     await session.refresh(user)
     return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, session: Database, admin: Admin) -> None:
+    user: User = await _one_or_404(session, User, user_id)
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=409,
+            detail="Нельзя удалить текущую учётную запись администратора",
+        )
+    before = _user_snapshot(user)
+    session.add(_audit(admin, "USER_DELETED", "USER", user.id, before=before))
+    await session.delete(user)
+    try:
+        await session.commit()
+    except IntegrityError as cause:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Пользователь связан с учебной историей. "
+                "Деактивируйте его вместо удаления."
+            ),
+        ) from cause
 
 
 @router.get("/classifier", response_model=list[ClassifierRead])

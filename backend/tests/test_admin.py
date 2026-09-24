@@ -9,8 +9,21 @@ from fastapi import HTTPException
 from app.main import app
 from app.modules.admin.dependencies import require_admin
 from app.modules.admin.models import AdminAudit, UserGroup
-from app.modules.admin.router import create_user, create_user_group, update_user
-from app.modules.admin.schemas import AIConfigRead, UserCreate, UserGroupCreate, UserUpdate
+from app.modules.admin.router import (
+    create_user,
+    create_user_group,
+    delete_user,
+    delete_user_group,
+    update_user,
+    update_user_group,
+)
+from app.modules.admin.schemas import (
+    AIConfigRead,
+    UserCreate,
+    UserGroupCreate,
+    UserGroupUpdate,
+    UserUpdate,
+)
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.passwords import verify_password
 from app.modules.object_registry.models import ObjectType
@@ -225,6 +238,75 @@ def test_admin_can_create_named_trainee_group_with_audit() -> None:
     assert result.name == "Группа ДДС-24"
     audit = session.add.call_args_list[-1].args[0]
     assert audit.action == "USER_GROUP_CREATED"
+
+
+def test_admin_can_rename_trainee_group() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    group = UserGroup(id=7, name="Старая группа", description="")
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = group
+    session.scalar.side_effect = [None, 3]
+
+    result = asyncio.run(
+        update_user_group(
+            group_id=group.id,
+            payload=UserGroupUpdate(name="Новая группа", description="Утренний поток"),
+            session=session,
+            admin=admin,
+        )
+    )
+
+    assert result.name == "Новая группа"
+    assert result.description == "Утренний поток"
+    assert result.member_count == 3
+    audit = session.add.call_args.args[0]
+    assert audit.action == "USER_GROUP_UPDATED"
+
+
+def test_deleting_group_keeps_members_and_writes_audit() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    group = UserGroup(id=7, name="Группа ДДС-24", description="Вечерний поток")
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = group
+
+    asyncio.run(delete_user_group(group_id=group.id, session=session, admin=admin))
+
+    session.execute.assert_awaited_once()
+    session.delete.assert_awaited_once_with(group)
+    audit = session.add.call_args.args[0]
+    assert audit.action == "USER_GROUP_DELETED"
+    assert audit.before["name"] == "Группа ДДС-24"
+    session.commit.assert_awaited_once()
+
+
+def test_admin_can_delete_another_user_with_audit() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    trainee = make_user(3, UserRole.TRAINEE)
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = trainee
+
+    asyncio.run(delete_user(user_id=trainee.id, session=session, admin=admin))
+
+    session.delete.assert_awaited_once_with(trainee)
+    audit = session.add.call_args.args[0]
+    assert audit.action == "USER_DELETED"
+    assert audit.before["username"] == trainee.username
+    session.commit.assert_awaited_once()
+
+
+def test_admin_cannot_delete_current_account() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    session = AsyncMock()
+    session.get.return_value = admin
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(delete_user(user_id=admin.id, session=session, admin=admin))
+
+    assert error.value.status_code == 409
+    session.delete.assert_not_awaited()
 
 
 def test_ai_contract_never_contains_secret_value() -> None:
