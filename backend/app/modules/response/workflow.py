@@ -6,6 +6,8 @@ from app.modules.response.models import (
     ResponseAssignment,
     ResponseAssignmentEvent,
     ResponseAssignmentState,
+    ResponseMessage,
+    ResponseMessageSender,
     ResponseUnit,
 )
 
@@ -21,6 +23,46 @@ NEXT_STATES = {
     ResponseAssignmentState.ARRIVED: {ResponseAssignmentState.WORKING},
     ResponseAssignmentState.WORKING: {ResponseAssignmentState.COMPLETED},
 }
+
+STATE_REPORTS = {
+    ResponseAssignmentState.ASSIGNED: "Ожидаем подтверждения задания.",
+    ResponseAssignmentState.ACKNOWLEDGED: "Задание принято, готовимся к выезду.",
+    ResponseAssignmentState.EN_ROUTE: "Следуем к месту происшествия.",
+    ResponseAssignmentState.ARRIVED: "Прибыли на место происшествия.",
+    ResponseAssignmentState.WORKING: "Проводим работы на месте происшествия.",
+    ResponseAssignmentState.COMPLETED: "Работы завершены.",
+    ResponseAssignmentState.CANCELLED: "Назначение отменено.",
+}
+
+
+def create_message(
+    assignment: ResponseAssignment,
+    *,
+    sender_type: ResponseMessageSender,
+    body: str,
+    actor_user_id: int | None = None,
+    event_key: str | None = None,
+    server_time: datetime | None = None,
+) -> ResponseMessage:
+    """Добавляет сообщение, не изменяя состояние группы или статус ДДС."""
+    body = body.strip()
+    if not body:
+        raise ValueError("Сообщение не может быть пустым")
+    if event_key:
+        for message in assignment.messages:
+            if message.event_key == event_key:
+                if message.body != body or message.sender_type != sender_type:
+                    raise ValueError("Ключ события уже использован для другого сообщения")
+                return message
+    message = ResponseMessage(
+        sender_type=sender_type,
+        body=body,
+        actor_user_id=actor_user_id,
+        event_key=event_key,
+        created_at=server_time or datetime.now(UTC),
+    )
+    assignment.messages.append(message)
+    return message
 
 
 def create_assignment(
