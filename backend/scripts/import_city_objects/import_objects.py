@@ -16,10 +16,18 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import create_database_engine, create_session_factory
-from app.modules.object_registry.models import CityObject, ObjectAttribute, ObjectTag, ObjectType
+from app.modules.object_registry.models import (
+    CityObject,
+    ObjectAttribute,
+    ObjectTag,
+    ObjectTagDefinition,
+    ObjectType,
+)
 from scripts.import_city_objects.mappers.education import map_education
 from scripts.import_city_objects.mappers.healthcare import map_healthcare
 from scripts.import_city_objects.mappers.metro import map_metro
+from seed.import_object_tag_classifier_features import load_links, upsert_links
+from seed.import_object_tags import load_object_tags, upsert_object_tags
 from seed.import_object_types import load_object_types, upsert_object_types
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,8 +41,17 @@ HEALTHCARE_DATASETS = {
     "emergency_stations": (516, "EMERGENCY_STATION"),
 }
 MANAGED_TAGS = {
-    "education", "children", "mass_people", "transport", "underground",
-    "medical", "patients", "visitors", "emergency_response", "24_hours", "daytime",
+    "education",
+    "children",
+    "mass_people",
+    "transport",
+    "underground",
+    "medical",
+    "patients",
+    "visitors",
+    "emergency_response",
+    "24_hours",
+    "daytime",
 }
 MANAGED_ATTRIBUTES = {
     "institution_type",
@@ -168,6 +185,10 @@ def upsert_objects(
     missing_types = {row["object_type_code"] for row in objects} - type_ids.keys()
     if missing_types:
         raise ValueError(f"Отсутствуют ObjectType: {', '.join(sorted(missing_types))}")
+    known_tags = set(session.scalars(select(ObjectTagDefinition.code)))
+    missing_tags = {row["tag"] for row in tags} - known_tags
+    if missing_tags:
+        raise ValueError(f"Отсутствуют теги в справочнике: {', '.join(sorted(missing_tags))}")
     keys = {(row["source"], row["external_id"]) for row in objects}
     existing = {
         (item.source, item.external_id): item
@@ -243,7 +264,9 @@ async def load_seed() -> None:
     try:
         async with factory.begin() as session:
             await upsert_object_types(session, load_object_types())
+            await session.run_sync(upsert_object_tags, load_object_tags())
             await session.run_sync(upsert_objects, objects, attributes, tags)
+            await session.run_sync(upsert_links, load_links())
     finally:
         await engine.dispose()
 

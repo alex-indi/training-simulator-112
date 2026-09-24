@@ -19,6 +19,7 @@ from app.modules.incident_classifier.models import (
     IncidentRuleFeature,
     IncidentRuleService,
 )
+from seed.import_object_tag_classifier_features import load_links, upsert_links
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -146,6 +147,7 @@ async def import_seed(data: dict[str, list[dict]]) -> dict[str, int]:
                     session.add(item)
                     existing_services[pair] = item
                 item.source_reference = link["source_reference"]
+            await session.run_sync(upsert_links, load_links())
         return {name: len(rows) for name, rows in data.items()}
     finally:
         await engine.dispose()

@@ -9,12 +9,19 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
-from app.modules.object_registry.models import CityObject, ObjectAttribute, ObjectTag, ObjectType
+from app.modules.object_registry.models import (
+    CityObject,
+    ObjectAttribute,
+    ObjectTag,
+    ObjectTagDefinition,
+    ObjectType,
+)
 from scripts.import_city_objects import mos_api_client
 from scripts.import_city_objects.import_objects import SEED_DIR, build_seed, upsert_objects
 from scripts.import_city_objects.mappers.education import classify, map_education
 from scripts.import_city_objects.mappers.healthcare import map_healthcare
 from scripts.import_city_objects.mappers.metro import map_metro
+from seed.import_object_tags import load_object_tags, upsert_object_tags
 from seed.import_object_types import load_object_types
 
 
@@ -94,7 +101,7 @@ def test_healthcare_maps_each_address_and_preserves_source_ids() -> None:
     assert objects[0]["source_dataset_id"] == "517"
     assert objects[0]["attributes"]["source_row_id"] == "42"
     assert objects[0]["attributes"]["source_address_id"] == "7"
-    assert objects[0]["tags"] == ["medical", "patients", "24_hours"]
+    assert objects[0]["tags"] == ["medical", "patients", "mass_people", "24_hours"]
     assert quality["objects"] == 2
     assert quality["missing_coordinates"] == 2
 
@@ -125,10 +132,12 @@ def test_upsert_updates_without_duplicates() -> None:
             ObjectType.__table__,
             CityObject.__table__,
             ObjectAttribute.__table__,
+            ObjectTagDefinition.__table__,
             ObjectTag.__table__,
         ],
     )
     with Session(engine) as session:
+        upsert_object_tags(session, load_object_tags())
         types = {}
         for row in load_object_types():
             item = ObjectType(
@@ -175,10 +184,46 @@ def test_upsert_updates_without_duplicates() -> None:
         assert session.scalar(select(CityObject.id)) == first_id
         assert session.scalar(select(CityObject.name)) == "Обновлённое название"
         assert session.scalar(select(ObjectAttribute.value)) == "Общеобразовательная школа"
+        session.add(ObjectTagDefinition(code="custom", name="Пользовательский"))
         session.add(ObjectTag(object_id=first_id, tag="custom"))
+        session.flush()
         upsert_objects(session, objects, [], [])
         assert session.scalars(select(ObjectTag.tag)).all() == ["custom"]
         assert session.scalar(select(func.count()).select_from(ObjectAttribute)) == 0
+    engine.dispose()
+
+
+def test_upsert_rejects_unknown_tag() -> None:
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            ObjectType.__table__,
+            CityObject.__table__,
+            ObjectAttribute.__table__,
+            ObjectTagDefinition.__table__,
+            ObjectTag.__table__,
+        ],
+    )
+    with Session(engine) as session:
+        session.add(ObjectType(code="BUILDING", name="Здание", source="test"))
+        session.flush()
+        with pytest.raises(ValueError, match="Отсутствуют теги в справочнике: unknown"):
+            upsert_objects(
+                session,
+                [
+                    {
+                        "source": "test",
+                        "external_id": "1",
+                        "source_dataset_id": "test",
+                        "object_type_code": "BUILDING",
+                    }
+                ],
+                [],
+                [{"source": "test", "external_id": "1", "tag": "unknown"}],
+            )
     engine.dispose()
 
 
