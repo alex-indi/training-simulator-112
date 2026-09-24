@@ -37,7 +37,7 @@ Open Data Sources → Object Registry → Scenario Generator → Training Incide
 
 ## Схема и стартовые данные
 
-Миграция `20260924_10_object_registry` создаёт четыре таблицы, `20260924_11_object_tags_dictionary` добавляет справочник и внешний ключ с сохранением уже записанных тегов, `20260924_12_object_tag_classifier_links` — таблицу связей с SRC-006. После `alembic upgrade head` стартовые типы и определения тегов загружаются вместе с объектами командой `cd backend && uv run python -m scripts.import_city_objects.import_objects load`. Классификатор загружается командой `cd backend && uv run python -m seed.incident_classifier.import_seed`. Порядок двух загрузок может быть любым: подтверждённые связи добавятся, когда оба справочника окажутся в БД. Загрузка повторяема, сохраняет вручную изменённые определения и обновляет существующие объекты по ключу источника.
+Миграция `20260924_14_object_registry` создаёт четыре таблицы, `20260924_15_object_tags_dictionary` добавляет справочник и внешний ключ с сохранением уже записанных тегов, `20260924_16_object_tag_classifier_links` — таблицу связей с SRC-006. После `alembic upgrade head` стартовые типы и определения тегов загружаются вместе с объектами командой `cd backend && uv run python -m scripts.import_city_objects.import_objects load`. Классификатор загружается командой `cd backend && uv run python -m seed.incident_classifier.import_seed`. Порядок двух загрузок может быть любым: подтверждённые связи добавятся, когда оба справочника окажутся в БД. Загрузка повторяема, сохраняет вручную изменённые определения и обновляет существующие объекты по ключу источника.
 
 ## Подготовленные исходные наборы Москвы
 
