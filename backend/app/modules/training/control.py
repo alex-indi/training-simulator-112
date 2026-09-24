@@ -14,7 +14,9 @@ from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User
 from app.modules.incidents.models import Incident
 from app.modules.incidents.workflow import create_delivered_incident
+from app.modules.scenario_library.runtime import prepare_runtime_events
 from app.modules.training.models import (
+    DeliveryState,
     InstructorAction,
     InstructorNote,
     RunPause,
@@ -233,12 +235,17 @@ async def list_scenarios(
 ) -> list[dict]:
     session = await _load_session(database, session_id)
     _ensure_session_owner(session, user)
-    prepared = {
-        item.scenario_id: item.title
+    return [
+        {
+            "id": item.scenario_id,
+            "title": item.title,
+            "scenario_instance_id": item.scenario_instance_id,
+            "training_run_id": item.training_run_id,
+            "training_group_id": item.training_group_id,
+        }
         for item in session.queue_items
         if item.approved and item.scenario_id is not None
-    }
-    return [{"id": item_id, "title": title} for item_id, title in prepared.items()]
+    ]
 
 
 @router.post("/{session_id}/manual-cards", status_code=201)
@@ -261,6 +268,33 @@ async def send_manual_card(
     )
     if prepared is None:
         raise HTTPException(404, "Подготовленный сценарий не найден")
+    if prepared.scenario_instance_id is not None and prepared.incident_id is not None:
+        return {"incident_ids": [prepared.incident_id]}
+    if prepared.scenario_instance_id is not None and prepared.training_group_id is not None:
+        if payload.target != "GROUP" or payload.target_id != prepared.training_group_id:
+            raise HTTPException(422, "Экземпляр подготовлен для указанной общей группы")
+        if not any(
+            run.group_id == prepared.training_group_id and not run.paused_at for run in session.runs
+        ):
+            raise HTTPException(409, "Все АРМ группы приостановлены")
+        now = datetime.now(UTC)
+        incident = create_delivered_incident(
+            training_session_id=session.id, source_snapshot=prepared.snapshot, server_time=now
+        )
+        incident.training_group_id = prepared.training_group_id
+        incident.scenario_instance_id = prepared.scenario_instance_id
+        database.add(incident)
+        await database.flush()
+        await prepare_runtime_events(database, incident)
+        prepared.incident_id = incident.id
+        prepared.delivery_state = DeliveryState.DELIVERED
+        prepared.delivered_at = now
+        database.add(
+            _audit(session.id, user.id, "manual_incident", {"incident_ids": [incident.id]})
+        )
+        await database.commit()
+        await _notify(session.id, "incident.delivered", incident.id)
+        return {"incident_ids": [incident.id]}
     if payload.target == "RUN":
         targets = [run for run in session.runs if run.id == payload.target_id]
     elif payload.target == "GROUP":
@@ -270,6 +304,9 @@ async def send_manual_card(
     if not targets:
         raise HTTPException(422, "Получатели не найдены")
     targets = [run for run in targets if not run.paused_at]
+    if prepared.scenario_instance_id is not None:
+        if len(targets) != 1 or targets[0].id != prepared.training_run_id:
+            raise HTTPException(422, "Экземпляр подготовлен для одного указанного АРМ")
     if not targets:
         raise HTTPException(409, "Все выбранные АРМ приостановлены")
     now = datetime.now(UTC)
@@ -282,8 +319,14 @@ async def send_manual_card(
             training_session_id=session.id, source_snapshot=snapshot, server_time=now
         )
         incident.training_run_id = run.id
+        incident.scenario_instance_id = prepared.scenario_instance_id
         database.add(incident)
         await database.flush()
+        await prepare_runtime_events(database, incident)
+        if prepared.scenario_instance_id is not None:
+            prepared.incident_id = incident.id
+            prepared.delivery_state = DeliveryState.DELIVERED
+            prepared.delivered_at = now
         ids.append(incident.id)
     database.add(
         _audit(
