@@ -21,6 +21,7 @@ from app.modules.identity.router import router as identity_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
+from app.modules.training.control import router as control_router
 from app.modules.training.delivery import router as delivery_router
 from app.modules.training.delivery import scheduler_loop
 from app.modules.training.models import TrainingSession, training_session_trainees
@@ -31,6 +32,8 @@ from app.realtime import publish_session_event
 
 logger = logging.getLogger("uvicorn.error")
 allowed_origins = get_settings().allowed_frontend_origins
+
+
 async def notify_delivery(session_id: int, incident_id: int) -> None:
     await publish_session_event("incident.delivered", session_id, incident_id)
 
@@ -119,6 +122,7 @@ app.add_middleware(
 )
 app.include_router(identity_router)
 app.include_router(training_router)
+app.include_router(control_router)
 app.include_router(monitor_router)
 app.include_router(template_router)
 app.include_router(delivery_router)

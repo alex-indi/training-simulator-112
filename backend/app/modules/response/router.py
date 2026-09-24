@@ -131,6 +131,8 @@ def _ensure_owner_active(assignment: ResponseAssignment, user: User) -> None:
     _ensure_owner(assignment, user)
     if assignment.incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+    if assignment.incident.training_session.paused_at or assignment.training_run.paused_at:
+        raise HTTPException(status_code=409, detail="Работа приостановлена преподавателем")
 
 
 def _ensure_instructor(assignment: ResponseAssignment, user: User) -> None:
@@ -143,6 +145,8 @@ def _ensure_instructor(assignment: ResponseAssignment, user: User) -> None:
         raise HTTPException(status_code=404, detail="Назначение группы не найдено")
     if assignment.incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+    if assignment.incident.training_session.paused_at or assignment.training_run.paused_at:
+        raise HTTPException(status_code=409, detail="Работа приостановлена преподавателем")
 
 
 @router.get("/assignments/{assignment_id}/messages", response_model=list[ResponseMessageRead])
@@ -414,6 +418,8 @@ async def apply_response_scenario_event(
         raise HTTPException(status_code=404, detail="Назначение группы не найдено")
     if session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Учебная сессия не активна")
+    if session.paused_at or assignment.training_run.paused_at:
+        raise HTTPException(status_code=409, detail="Работа приостановлена преподавателем")
     try:
         event = apply_scenario_event(
             assignment,
@@ -435,7 +441,8 @@ async def apply_response_scenario_event(
     )
     await database.commit()
     await publish_session_event(
-        "response.state_changed", assignment.incident.training_session_id,
+        "response.state_changed",
+        assignment.incident.training_session_id,
         assignment.incident_id,
     )
     if existing_message is None:

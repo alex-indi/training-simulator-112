@@ -90,12 +90,13 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         and item.delivery_interval_seconds
         else 0
     )
-    target_count = required_per_run if item.mode == TrainingMode.FLOW else (
-        1 if item.mode == TrainingMode.FIXED_SET else 0
+    target_count = (
+        required_per_run
+        if item.mode == TrainingMode.FLOW
+        else (1 if item.mode == TrainingMode.FIXED_SET else 0)
     )
     targets = {
-        ("group", run.group_id) if run.queue_mode == QueueMode.SHARED_QUEUE
-        else ("run", run.id)
+        ("group", run.group_id) if run.queue_mode == QueueMode.SHARED_QUEUE else ("run", run.id)
         for run in runs
     }
     pool_complete = all(
@@ -107,7 +108,8 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
                 else queue_item.training_run_id == target_id
             )
             for queue_item in item.queue_items
-        ) >= target_count
+        )
+        >= target_count
         for target_type, target_id in targets
     )
     shared_runs = [run for run in runs if run.queue_mode == QueueMode.SHARED_QUEUE]
@@ -171,6 +173,10 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
         state=item.state,
         created_at=item.created_at,
         started_at=item.started_at,
+        paused_at=item.paused_at,
+        paused_seconds=item.paused_seconds or 0,
+        finish_mode=item.finish_mode,
+        completed_at=item.completed_at,
         runs=[
             RunRead(
                 id=run.id,
@@ -183,6 +189,7 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
                 group_id=run.group_id,
                 online=bool(run.last_seen_at and now - run.last_seen_at < ONLINE_WINDOW),
                 last_seen_at=run.last_seen_at,
+                paused_at=run.paused_at,
             )
             for run in sorted(item.runs, key=lambda run: run.workstation_number or 0)
         ],
@@ -304,24 +311,36 @@ async def list_training_sessions(
                     own_run.trainee_id == current_user.id,
                 ),
             )
-            .where(or_(
-                TrainingSession.state.in_((TrainingSessionState.DRAFT, TrainingSessionState.READY)),
-                own_run.id.is_not(None),
-            ))
+            .where(
+                or_(
+                    TrainingSession.state.in_(
+                        (TrainingSessionState.DRAFT, TrainingSessionState.READY)
+                    ),
+                    own_run.id.is_not(None),
+                )
+            )
             .order_by(TrainingSession.id.desc())
         )
         rows = (await database.execute(statement)).all()
         now = datetime.now(UTC)
         return [
             TrainingSessionSummary(
-                id=item.id, title=item.title, state=item.state,
+                id=item.id,
+                title=item.title,
+                state=item.state,
                 workstation_count=item.workstation_count,
+                paused_at=item.paused_at,
                 own_run=OwnRunSummary(
-                    id=run.id, workstation_number=run.workstation_number,
+                    id=run.id,
+                    workstation_number=run.workstation_number,
                     dds_profile=run.dds_profile,
                     online=bool(run.last_seen_at and now - run.last_seen_at < ONLINE_WINDOW),
-                ) if run else None,
-            ) for item, run in rows
+                    paused_at=run.paused_at,
+                )
+                if run
+                else None,
+            )
+            for item, run in rows
         ]
     statement = select(TrainingSession).options(
         selectinload(TrainingSession.trainees),
@@ -535,8 +554,10 @@ async def assign_runs(
         for key in ("dds_profile", "difficulty", "queue_mode", "group_id")
     ):
         raise HTTPException(status_code=422, detail="Укажите назначаемые параметры")
-    if overrides and "group_id" not in payload.model_fields_set and any(
-        run.group_id is not None for run in targets
+    if (
+        overrides
+        and "group_id" not in payload.model_fields_set
+        and any(run.group_id is not None for run in targets)
     ):
         raise HTTPException(status_code=422, detail="Сначала исключите участника из группы")
     for run in targets:
@@ -546,9 +567,7 @@ async def assign_runs(
             run.difficulty = group.difficulty
             run.queue_mode = group.queue_mode
         for key in ("dds_profile", "difficulty", "queue_mode", "group_id"):
-            if key in payload.model_fields_set and (
-                payload.group_id is None or key == "group_id"
-            ):
+            if key in payload.model_fields_set and (payload.group_id is None or key == "group_id"):
                 setattr(run, key, getattr(payload, key))
         if run.group_id is None and run.queue_mode == QueueMode.SHARED_QUEUE:
             run.queue_mode = QueueMode.INDIVIDUAL_QUEUE

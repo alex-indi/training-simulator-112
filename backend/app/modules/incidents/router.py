@@ -26,6 +26,7 @@ from app.modules.incidents.workflow import (
     mark_incident_opened,
     perform_incident_action,
 )
+from app.modules.training.clock import active_seconds
 from app.modules.training.models import (
     QueueMode,
     TrainingRun,
@@ -62,12 +63,18 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
         context_run = member_run
     elif is_shared:
         context_run = next(
-            (run for run in incident.training_session.runs
-             if run.id == incident.claimed_by_training_run_id),
+            (
+                run
+                for run in incident.training_session.runs
+                if run.id == incident.claimed_by_training_run_id
+            ),
             None,
         ) or next(
-            (run for run in incident.training_session.runs
-             if run.group_id == incident.training_group_id),
+            (
+                run
+                for run in incident.training_session.runs
+                if run.group_id == incident.training_group_id
+            ),
             None,
         )
     else:
@@ -75,6 +82,8 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
     can_act = (
         user.role == UserRole.TRAINEE
         and incident.training_session.state == TrainingSessionState.ACTIVE
+        and not incident.training_session.paused_at
+        and not (member_run and member_run.paused_at)
         and (
             incident.claimed_by_training_run_id == member_run.id
             if is_shared and member_run is not None
@@ -106,6 +115,9 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
             and member_run.queue_mode == QueueMode.SHARED_QUEUE
             and incident.claimed_by_training_run_id is None
             and incident.training_session.state == TrainingSessionState.ACTIVE
+            and not incident.training_session.finish_mode
+            and not incident.training_session.paused_at
+            and not member_run.paused_at
         ),
         can_edit=can_act,
         viewer_dds_profile=context_run.dds_profile if context_run else None,
@@ -125,12 +137,21 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
         dds_status=incident.dds_status,
         available_actions=get_available_actions(incident) if can_act and incident.opened_at else [],
         actions=[_to_action_read_model(action) for action in incident.actions],
+        scenario_events=[
+            {"id": event.id, "kind": event.kind, "body": event.body, "created_at": event.created_at}
+            for event in (incident.scenario_events or [])
+        ],
         created_at=incident.created_at,
         delivered_at=incident.delivered_at,
         opened_at=incident.opened_at,
         primary_status_at=incident.primary_status_at,
         primary_response_duration_seconds=(
-            (incident.primary_status_at - incident.delivered_at).total_seconds()
+            active_seconds(
+                incident.delivered_at,
+                incident.primary_status_at,
+                incident.training_session.pauses,
+                context_run.pauses if context_run else [],
+            )
             if incident.primary_status_at is not None and incident.delivered_at is not None
             else None
         ),
@@ -161,6 +182,15 @@ def _ensure_incident_visible(incident: Incident, user: User) -> None:
         )
 
 
+def _ensure_training_running(incident: Incident, user: User) -> None:
+    session = incident.training_session
+    if session.paused_at:
+        raise HTTPException(status_code=409, detail="Занятие приостановлено преподавателем")
+    run = next((item for item in session.runs if item.trainee_id == user.id), None)
+    if run and run.paused_at:
+        raise HTTPException(status_code=409, detail="Ваш АРМ приостановлен преподавателем")
+
+
 async def _load_incident(
     database: AsyncSession,
     incident_id: int,
@@ -172,10 +202,15 @@ async def _load_incident(
         .where(Incident.id == incident_id)
         .options(
             selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
+            selectinload(Incident.training_session).selectinload(TrainingSession.pauses),
             selectinload(Incident.training_session)
             .selectinload(TrainingSession.runs)
             .selectinload(TrainingRun.trainee),
+            selectinload(Incident.training_session)
+            .selectinload(TrainingSession.runs)
+            .selectinload(TrainingRun.pauses),
             selectinload(Incident.actions),
+            selectinload(Incident.scenario_events),
             selectinload(Incident.training_run),
         )
     )
@@ -224,6 +259,8 @@ async def create_incident(
             status_code=status.HTTP_409_CONFLICT,
             detail="Карточку можно доставить только в активную учебную сессию",
         )
+    if training_session.paused_at or training_session.finish_mode:
+        raise HTTPException(status_code=409, detail="Выдача карточек приостановлена")
 
     matching_runs = [
         run
@@ -253,6 +290,10 @@ async def create_incident(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Укажите обучаемого из текущей учебной сессии",
         )
+    if group and all(run.paused_at for run in training_session.runs if run.group_id == group.id):
+        raise HTTPException(status_code=409, detail="Все АРМ группы приостановлены")
+    if not group and any(run.paused_at for run in matching_runs):
+        raise HTTPException(status_code=409, detail="АРМ приостановлен")
 
     incident = create_delivered_incident(
         training_session_id=training_session.id,
@@ -281,10 +322,15 @@ async def list_incidents(
     """Возвращает карточки только из доступных пользователю учебных сессий."""
     statement = select(Incident).options(
         selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
+        selectinload(Incident.training_session).selectinload(TrainingSession.pauses),
         selectinload(Incident.training_session)
         .selectinload(TrainingSession.runs)
         .selectinload(TrainingRun.trainee),
+        selectinload(Incident.training_session)
+        .selectinload(TrainingSession.runs)
+        .selectinload(TrainingRun.pauses),
         selectinload(Incident.actions),
+        selectinload(Incident.scenario_events),
         selectinload(Incident.training_run),
     )
     if current_user.role == UserRole.INSTRUCTOR:
@@ -359,6 +405,9 @@ async def claim_incident(
         raise HTTPException(status_code=409, detail="Карточка не входит в вашу общую очередь")
     if incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Занятие не активно")
+    if incident.training_session.finish_mode:
+        raise HTTPException(status_code=409, detail="Завершение занятия: новые карточки не берутся")
+    _ensure_training_running(incident, current_user)
     claimed_at = datetime.now(UTC)
     result = await database.execute(
         update(Incident)
@@ -400,6 +449,7 @@ async def open_incident(
         raise HTTPException(
             status_code=409, detail="Открыть карточку можно только в активном занятии"
         )
+    _ensure_training_running(incident, current_user)
     if incident.training_group_id is not None and incident.claimed_by_training_run_id != next(
         (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
         None,
@@ -431,6 +481,7 @@ async def change_incident_status(
 
     incident = await _load_incident(database, incident_id, for_update=True)
     _ensure_incident_visible(incident, current_user)
+    _ensure_training_running(incident, current_user)
     if incident.training_group_id is not None and incident.claimed_by_training_run_id != next(
         (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
         None,

@@ -65,6 +65,7 @@ class RunRead(BaseModel):
     group_id: int | None
     online: bool
     last_seen_at: datetime | None
+    paused_at: datetime | None = None
 
 
 class OwnRunSummary(BaseModel):
@@ -72,6 +73,7 @@ class OwnRunSummary(BaseModel):
     workstation_number: int | None
     dds_profile: str | None
     online: bool
+    paused_at: datetime | None = None
 
 
 class TrainingSessionSummary(BaseModel):
@@ -80,6 +82,7 @@ class TrainingSessionSummary(BaseModel):
     state: TrainingSessionState
     workstation_count: int
     own_run: OwnRunSummary | None = None
+    paused_at: datetime | None = None
 
 
 class GroupWrite(BaseModel):
@@ -136,6 +139,10 @@ class TrainingSessionRead(SessionSettings):
     state: TrainingSessionState
     created_at: datetime
     started_at: datetime | None
+    paused_at: datetime | None = None
+    paused_seconds: float = 0
+    finish_mode: str | None = None
+    completed_at: datetime | None = None
     runs: list[RunRead] = Field(default_factory=list)
     groups: list[GroupRead] = Field(default_factory=list)
     readiness: ReadinessRead | None = None
