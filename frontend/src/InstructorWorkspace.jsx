@@ -29,6 +29,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   const [editingGroupId, setEditingGroupId] = useState(null)
   const [templateName, setTemplateName] = useState('')
   const [queue, setQueue] = useState([])
+  const [scenarioInstances, setScenarioInstances] = useState([])
   const [scenarioDraft, setScenarioDraft] = useState(emptyScenario)
   const [editingScenarioId, setEditingScenarioId] = useState(null)
   const [generateCount, setGenerateCount] = useState(3)
@@ -50,7 +51,12 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     if (sessionId) {
       const fresh = items.find((item) => item.id === sessionId)
       if (fresh) setSession(fresh)
-      setQueue(await api(`/api/training/sessions/${sessionId}/queue`))
+      const [items, instances] = await Promise.all([
+        api(`/api/training/sessions/${sessionId}/queue`),
+        api(`/api/training/sessions/${sessionId}/scenario-instances`),
+      ])
+      setQueue(items)
+      setScenarioInstances(instances)
     }
   }, [api])
 
@@ -112,7 +118,9 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     setSelected([])
     setGenerateCount(item.mode === 'FLOW' ? Math.min(100, Math.ceil(item.duration_minutes * 60 / item.delivery_interval_seconds) + 2) : 3)
     setQueue([])
+    setScenarioInstances([])
     api(`/api/training/sessions/${item.id}/queue`).then(setQueue).catch((cause) => setError(cause.message))
+    api(`/api/training/sessions/${item.id}/scenario-instances`).then(setScenarioInstances).catch((cause) => setError(cause.message))
     setStep(0)
   }
 
@@ -235,7 +243,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     reload()
   }
 
-  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} onBack={() => setLibraryOpen(false)} />
+  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} onBack={() => { setLibraryOpen(false); if (session?.id) reload(session.id).catch((cause) => setError(cause.message)) }} />
 
   if (session?.state === 'ACTIVE') return <main className={styles.shell}>
     <header className={styles.header}>
@@ -288,6 +296,11 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
       </div><h4>Учебные группы</h4><div className={styles.cards}>{session.groups.map((group) => <div key={group.id} className={styles.card}><strong>{group.name}</strong><span>{group.dds_profile || 'Профиль не задан'} · {group.difficulty || 'Без сложности'}</span><small>{group.queue_mode === 'SHARED_QUEUE' ? 'Общая очередь' : 'Индивидуальная очередь'} · {group.run_ids.length} участников</small>{editable && <><button type="button" onClick={() => { setEditingGroupId(group.id); setGroupDraft({ name: group.name, dds_profile: group.dds_profile || '', difficulty: group.difficulty || 'Средняя', queue_mode: group.queue_mode }) }}>Изменить группу</button><button type="button" onClick={() => changeGroup(group, 'DELETE')}>Удалить группу</button></>}</div>)}</div>{editable && <div className={styles.groupForm}><input aria-label="Название группы" placeholder="Новая группа" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} /><input aria-label="Профиль ДДС группы" placeholder="Профиль ДДС" value={groupDraft.dds_profile} onChange={(event) => setGroupDraft((current) => ({ ...current, dds_profile: event.target.value }))} /><select aria-label="Сложность группы" value={groupDraft.difficulty} onChange={(event) => setGroupDraft((current) => ({ ...current, difficulty: event.target.value }))}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select><select aria-label="Тип очереди группы" value={groupDraft.queue_mode} onChange={(event) => setGroupDraft((current) => ({ ...current, queue_mode: event.target.value }))}><option value="INDIVIDUAL_QUEUE">Индивидуальная</option><option value="SHARED_QUEUE">Общая</option></select><button type="button" disabled={!groupDraft.name.trim() || busy} onClick={saveGroup}>{editingGroupId ? 'Сохранить группу' : 'Создать группу'}</button>{editingGroupId && <button type="button" onClick={() => { setEditingGroupId(null); setGroupDraft(emptyGroup) }}>Отмена</button>}</div>}<div className={styles.actions}><button type="button" onClick={() => setStep(3)}>К заданиям →</button></div></section>}
       {step === 3 && <section className={styles.section}>
         <h3>Подготовленные задания</h3>
+        <h4>Экземпляры из библиотеки</h4>
+        <p>Экземпляры сохраняют план сценария для занятия. Карточки очереди пока готовятся отдельно.</p>
+        <div className={styles.cards}>{scenarioInstances.map((item) => <article className={styles.card} key={item.id}><strong>{item.name}</strong><span>{item.object_snapshot.name} · {item.object_snapshot.address}</span><small>Экземпляр #{item.id} · сложность {item.difficulty}/5 · {item.events.length} событий</small></article>)}</div>
+        {!scenarioInstances.length && <p>Экземпляры библиотеки пока не привязаны к занятию.</p>}
+        {editable && <button type="button" onClick={() => setLibraryOpen(true)}>Открыть библиотеку сценариев</button>}
         <p>Карточки подготовлены до старта. Для FLOW требуется примерно {session.mode === 'FLOW' ? Math.ceil(session.duration_minutes * 60 / session.delivery_interval_seconds) : '—'} позиций на АРМ. Случайный порядок фиксируется при запуске.</p>
         {editable && <div className={styles.actions}>
           <label>На каждое АРМ или группу <input type="number" min="1" max="100" value={generateCount} onChange={(event) => setGenerateCount(event.target.value)} /></label>

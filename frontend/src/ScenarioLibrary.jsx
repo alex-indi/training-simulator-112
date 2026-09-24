@@ -28,6 +28,12 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [generation, setGeneration] = useState(null)
+  const [generationInput, setGenerationInput] = useState({ object_id: null, object_query: '', difficulty: 3, seed: 0, variant_mode: 'MANUAL', training_session_id: null })
+  const [generationPreview, setGenerationPreview] = useState(null)
+  const [generationCandidates, setGenerationCandidates] = useState([])
+  const [generatedInstance, setGeneratedInstance] = useState(null)
+  const [sessions, setSessions] = useState([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -87,6 +93,25 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
     const saved = await api(`/api/scenario-templates/${selected.id}/archive`, { method: 'POST' })
     setSelected(saved); setNotice('Сценарий архивирован'); await load()
   })
+  const startGeneration = (item) => perform(async () => {
+    const seed = Math.floor(Math.random() * 2147483647)
+    const input = { object_id: item.object_rule?.specific_object_id || null, object_query: '', difficulty: item.difficulty, seed, variant_mode: 'MANUAL', training_session_id: null }
+    const [preview, availableSessions] = await Promise.all([
+      api(`/api/scenario-templates/${item.id}/generate-preview`, asOptions('POST', input)),
+      api('/api/training/sessions'),
+    ])
+    setGeneration(item); setGenerationInput(input); setGenerationPreview(preview); setGenerationCandidates(preview.matching_objects)
+    setSessions(availableSessions.filter((session) => ['DRAFT', 'READY'].includes(session.state)))
+    setGeneratedInstance(null)
+  })
+  const refreshGenerationPreview = () => perform(async () => {
+    const preview = await api(`/api/scenario-templates/${generation.id}/generate-preview`, asOptions('POST', generationInput))
+    setGenerationPreview(preview); setGenerationCandidates(preview.matching_objects)
+  })
+  const createInstance = () => perform(async () => {
+    const created = await api(`/api/scenario-templates/${generation.id}/instances`, asOptions('POST', generationInput))
+    setGeneratedInstance(created); setGenerationPreview(null); setNotice(`Экземпляр #${created.id} создан`)
+  })
   const updateList = (field, index, patch) => change(field, draft[field].map((item, position) => position === index ? { ...item, ...patch } : item))
   const removeList = (field, index) => change(field, draft[field].filter((_, position) => position !== index))
   const addList = (field, item) => change(field, [...draft[field], item])
@@ -100,7 +125,23 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
     <header className={styles.header}><div><small>Кабинет преподавателя / методические материалы</small><h1>Библиотека сценариев</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
-    {!selected && <div className={styles.content}>
+    {generation && <div className={styles.content}>
+      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { setGeneration(null); setGenerationPreview(null); setGeneratedInstance(null) }}>← Библиотека</button><h2>Экземпляр: {generation.name}</h2></div></div>
+      {!generatedInstance && <section className={styles.panel}>
+        <h3>Параметры генерации</h3>
+        <div className={styles.fields}>
+          <label>Сложность<select value={generationInput.difficulty} onChange={(event) => { setGenerationInput((old) => ({ ...old, difficulty: Number(event.target.value) })); setGenerationPreview(null) }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}/5</option>)}</select></label>
+          {generation.object_rule?.selection_mode === 'GENERIC' && <><label>Выбор объекта<select value={generationInput.variant_mode} onChange={(event) => { setGenerationInput((old) => ({ ...old, variant_mode: event.target.value, object_id: null })); setGenerationPreview(null) }}><option value="MANUAL">Вручную</option><option value="RANDOM">Случайный по seed</option></select></label>{generationInput.variant_mode === 'MANUAL' && <><label>Поиск объекта<input value={generationInput.object_query} onChange={(event) => { setGenerationInput((old) => ({ ...old, object_query: event.target.value, object_id: null })); setGenerationPreview(null) }} placeholder="Название, адрес или район" /></label><label>Подходящий объект<select value={generationInput.object_id || ''} onChange={(event) => { setGenerationInput((old) => ({ ...old, object_id: Number(event.target.value) || null })); setGenerationPreview(null) }}><option value="">Выберите объект</option>{generationCandidates.map((object) => <option key={object.id} value={object.id}>{object.name} · {object.address}</option>)}</select></label></>}</>}
+          <label>Seed<input type="number" min="0" max="2147483647" value={generationInput.seed} onChange={(event) => { setGenerationInput((old) => ({ ...old, seed: Number(event.target.value) })); setGenerationPreview(null) }} /></label>
+          <label>Занятие<select value={generationInput.training_session_id || ''} onChange={(event) => { setGenerationInput((old) => ({ ...old, training_session_id: Number(event.target.value) || null })); setGenerationPreview(null) }}><option value="">Привязать позже</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title} · #{session.id}</option>)}</select></label>
+        </div>
+        {!generationPreview && <button type="button" disabled={busy} onClick={refreshGenerationPreview}>Показать предпросмотр</button>}
+        {generationPreview && <div className={styles.preview}><div><h4>Объект</h4><p>{generationPreview.object_snapshot?.name || 'Выберите объект'}</p><p>{generationPreview.object_snapshot?.address}</p><p>Подходящих объектов: {generationPreview.matching_object_count}</p></div><div><h4>Классификация и службы</h4><p>{generationPreview.classifier_snapshot.final_incident_type}</p><ul>{generationPreview.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul><h4>Timeline</h4><ol>{generationPreview.events.map((event, index) => <li key={index}>T+{formatOffset(event.offset_seconds)} · {event.title} — {event.description}</li>)}</ol></div></div>}
+        {generationPreview?.object_snapshot && <button type="button" disabled={busy} onClick={createInstance}>Сгенерировать экземпляр</button>}
+      </section>}
+      {generatedInstance && <section className={styles.panel}><h3>Экземпляр #{generatedInstance.id}</h3><p>{generatedInstance.name} · сложность {generatedInstance.difficulty}/5</p><p>Объект: {generatedInstance.object_snapshot.name} · {generatedInstance.object_snapshot.address}</p><p>Классификация: {generatedInstance.classifier_snapshot.final_incident_type}</p><p>Занятие: {generatedInstance.training_session_id ? `#${generatedInstance.training_session_id}` : 'не привязано'}</p><h4>Службы</h4><ul>{generatedInstance.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul><h4>Timeline</h4><ol>{generatedInstance.events.map((event, index) => <li key={index}>T+{formatOffset(event.offset_seconds)} · {event.title} — {event.description}</li>)}</ol>{!generatedInstance.training_session_id && <label>Использовать в занятии<select value={generationInput.training_session_id || ''} onChange={(event) => setGenerationInput((old) => ({ ...old, training_session_id: Number(event.target.value) || null }))}><option value="">Выберите занятие</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title} · #{session.id}</option>)}</select></label>}{!generatedInstance.training_session_id && <button type="button" disabled={busy || !generationInput.training_session_id} onClick={() => perform(async () => { const attached = await api(`/api/scenario-instances/${generatedInstance.id}/attach`, asOptions('POST', { training_session_id: generationInput.training_session_id })); setGeneratedInstance(attached); setNotice('Экземпляр привязан к занятию') })}>Привязать к занятию</button>}</section>}
+    </div>}
+    {!selected && !generation && <div className={styles.content}>
       <div className={styles.topline}><div><h2>Сценарии</h2><p>Подготовленные методические шаблоны. В библиотеке по умолчанию показаны проверенные READY-сценарии.</p></div><button type="button" onClick={() => { setSelected({ status: 'DRAFT' }); setDraft(blank()); setStep(0); setValidation(null); setDirty(false) }}>+ Создать сценарий</button></div>
       <div className={styles.filters}>
         <label>Поиск<input value={filters.q} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Название" /></label>
@@ -122,8 +163,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
       </button>)}</div> : <p>По выбранным фильтрам сценариев нет.</p>}
       <div className={styles.actions}><button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 24))}>Назад</button><span>{total ? offset + 1 : 0}–{Math.min(total, offset + 24)} из {total}</span><button type="button" disabled={offset + 24 >= total} onClick={() => setOffset(offset + 24)}>Далее</button></div>
     </div>}
-    {selected && <div className={styles.content}>
-      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { setSelected(null); setValidation(null) }}>← Библиотека</button><h2>{selected.id ? draft.name || 'Без названия' : 'Новый сценарий'}</h2><p>{selected.status} · {selected.id ? `№ ${selected.id}` : 'Не сохранён'}</p></div><div className={styles.actions}>{editable && <button type="button" disabled={busy} onClick={save}>Сохранить черновик</button>}{selected.id && <button type="button" disabled={busy} onClick={duplicate}>Создать копию</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={archive}>Архивировать</button>}</div></div>
+    {selected && !generation && <div className={styles.content}>
+      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { setSelected(null); setValidation(null) }}>← Библиотека</button><h2>{selected.id ? draft.name || 'Без названия' : 'Новый сценарий'}</h2><p>{selected.status} · {selected.id ? `№ ${selected.id}` : 'Не сохранён'}</p></div><div className={styles.actions}>{editable && <button type="button" disabled={busy} onClick={save}>Сохранить черновик</button>}{selected.id && <button type="button" disabled={busy} onClick={duplicate}>Создать копию</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => startGeneration(selected)}>Сгенерировать экземпляр</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={archive}>Архивировать</button>}</div></div>
       <nav className={styles.steps} aria-label="Редактор сценария">{steps.map((label, index) => <button type="button" key={label} onClick={() => setStep(index)} className={step === index ? styles.current : ''}><b>{index + 1}</b>{label}</button>)}</nav>
       <section className={styles.panel}>
         <h3>{steps[step]}</h3>
