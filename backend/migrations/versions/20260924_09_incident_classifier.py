@@ -1,7 +1,7 @@
 """SRC-006 classifier and customer service catalog.
 
 Revision ID: 20260924_09
-Revises: 20260923_08
+Revises: 20260923_09
 """
 
 from collections.abc import Sequence
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260924_09"
-down_revision: str | None = "20260923_08"
+down_revision: str | None = "20260923_09"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
