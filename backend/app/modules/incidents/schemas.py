@@ -79,11 +79,12 @@ class IncidentActionCreate(BaseModel):
     """Команда обучаемого на изменение статуса реагирования ДДС."""
 
     action: IncidentActionType
+    order_number: str | None = Field(default=None, max_length=80)
     comment: str | None = Field(default=None, max_length=2000)
 
-    @field_validator("comment")
+    @field_validator("order_number", "comment")
     @classmethod
-    def normalize_comment(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
         return value.strip() or None
@@ -100,6 +101,7 @@ class IncidentActionRead(BaseModel):
     action: IncidentActionType | None
     from_status: DDSResponseStatus | None
     to_status: DDSResponseStatus | None
+    order_number: str | None
     comment: str | None
     created_at: datetime
 
