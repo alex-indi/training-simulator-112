@@ -157,6 +157,7 @@ def perform_incident_action(
     action: IncidentActionType,
     actor_user_id: int,
     actor_display_name: str,
+    order_number: str | None = None,
     comment: str | None = None,
     server_time: datetime | None = None,
 ) -> IncidentAction:
@@ -168,6 +169,7 @@ def perform_incident_action(
         )
 
     normalized_comment = comment.strip() if comment else None
+    normalized_order_number = order_number.strip() if order_number else None
     if action in COMMENT_REQUIRED_ACTIONS and not normalized_comment:
         raise IncidentActionCommentRequiredError(
             "Для выбранного действия требуется комментарий"
@@ -184,6 +186,7 @@ def perform_incident_action(
         action=action,
         from_status=from_status,
         to_status=to_status,
+        order_number=normalized_order_number,
         comment=normalized_comment,
         created_at=created_at,
     )

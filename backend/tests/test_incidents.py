@@ -186,6 +186,7 @@ def test_primary_decision_requires_comment_and_preserves_rejection_history() -> 
         action=IncidentActionType.REJECT,
         actor_user_id=3,
         actor_display_name="Диспетчер ДДС",
+        order_number=" КП №42 ",
         comment=" Дубль, реагирование по КП №42 ",
         server_time=rejected_at,
     )
@@ -209,6 +210,7 @@ def test_primary_decision_requires_comment_and_preserves_rejection_history() -> 
         IncidentActionType.ACCEPT,
     ]
     assert manual_actions[0].comment == "Дубль, реагирование по КП №42"
+    assert manual_actions[0].order_number == "КП №42"
     assert incident.primary_status_at == rejected_at
 
 
@@ -550,6 +552,7 @@ def test_assigned_trainee_changes_status_through_api(monkeypatch) -> None:
             incident_id=incident.id,
             payload=IncidentActionCreate(
                 action=IncidentActionType.REJECT,
+                order_number=" 23 ",
                 comment="Объект вне зоны ответственности",
             ),
             current_user=trainee,
@@ -564,6 +567,7 @@ def test_assigned_trainee_changes_status_through_api(monkeypatch) -> None:
     assert response.actions[-1].actor_user_id == trainee.id
     assert response.actions[-1].actor_display_name == trainee.full_name
     assert response.actions[-1].comment == "Объект вне зоны ответственности"
+    assert response.actions[-1].order_number == "23"
     database.commit.assert_awaited_once()
     publish.assert_awaited_once_with("incident.updated", 12, 7)
 

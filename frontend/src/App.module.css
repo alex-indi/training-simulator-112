@@ -976,11 +976,11 @@
 }
 
 .incidentInfoStrip {
-  min-height: 38px;
+  min-height: 52px;
   display: grid;
-  grid-template-columns: 45% 55%;
-  gap: 5px;
-  padding: 0 5px 5px;
+  grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+  gap: 8px;
+  padding: 0 8px 8px;
   background: #c8ced1;
 }
 
@@ -990,45 +990,123 @@
   gap: 12px;
   padding: 0 8px;
   background: #f1f2f2;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .incidentInfoStrip > div > span {
   color: #647076;
 }
 
-.incidentIndicators {
-  gap: 8px !important;
+.incidentInfoStrip > .incidentIndicators {
+  display: grid;
+  grid-template-columns: minmax(max-content, 42%) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+}
+
+.indicatorSummary,
+.indicatorActions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  background: #f7fafc;
+}
+
+.indicatorSummary {
+  gap: 12px;
+  padding: 0 8px;
+  color: #253036;
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.indicatorActions {
+  gap: 12px;
+  padding: 0 14px;
 }
 
 .incidentIndicators button {
-  height: 25px;
-  padding: 0 8px;
+  height: 30px;
+  min-width: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 7px;
   border: 1px solid #aeb7bb;
-  background: #eef0f0;
+  background: #f7fafc;
   color: #253036;
+  font-size: inherit;
   font-weight: 700;
 }
 
 .incidentIndicators .emergencyButton {
-  background: #e35f3e;
+  border-color: #ec653b;
+  background: #ec653b;
   color: #fff;
 }
 
 .incidentIndicators .pencilButton {
-  width: 27px;
+  width: 30px;
+  min-width: 30px;
   padding: 0;
   border-radius: 50%;
-  font-size: 16px;
+  background: #f7fafc;
+}
+
+.editPencilIcon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  background: url('./assets/edit-pencil.svg') center / contain no-repeat;
+}
+
+.chsBoltIcon {
+  width: 10px;
+  height: 17px;
+  display: inline-block;
+  background: currentColor;
+  mask: url('./assets/electricity.svg') center / contain no-repeat;
+  transform: rotate(16deg);
+}
+
+.warningIcon {
+  position: relative;
+  width: 19px;
+  height: 18px;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.warningIcon::before {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  content: '';
+}
+
+.warningIcon::after {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 100%;
+  color: #ec653b;
+  content: '!';
+  font-size: 12px;
+  line-height: 1;
+  text-align: center;
 }
 
 .incidentBody {
   min-height: 430px;
   display: grid;
-  grid-template-columns: 45% 55%;
-  gap: 5px;
+  grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+  gap: 8px;
   flex: 1;
-  padding: 0 5px 5px;
+  padding: 0 8px 8px;
   background: #c8ced1;
 }
 
@@ -1096,12 +1174,68 @@
   font-weight: 700;
 }
 
+.classificationTitle a {
+  display: inline-block;
+  padding-bottom: 3px;
+  color: inherit;
+  text-decoration: none;
+  background: linear-gradient(to right, currentColor 6px, transparent 6px) left bottom / 9px 1px repeat-x;
+}
+
+.classificationTitle a:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .classificationLine {
   min-height: 32px;
   margin-top: 5px;
   padding: 8px;
   background: #f1f2f2;
   font-size: 10px;
+}
+
+.classifierDetails {
+  display: none;
+  margin-top: 5px;
+  padding: 10px;
+  background: #f1f2f2;
+  font-size: 11px;
+}
+
+.classifierDetails:target {
+  display: block;
+}
+
+.classifierDetailsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.classifierDetailsHeader a {
+  color: #17688a;
+}
+
+.classifierDetails dl {
+  margin: 8px 0 0;
+}
+
+.classifierDetails dl > div {
+  display: grid;
+  grid-template-columns: 125px minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid #c8ced1;
+}
+
+.classifierDetails dt {
+  color: #657279;
+}
+
+.classifierDetails dd {
+  margin: 0;
 }
 
 .serviceArea {
@@ -1146,6 +1280,80 @@
   cursor: pointer;
 }
 
+.serviceTileWrapper {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.statusTile {
+  position: absolute;
+  z-index: 9;
+  bottom: 100%;
+  left: 0;
+  width: 104px;
+  height: 82px;
+  background: #455159;
+  color: #fff;
+  border-right: 1px solid #91a0a7;
+  box-sizing: border-box;
+}
+
+.statusTileActive {
+  background: #1687c3;
+}
+
+.statusTileMain {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.statusTileMain strong,
+.statusTileMain small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusTileMain strong {
+  font-size: 10px;
+}
+
+.statusTileMain small {
+  font-size: 8px;
+}
+
+.serviceEditButton {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  z-index: 1;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.serviceEditIcon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  background: url('./assets/edit-pencil.svg') center / contain no-repeat;
+}
+
 .serviceChevron {
   position: absolute;
   top: 4px;
@@ -1171,16 +1379,12 @@
   white-space: nowrap;
 }
 
-.serviceTile i {
-  position: absolute;
-  top: 3px;
-  right: 5px;
-  font-size: 12px;
-  font-style: normal;
-}
-
 .serviceTileActive {
   background: #1687c3;
+}
+
+.serviceTileSecondary {
+  background: #94999c;
 }
 
 .serviceTileMuted {
@@ -1204,6 +1408,30 @@
   font-size: 22px;
 }
 
+.dockControl {
+  display: grid;
+  place-items: center;
+}
+
+.dockInformationIcon {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.dockChevronPair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.dockChevronPair .chevronIcon {
+  width: 24px;
+  height: 14px;
+  mask-size: 100% 100%;
+}
+
 .dockSpacer {
   flex: 1;
 }
@@ -1211,15 +1439,18 @@
 .serviceHistory {
   position: absolute;
   z-index: 10;
-  left: 92px;
-  bottom: 78px;
+  bottom: 164px;
   width: 520px;
-  max-height: 72vh;
-  padding: 9px 10px 11px;
+  max-height: min(152px, 45vh);
+  padding: 5px 7px;
   overflow-y: auto;
-  background: #1484bd;
+  background: #1979b2;
   color: #fff;
-  box-shadow: 3px 4px 0 rgb(0 0 0 / 32%);
+  box-shadow: 2px 3px 0 rgb(0 0 0 / 26%);
+}
+
+.serviceHistoryBase {
+  bottom: 82px;
 }
 
 .serviceHistory > button {
@@ -1229,12 +1460,6 @@
   border: 0;
   background: transparent;
   color: #fff;
-}
-
-.serviceHistory > strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 10px;
 }
 
 .readOnlyServiceHistory > div {
@@ -1249,111 +1474,114 @@
   font-style: normal;
 }
 
-.currentDdsStatus {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 0 -10px;
-  padding: 8px 10px;
-  background: rgb(0 0 0 / 16%);
-}
-
-.currentDdsStatus span {
-  font-size: 9px;
-  opacity: 0.8;
-}
-
-.currentDdsStatus strong {
-  font-size: 12px;
-}
-
 .historyList {
   display: grid;
-  gap: 1px;
-  max-height: 230px;
-  margin: 7px 0;
-  overflow-y: auto;
-  background: rgb(255 255 255 / 18%);
+  gap: 0;
 }
 
 .historyEntry {
-  padding: 7px 8px;
-  background: #157cad;
+  display: grid;
+  grid-template-columns: 46px 12px minmax(0, 1fr) 12px minmax(0, 190px);
+  align-items: center;
+  gap: 3px;
+  min-height: 26px;
+  font-size: 10px;
 }
 
-.historyEntry > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+.historyActor {
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.historyEntry em {
-  font-weight: 700;
+.historyArrow {
+  font-size: 21px;
+  line-height: 1;
 }
 
-.historyEntry time,
-.historyEntry small {
-  color: #d8f1fc;
-  font-size: 8px;
+.historyEvent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 .historyEntry p {
-  margin: 5px 0 0;
-  padding-top: 5px;
-  border-top: 1px solid rgb(255 255 255 / 18%);
-  line-height: 1.35;
+  grid-column: 5;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.historyEntry small {
+  font-size: 9px;
 }
 
 .statusEditor {
+  position: fixed;
+  z-index: 51;
+  left: max(8%, 100px);
+  bottom: 96px;
+  width: min(900px, calc(100vw - 120px));
+  height: 28px;
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgb(255 255 255 / 35%);
+  grid-template-columns: minmax(150px, 270px) minmax(120px, 270px) minmax(180px, 1fr) 34px 34px;
+  background: #fff;
+  box-shadow: 2px 3px 6px rgb(0 0 0 / 30%);
 }
 
-.statusEditor label {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  color: #e7f7fe;
-  font-size: 8px;
+.statusEditorBackdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  background: rgb(0 0 0 / 48%);
 }
 
 .statusEditor select,
-.statusEditor textarea {
+.statusEditor input {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
-  border: 1px solid #8cc8e3;
-  background: #f7fbfd;
+  border: 0;
+  border-bottom: 1px solid #8b979d;
+  border-radius: 0;
+  background: #fff;
   color: #1b2b33;
   font: inherit;
-}
-
-.statusEditor select {
-  min-height: 28px;
-  padding: 4px;
-}
-
-.statusEditor textarea {
-  padding: 6px;
-  resize: vertical;
+  font-size: 11px;
+  padding: 3px 8px;
 }
 
 .statusEditor > button {
-  grid-column: 2;
-  justify-self: end;
-  padding: 6px 12px;
-  border: 1px solid #fff;
-  background: #32434b;
-  color: #fff;
+  border: 1px solid #c9d0d3;
+  background: #fff;
+  color: #63767f;
   cursor: pointer;
+  font-size: 18px;
 }
 
 .statusEditor > button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+@media (max-width: 700px) {
+  .statusEditor {
+    left: 12px;
+    right: 12px;
+    bottom: 80px;
+    width: auto;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) 36px 36px;
+  }
+
+  .statusEditor select,
+  .statusEditor input {
+    grid-column: 1 / -1;
+    min-height: 30px;
+  }
+
+  .statusEditor > button:first-of-type {
+    grid-column: 2;
+  }
 }
 
 .statusLocked,
