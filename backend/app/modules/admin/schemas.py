@@ -52,6 +52,11 @@ class UserGroupRead(UserGroupCreate):
     member_count: int
 
 
+class UserGroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    description: str | None = Field(default=None, max_length=1000)
+
+
 class ObjectTypeWrite(BaseModel):
     code: str = Field(min_length=2, max_length=120, pattern=r"^[A-Z0-9_]+$")
     name: str = Field(min_length=2, max_length=250)
