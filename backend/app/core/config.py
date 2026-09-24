@@ -12,6 +12,15 @@ class Settings(BaseSettings):
     """Хранит настройки, необходимые backend-приложению."""
 
     database_url: str
+    frontend_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    @property
+    def allowed_frontend_origins(self) -> list[str]:
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.frontend_origins.split(",")
+            if origin.strip()
+        ]
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

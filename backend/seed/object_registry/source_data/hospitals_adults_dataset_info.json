@@ -1,0 +1,499 @@
+{
+  "Id": 517,
+  "IdentificationNumber": "7707089084-clinics",
+  "CategoryId": 3,
+  "CategoryCaption": "Здравоохранение",
+  "DepartmentId": 1002,
+  "DepartmentCaption": "Департамент здравоохранения города Москвы",
+  "Caption": "Больницы взрослые",
+  "Description": "Больницы взрослые, расположенные в пределах установленных границ города Москвы.",
+  "FullDescription": "<p>Набор данных позволяет получить информацию о больницах, посмотреть их местоположение на карте, а также точный адрес, график работы и другие контактные данные.</p>\n<p>Основная задача больниц --- оказание медпомощи в тех случаях, когда проведение лечения или сложных диагностических исследований невозможно в амбулаторно-поликлинических условиях; если выздоровление или улучшение состояния больного может быть быстрее достигнуто в стационаре, чем при амбулаторном лечении; если пребывание больного дома представляет угрозу для окружающих (при ряде инфекционных и венерических заболеваний, некоторых видах психических расстройств и др.).</p>\n<p>По специализации (профилю) больницы делятся на:</p>\n<ul>\n<li>Специализированные --- направленные на лечение определенного класса заболеваний: кардиологические (Кардиоцентр), нейрохирургические (Институт нейрохирургии), онкологические (Онкоцентр), урологические, инфекционные и множество других.</li>\n<li>Общие --- многопрофильные учреждения, направленные на диагностику и лечение широкого спектра заболеваний.</li>\n</ul>\n<p>В состав больницы общего профиля как правило входят:</p>\n<ul>\n<li>Санитарный пропускник (санпропускник)</li>\n<li>Терапевтический корпус</li>\n<li>Хирургический корпус</li>\n<li>Гинекологическое отделение</li>\n<li>Клиническое отделение</li>\n</ul>\n<p><strong>Современная ситуация в больницах России</strong></p>\n<p>Медицина и здравоохранение в России стремительно развиваются, внедряется лучший мировой опыт и технологии. Уже сделаны огромные шаги в развитии собственной высокотехнологичной медицины. Благодаря поддержке государства разрабатываются новые российские уникальные программы лечения многих серьезных заболеваний. Заметный прогресс достигнут в России в лечении онкологических заболеваний, нейрохирургии, кардиологии, терапии эндокринной системы. Лучшие специалисты в этих областях практикуют в отечественных клиниках, передавая свой опыт молодым коллегам. Но, несмотря на все прилагаемые усилия, лучшие клиники по-прежнему остаются в самых известных городах России: Москве и Санкт-Петербурге. Их названия у всех на слуху: НИИ нейрохирургии им. Бурденко, клиника кибернетической медицины, клиника урологии доктора Меньщикова, клиника &quot;Медицина&quot;, Ленинградский областной онкологический диспансер и многие другие.</p>\n<p><strong>Ситуация в больницах города Москвы</strong></p>\n<p>По оснащённости больниц и поликлиник продвинутой техникой Москва уступает только Японии и США. К услугам горожан компьютерная и магнитно-резонансная томография, диагностика в мощных лабораториях. Высокие технологии применяют не только в лечении болезней, но и для повышения качества и скорости обслуживания.</p>\n<p>Дата-сет позволяет получить подробную информацию об объектах, посмотреть их местоположение на карте. По каждой больнице можно посмотреть ее полное наименование, точный адрес, график работы, полный перечень оказываемых услуг и их специализацию и другие контактные данные. Помимо этого, для удобства пользователей, в дата-сете опубликована информация о руководителе учреждения -- его ФИО, должность, контактный телефон.</p>\n<p><strong>А знаете ли вы что?</strong></p>\n<p>*-*Городская клиническая больница № 1 им. Н.И. Пирогова ведет свою историю с 1802 года, когда по завещанию и на средства видного российского дипломата князя Дмитрия Михайловича Голицына по проекту известного архитектора Матвея Казакова была построена Голицынская лечебница для бедных. При создании проекта был использован принцип городской усадьбы. Внутри здания больницы располагался храм, купол которого одухотворял все строение. Позднее рядом с Голицынской лечебницей была заложена Первая Градская больница, а спустя несколько десятилетий пришло время и Второй Градской. Ныне все три лечебницы представляют собой единый организм -- Городскую клиническую больницу № 1 им. Н.И. Пирогова.</p>\n",
+  "Keywords": "больница, больница клиническая, больницы взрослые, городская больница, госпитализация, госпиталь, дерматология, женская консультация, здоровье, здравоохранение, инфекционная больница, КВД, клиника, лечебница, лечение, медицинское учреждение, направление на госпитализацию, нейрохирургия, онкология, операция, отоларингология, Офтальмологическая, палата, психиатрическая больница, реанимация, специализированная больница, стационар, стоматологическая помощь населению, стоматология, травм пункт, травматологический пункт, травматология, флюбология, эндокринология",
+  "ContainsGeodata": true,
+  "VersionNumber": "2.601",
+  "VersionDate": "22.09.2026 18:00:14",
+  "ItemsCount": 37,
+  "Columns": [
+    {
+      "Name": "Category",
+      "Caption": "Категория",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "FullName",
+      "Caption": "Полное наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "ShortName",
+      "Caption": "Сокращённое наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "OrgInfo",
+      "Caption": "Информация о юридическом лице",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "FullName",
+          "Caption": "Полное наименование учреждения",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefPhone",
+          "Caption": "Телефон руководителя",
+          "Visible": true,
+          "Type": "CATALOG",
+          "SubColumns": [
+            {
+              "Name": "ChiefPhone",
+              "Caption": "Телефон руководителя",
+              "Visible": true,
+              "Type": "STRING",
+              "SubColumns": null
+            }
+          ]
+        },
+        {
+          "Name": "INN",
+          "Caption": "ИНН",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "KPP",
+          "Caption": "КПП",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "OGRN",
+          "Caption": "ОГРН",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "LegalAddress",
+          "Caption": "Юридический адрес",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefName",
+          "Caption": "ФИО руководителя учреждения",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefPosition",
+          "Caption": "Должность руководителя",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefGender",
+          "Caption": "Пол руководителя",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "ObjectAddress",
+      "Caption": "Адреса объекта",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "AdmArea",
+          "Caption": "Административный округ",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "District",
+          "Caption": "Район",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "PostalCode",
+          "Caption": "Почтовый индекс",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "Address",
+          "Caption": "Адрес",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "Availability",
+          "Caption": "Доступность",
+          "Visible": true,
+          "Type": "CATALOG",
+          "SubColumns": [
+            {
+              "Name": "available_k",
+              "Caption": "Доступность объекта (инвалиды-колясочники)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_o",
+              "Caption": "Доступность объекта (инвалиды-опорники)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_z",
+              "Caption": "Доступность объекта (инвалиды по зрению)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_s",
+              "Caption": "Доступность объекта (инвалиды по слуху)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_element",
+              "Caption": "Элементы доступности",
+              "Visible": true,
+              "Type": "CATALOG",
+              "SubColumns": [
+                {
+                  "Name": "Group_mgn",
+                  "Caption": "Группа",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "Area_mgn",
+                  "Caption": "Зона учреждения",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "Element_mgn",
+                  "Caption": "Элемент инфраструктуры",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "available_degree",
+                  "Caption": "Степень доступности",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "available_index",
+                  "Caption": "Показатель доступности",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "Extrainfo",
+          "Caption": "Дополнительная информация",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "ChiefName",
+      "Caption": "ФИО руководителя",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "ChiefPosition",
+      "Caption": "Должность руководителя",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "ChiefGender",
+      "Caption": "Пол руководителя",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "ChiefPhone",
+      "Caption": "Телефон руководителя",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "ChiefPhone",
+          "Caption": "Телефон руководителя",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "PublicPhone",
+      "Caption": "Общий телефон",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "PublicPhone",
+          "Caption": "Общий телефон",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "Fax",
+      "Caption": "Факс",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "Fax",
+          "Caption": "Факс",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "Email",
+      "Caption": "Адрес электронной почты",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "Email",
+          "Caption": "Адрес электронной почты",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "CloseFlag",
+      "Caption": "Признак закрытия",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "CloseReason",
+      "Caption": "Причина закрытия",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "CloseDate",
+      "Caption": "Дата закрытия",
+      "Visible": true,
+      "Type": "DATE",
+      "SubColumns": null
+    },
+    {
+      "Name": "ReopenDate",
+      "Caption": "Дата повторного открытия",
+      "Visible": true,
+      "Type": "DATE",
+      "SubColumns": null
+    },
+    {
+      "Name": "BedSpace",
+      "Caption": "Коечный фонд",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "PaidServiceInfo",
+      "Caption": "Информация о платных услугах",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "WorkingHours",
+      "Caption": "График работы",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "DayWeek",
+          "Caption": "День недели",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "WorkHours",
+          "Caption": "Часы работы",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "ClarificationWorkingHours",
+      "Caption": "Уточнение графика работы",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "Specialization",
+      "Caption": "Информация о специализации",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "BeneficialDrugPrescription",
+      "Caption": "Дополнительное лекарственное обеспечение",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "DrugStore",
+      "Caption": "Наличие аптечного киоска",
+      "Visible": true,
+      "Type": "FLAG",
+      "SubColumns": null
+    },
+    {
+      "Name": "AmbulanceStation",
+      "Caption": "Наличие станции неотложной помощи",
+      "Visible": true,
+      "Type": "FLAG",
+      "SubColumns": null
+    },
+    {
+      "Name": "AmbulanceStationPhone",
+      "Caption": "Перечень телефонов неотложной помощи",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "AmbulancePhone",
+          "Caption": "Телефон неотложной помощи",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "global_id",
+      "Caption": "global_id",
+      "Visible": true,
+      "Type": null,
+      "SubColumns": null
+    },
+    {
+      "Name": "DoctorsSpecialtiesListForSelfRecording",
+      "Caption": "Перечень специальностей врачей (для самозаписи)",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "Extrainfo",
+      "Caption": "Дополнительная информация",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "AgeRestriction",
+      "Caption": "Возрастные ограничения",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "DrugStoreType",
+      "Caption": "Тип аптеки",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "geoData",
+      "Caption": "Геоданные",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "coordinates",
+          "Caption": "Координаты",
+          "Visible": true,
+          "Type": "ARRAY",
+          "SubColumns": []
+        },
+        {
+          "Name": "type",
+          "Caption": "Тип геоданных",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": []
+        }
+      ]
+    },
+    {
+      "Name": "geodata_center",
+      "Caption": "Центроид",
+      "Visible": true,
+      "Type": "ARRAY",
+      "SubColumns": null
+    }
+  ]
+}

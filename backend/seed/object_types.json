@@ -1,0 +1,14 @@
+[
+  {"code": "BUILDING", "name": "Здание", "parent_code": null, "description": "Здания и сооружения", "source": "MVP seed"},
+  {"code": "EDUCATION", "name": "Образование", "parent_code": "BUILDING", "description": null, "source": "MVP seed"},
+  {"code": "SCHOOL", "name": "Школа", "parent_code": "EDUCATION", "description": null, "source": "MVP seed"},
+  {"code": "KINDERGARTEN", "name": "Детский сад", "parent_code": "EDUCATION", "description": null, "source": "MVP seed"},
+  {"code": "EDUCATIONAL_COMPLEX", "name": "Образовательный комплекс", "parent_code": "EDUCATION", "description": "Совмещает дошкольное и школьное образование по данным источника", "source": "MVP seed"},
+  {"code": "EDUCATION_UNKNOWN", "name": "Образовательный объект, тип требует проверки", "parent_code": "EDUCATION", "description": "Тип не удалось однозначно определить по набору 747", "source": "MVP seed"},
+  {"code": "HEALTHCARE", "name": "Здравоохранение", "parent_code": "BUILDING", "description": null, "source": "MVP seed"},
+  {"code": "HOSPITAL", "name": "Больница", "parent_code": "HEALTHCARE", "description": null, "source": "MVP seed"},
+  {"code": "POLYCLINIC", "name": "Поликлиника", "parent_code": "HEALTHCARE", "description": null, "source": "MVP seed"},
+  {"code": "EMERGENCY_STATION", "name": "Станция скорой медицинской помощи", "parent_code": "HEALTHCARE", "description": null, "source": "MVP seed"},
+  {"code": "TRANSPORT", "name": "Транспорт", "parent_code": "BUILDING", "description": "Здания и сооружения транспортной инфраструктуры", "source": "MVP seed"},
+  {"code": "METRO_STATION", "name": "Станция метро", "parent_code": "TRANSPORT", "description": null, "source": "MVP seed"}
+]

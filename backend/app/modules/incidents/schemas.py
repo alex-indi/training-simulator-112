@@ -117,6 +117,8 @@ class IncidentRead(BaseModel):
     claimant_workstation_number: int | None = None
     can_claim: bool = False
     can_edit: bool = False
+    viewer_dds_profile: str | None = None
+    viewer_workstation_number: int | None = None
     incident_number: str
     reported_at: datetime
     source: str
@@ -132,6 +134,7 @@ class IncidentRead(BaseModel):
     dds_status: DDSResponseStatus
     available_actions: list[IncidentActionType]
     actions: list[IncidentActionRead]
+    scenario_events: list[dict] = Field(default_factory=list)
     created_at: datetime
     delivered_at: datetime | None
     opened_at: datetime | None
