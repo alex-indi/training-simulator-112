@@ -71,7 +71,7 @@ def map_healthcare(rows: list[dict], dataset_id: int, type_code: str) -> tuple[l
         all_day = _all_day(cells.get("WorkingHours"))
         tags = ["medical"]
         if type_code == "HOSPITAL":
-            tags.append("patients")
+            tags.extend(("patients", "mass_people"))
         elif type_code == "POLYCLINIC":
             tags.append("visitors")
         else:

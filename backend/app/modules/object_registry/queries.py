@@ -5,7 +5,12 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.sql import Select
 
-from app.modules.object_registry.models import CityObject, ObjectTag, ObjectType
+from app.modules.object_registry.models import (
+    CityObject,
+    ObjectTag,
+    ObjectTagClassifierFeature,
+    ObjectType,
+)
 
 
 def descendant_type_ids(parent_code: str) -> Select[tuple[int]]:
@@ -35,3 +40,16 @@ def select_city_objects(
             CityObject.id.in_(select(ObjectTag.object_id).where(ObjectTag.tag.in_(tag_set)))
         )
     return query
+
+
+def select_city_objects_for_classifier_features(
+    feature_ids: Iterable[int], *, type_code: str | None = None
+) -> Select[tuple[CityObject]]:
+    """Find objects by explicitly linked SRC-006 features, with optional type tree."""
+    tag_codes = select(ObjectTagClassifierFeature.tag_code).where(
+        ObjectTagClassifierFeature.feature_id.in_(set(feature_ids))
+    )
+    query = select_city_objects(type_code=type_code)
+    return query.where(
+        CityObject.id.in_(select(ObjectTag.object_id).where(ObjectTag.tag.in_(tag_codes)))
+    )
