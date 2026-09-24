@@ -334,6 +334,64 @@ class InstructorNote(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class AssessmentResult(Base):
+    """Зафиксированный автоматический расчёт и отдельно утверждённый итог."""
+
+    __tablename__ = "assessment_results"
+    __table_args__ = (UniqueConstraint("training_run_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_run_id: Mapped[int] = mapped_column(
+        ForeignKey("training_runs.id", ondelete="CASCADE"), index=True
+    )
+    automatic_score: Mapped[int] = mapped_column(Integer)
+    final_score: Mapped[int | None] = mapped_column(Integer)
+    score_override: Mapped[int | None] = mapped_column(Integer)
+    final_comment: Mapped[str | None] = mapped_column(Text)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    metrics: Mapped[dict] = mapped_column(JSON)
+    deviations: Mapped[list[AssessmentDeviation]] = relationship(
+        back_populates="result", cascade="all, delete-orphan", order_by="AssessmentDeviation.id"
+    )
+
+
+class AssessmentDeviation(Base):
+    __tablename__ = "assessment_deviations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assessment_result_id: Mapped[int] = mapped_column(
+        ForeignKey("assessment_results.id", ondelete="CASCADE"), index=True
+    )
+    incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(60))
+    description: Mapped[str] = mapped_column(Text)
+    weight: Mapped[int] = mapped_column(Integer)
+    critical: Mapped[bool] = mapped_column(default=False, server_default="false")
+    decision: Mapped[str] = mapped_column(String(20), default="PENDING", server_default="PENDING")
+    is_manual: Mapped[bool] = mapped_column(default=False, server_default="false")
+
+    result: Mapped[AssessmentResult] = relationship(back_populates="deviations")
+
+
+class AssessmentAudit(Base):
+    __tablename__ = "assessment_audit"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assessment_result_id: Mapped[int] = mapped_column(
+        ForeignKey("assessment_results.id", ondelete="CASCADE"), index=True
+    )
+    changed_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    action: Mapped[str] = mapped_column(String(40))
+    before: Mapped[dict] = mapped_column(JSON)
+    after: Mapped[dict] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(Text)
+
+
 class ScenarioEvent(Base):
     __tablename__ = "scenario_events"
     id: Mapped[int] = mapped_column(primary_key=True)

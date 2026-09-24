@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 import styles from './App.module.css'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
+import TrainingResults from './TrainingResults.jsx'
 import ResponseChat from './ResponseChat'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
@@ -609,6 +610,7 @@ function App() {
   return (
     <main className={styles.armShell}>
       {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} onJoined={setJoinedSessionId} />}
+      {currentUser?.role === 'TRAINEE' && <TrainingResults user={currentUser} requestJson={requestJson} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <strong>Ошибка:</strong> {error}
