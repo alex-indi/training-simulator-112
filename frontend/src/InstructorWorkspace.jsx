@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
 import styles from './InstructorWorkspace.module.css'
+import LiveMonitor from './LiveMonitor.jsx'
 
 const emptySettings = {
   title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -53,29 +54,36 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   useEffect(() => {
     let active = true
     Promise.all([api('/api/training/sessions'), api('/api/training/templates')])
-      .then(([items, saved]) => { if (active) { setSessions(items); setTemplates(saved) } })
+      .then(([items, saved]) => {
+        if (!active) return
+        setSessions(items)
+        setTemplates(saved)
+        const savedId = Number(window.sessionStorage.getItem('ut112-instructor-session-id'))
+        const current = items.find((item) => item.id === savedId && item.state === 'ACTIVE')
+        if (current) setSession(current)
+      })
       .catch((cause) => { if (active) setError(cause.message) })
     return () => { active = false }
   }, [api])
 
   useEffect(() => {
-    if (!openSessionId) return undefined
+    if (!openSessionId || session?.state === 'ACTIVE') return undefined
     const timer = window.setInterval(() => {
       api(`/api/training/sessions/${openSessionId}`)
         .then((fresh) => setSession((current) => current?.id === fresh.id ? fresh : current))
         .catch(() => {})
     }, 10000)
     return () => window.clearInterval(timer)
-  }, [api, openSessionId])
+  }, [api, openSessionId, session?.state])
 
   useEffect(() => {
-    if (!openSessionId) return undefined
+    if (!openSessionId || session?.state === 'ACTIVE') return undefined
     const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', { auth: { username: user.username } })
     const refresh = () => reload(openSessionId).catch(() => {})
     socket.on('connect', () => { socket.emit('subscribe', { session_id: openSessionId }); refresh() })
     socket.on('incident.delivered', refresh)
     return () => socket.disconnect()
-  }, [openSessionId, reload, user.username])
+  }, [openSessionId, reload, session?.state, user.username])
 
   const runAction = async (action) => {
     setBusy(true)
@@ -85,6 +93,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   }
 
   const openSession = (item) => {
+    window.sessionStorage.setItem('ut112-instructor-session-id', String(item.id))
     setSession(item)
     setSettings({
       title: item.title, topic: item.topic, mode: item.mode,
@@ -209,6 +218,22 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   const toggleRun = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   const editable = session && ['DRAFT', 'READY'].includes(session.state)
   const stationByNumber = new Map(session?.runs?.map((run) => [run.workstation_number, run]) || [])
+  const closeSession = () => {
+    window.sessionStorage.removeItem('ut112-instructor-session-id')
+    setSession(null)
+    reload()
+  }
+
+  if (session?.state === 'ACTIVE') return <main className={styles.shell}>
+    <header className={styles.header}>
+      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Live-монитор</h1></div>
+      <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
+    </header>
+    <div className={styles.content}>
+      <button className={styles.back} type="button" onClick={closeSession}>← Все занятия</button>
+      <LiveMonitor sessionId={session.id} user={user} api={api} />
+    </div>
+  </main>
 
   return <main className={styles.shell}>
     <header className={styles.header}>
@@ -227,7 +252,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
       </section>)}
       <section className={styles.section}><h3>Шаблоны занятий</h3><div className={styles.cards}>{templates.map((item) => <button key={item.id} className={styles.card} type="button" disabled={busy} onClick={() => applyTemplate(item.id)}><strong>{item.name}</strong><small>Создать новый черновик</small></button>)}</div></section>
     </div> : <div className={styles.content}>
-      <div className={styles.topline}><div><button className={styles.back} type="button" onClick={() => { setSession(null); reload() }}>← Все занятия</button><h2>{session.id ? session.title : 'Новое занятие'}</h2><p>{session.id ? stateLabels[session.state] : 'Шаг 1 · основные параметры'}</p></div>{session.id && <span className={styles.badge}>№ {session.id}</span>}</div>
+      <div className={styles.topline}><div><button className={styles.back} type="button" onClick={closeSession}>← Все занятия</button><h2>{session.id ? session.title : 'Новое занятие'}</h2><p>{session.id ? stateLabels[session.state] : 'Шаг 1 · основные параметры'}</p></div>{session.id && <span className={styles.badge}>№ {session.id}</span>}</div>
       <nav className={styles.steps} aria-label="Шаги подготовки">{steps.map((label, index) => <button key={label} type="button" className={step === index ? styles.activeStep : ''} disabled={!session.id && index > 0} onClick={() => setStep(index)}><b>{index + 1}</b>{label}</button>)}</nav>
       {step === 0 && <section className={styles.section}><h3>Основные параметры</h3><div className={styles.formGrid}>
         <label>Название занятия<input name="title" value={settings.title} onChange={updateSettings} disabled={!editable} required /></label>
