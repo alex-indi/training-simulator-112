@@ -48,6 +48,18 @@ const historyStatusLabels = {
   ...ddsStatusLabels,
 }
 
+function registryServiceStatus(incident) {
+  const latestStatus = incident.actions?.[incident.actions.length - 1]?.status
+  if (latestStatus === 'SERVICE_RECEIVED') return 'Добавлена'
+  if (latestStatus) return historyStatusLabels[latestStatus] || lifecycleLabels[incident.lifecycle_state]
+  return incident.lifecycle_state === 'OPENED' ? 'Добавлена' : lifecycleLabels[incident.lifecycle_state]
+}
+
+function registryIncidentType(incident) {
+  const code = incident.source_snapshot?.classifier_code
+  return code == null || String(code).trim() === '' ? incident.incident_type : String(code)
+}
+
 const responseStateLabels = {
   ASSIGNED: 'Назначена',
   ACKNOWLEDGED: 'Задание подтверждено',
@@ -70,10 +82,18 @@ const emptyFilters = {
   state: '',
 }
 
-const fullDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+const clockWeekdayFormatter = new Intl.DateTimeFormat('ru-RU', {
   weekday: 'long',
-  day: 'numeric',
+  timeZone: 'Europe/Moscow',
+})
+
+const clockMonthFormatter = new Intl.DateTimeFormat('ru-RU', {
   month: 'long',
+  timeZone: 'Europe/Moscow',
+})
+
+const clockDayYearFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
   year: 'numeric',
   timeZone: 'Europe/Moscow',
 })
@@ -82,6 +102,13 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: '2-digit',
   month: '2-digit',
   year: '2-digit',
+  timeZone: 'Europe/Moscow',
+})
+
+const fullDateFormatter = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
   timeZone: 'Europe/Moscow',
 })
 
@@ -103,6 +130,19 @@ function formatTime(value) {
 
 function formatDateTime(value) {
   return value ? `${formatDate(value)} ${formatTime(value)}` : '—'
+}
+
+function formatSavedDateTime(value) {
+  return value ? `${fullDateFormatter.format(new Date(value))} в ${formatTime(value)}` : '—'
+}
+
+function formatClockDate(value) {
+  const weekday = clockWeekdayFormatter.format(value)
+  const month = clockMonthFormatter.format(value)
+  const parts = clockDayYearFormatter.formatToParts(value)
+  const day = parts.find((part) => part.type === 'day')?.value
+  const year = parts.find((part) => part.type === 'year')?.value
+  return `${weekday[0].toUpperCase()}${weekday.slice(1)}, ${day} ${month[0].toUpperCase()}${month.slice(1)} ${year}`
 }
 
 function compactServiceName(service) {
@@ -244,7 +284,8 @@ function App() {
       || (filters.state === 'opened' && Boolean(incident.opened_at))
     return stateMatches
       && includesText(incident.incident_number, filters.number)
-      && includesText(incident.incident_type, filters.type)
+      && (includesText(incident.incident_type, filters.type)
+        || includesText(registryIncidentType(incident), filters.type))
       && includesText(incident.address, filters.address)
       && includesText(incident.applicant_name, filters.applicant)
       && includesText(incident.description, filters.description)
@@ -502,7 +543,7 @@ function App() {
                     </option>
                   ))}
                 </select>
-                <span aria-hidden="true">⌄</span>
+                <span className={styles.chevronIcon} aria-hidden="true" />
               </div>
             </label>
             <label>
@@ -571,6 +612,7 @@ function App() {
   const latestOwnStatus = ownServiceHistory[ownServiceHistory.length - 1]
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const filtersActive = Object.values(filters).some(Boolean)
+  const [clockHours, clockMinutes, clockSeconds] = formatTime(now).split(':')
   const canAssignResponse = selectedIncident && [
     'ACCEPTED', 'RESPONSE_STARTED', 'ARRIVED', 'WORKING',
   ].includes(selectedIncident.dds_status)
@@ -601,18 +643,18 @@ function App() {
           <header className={styles.telephonyStrip}>
             <div className={styles.callState}>
               <span className={styles.headsetIcon}><span className={styles.phoneReceiverIcon} aria-hidden="true" /></span>
-              <div><span>не подключен</span><small>линия оператора</small></div>
+              <div><span>Отключение</span></div>
               <div className={styles.callButtons}>
                 <button type="button" disabled title="Архив записей телефонных разговоров">записи звонков</button>
                 <button type="button" disabled title="Входящие и исходящие SMS">список SMS</button>
               </div>
             </div>
-            <div className={styles.phoneField}><b><span className={styles.phoneIcon} aria-hidden="true" /></b><span>АОН<strong>{selectedIncident.applicant_phone || 'не определён'}</strong></span><i>▰</i></div>
-            <div className={styles.phoneField}><b><span className={styles.phoneIcon} aria-hidden="true" /></b><span>предоставленный<strong>{selectedIncident.applicant_phone || 'не указан'}</strong></span><i>▰</i></div>
-            <div className={styles.phoneField}><b><span className={styles.phoneIcon} aria-hidden="true" /></b><span>телефон на место<strong>не указан</strong></span></div>
+            <div className={styles.phoneField}><div className={styles.phoneFieldIcons}><span className={styles.phoneIcon} aria-hidden="true" /><span className={styles.messageIcon} aria-hidden="true" /></div><span>АОН<strong>{selectedIncident.applicant_phone || 'не определён'}</strong></span></div>
+            <div className={styles.phoneField}><div className={styles.phoneFieldIcons}><span className={styles.phoneIcon} aria-hidden="true" /><span className={styles.messageIcon} aria-hidden="true" /></div><span>предоставленный<strong>{selectedIncident.applicant_phone || 'не указан'}</strong></span></div>
+            <div className={styles.phoneField}><div className={styles.phoneFieldIcons}><span className={styles.phoneIcon} aria-hidden="true" /><span className={styles.messageIcon} aria-hidden="true" /></div><span>телефон на место<strong>не указан</strong></span></div>
             <div className={styles.incidentIdentity}>
               <strong>Происшествие {selectedIncident.incident_number}</strong>
-              <span>Сохр. {formatDateTime(selectedIncident.delivered_at)}</span>
+              <span>Сохр. {formatSavedDateTime(selectedIncident.delivered_at)}</span>
               <span>Опер. 0, АРМ 4, УМЦ О.п.</span>
             </div>
             <div className={styles.viewTabs}>
@@ -778,7 +820,7 @@ function App() {
                   onClick={() => selectService(service)}
                   title="Выбрать службу и показать историю статусов"
                 >
-                  <span className={styles.serviceChevron} aria-hidden="true" />
+                  <span className={`${styles.chevronIcon} ${styles.serviceChevron}`} aria-hidden="true" />
                   <strong>{compactServiceName(service)}</strong>
                   <small>{index === 0
                     ? `${formatTime(latestOwnStatus?.created_at)} ${historyStatusLabels[latestOwnStatus?.status] || 'Добавлена'}`
@@ -788,7 +830,7 @@ function App() {
               ))}
               {['Доп. ЖКХ', 'ЦЭМП', 'ЦОДД', 'Мос.Без.'].map((service) => (
                 <button className={`${styles.serviceTile} ${styles.serviceTileMuted}`} key={service} type="button" disabled>
-                  <span className={styles.serviceChevron} aria-hidden="true" /><strong>{service}</strong><small>не оповещена</small>
+                  <span className={`${styles.chevronIcon} ${styles.serviceChevron}`} aria-hidden="true" /><strong>{service}</strong><small>не оповещена</small>
                 </button>
               ))}
               <button className={styles.dockControl} type="button" onClick={() => setServiceHistoryOpen((isOpen) => !isOpen)} title="Развернуть или свернуть историю выбранной службы">↕</button>
@@ -807,29 +849,39 @@ function App() {
                 <span aria-hidden="true">⌕</span>
               </div>
               <div className={styles.searchControls}>
-                <button className={styles.expandSearchButton} type="button" onClick={() => setExpandedSearch((isOpen) => !isOpen)}>
-                  расширенный по параметрам {expandedSearch ? '⌃' : '⌄'}
+                <button className={styles.expandSearchButton} type="button" aria-expanded={expandedSearch} onClick={() => setExpandedSearch((isOpen) => !isOpen)}>
+                  расширенный по параметрам <span className={`${styles.chevronIcon} ${expandedSearch ? styles.chevronUp : ''}`} aria-hidden="true" />
                 </button>
                 <button type="button" onClick={() => setFilters(emptyFilters)} disabled={!filtersActive}>сбросить</button>
               </div>
             </div>
 
             <div className={styles.clockPanel}>
-              <div>
-                <strong>{fullDateFormatter.format(now)}</strong>
-                <label>
-                  <select value={currentUser?.username || ''} onChange={selectUser} disabled={!users.length} aria-label="Текущий пользователь">
-                    {!currentUser && <option value="">загрузка…</option>}
-                    {users.map((user) => (
-                      <option key={user.id} value={user.username}>
-                        {user.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className={styles.sessionExit} type="button" onClick={logout}>выйти</button>
+              <div className={styles.clockUpper}>
+                <div className={styles.clockDetails}>
+                  <strong>{formatClockDate(now)}</strong>
+                  <div className={styles.clockToolbar}>
+                    <span>УМЦ О.п.</span>
+                    <label className={styles.clockUserPicker} title={`Сменить пользователя: ${currentUser?.full_name || ''}`}>
+                      <span className={styles.clockMonitorIcon} aria-hidden="true" />
+                      <select value={currentUser?.username || ''} onChange={selectUser} disabled={!users.length} aria-label="Текущий пользователь">
+                        {users.map((user) => (
+                          <option key={user.id} value={user.username}>{user.full_name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <span className={styles.clockGearIcon} aria-hidden="true" />
+                    <span className={styles.clockHelpIcon} aria-hidden="true" />
+                    <button className={styles.sessionExit} type="button" onClick={logout} aria-label="Выйти" title="Выйти">
+                      <span className={styles.clockRunIcon} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                <time className={styles.clockTime} dateTime={formatTime(now)}>
+                  <span>{clockHours}:{clockMinutes}</span><sup>:{clockSeconds}</sup>
+                </time>
               </div>
-              <time>{formatTime(now)}</time>
+              <div className={styles.clockLower} aria-hidden="true" />
             </div>
           </header>
 
@@ -848,47 +900,51 @@ function App() {
 
           <section className={styles.registryContent}>
             <div className={styles.registryToolbar}>
-              <h2>Список происшествий <span>⌃</span></h2>
+              <h2>Список происшествий <span className={`${styles.chevronIcon} ${styles.chevronUp}`} aria-hidden="true" /></h2>
               <div><span>ⓘ уведомления</span><select disabled><option>выберите что показать</option></select></div>
             </div>
 
             <div className={styles.registryHeader} aria-hidden="true">
-              <span>Связи</span><span>ЧС</span><span>Опер.</span><span>АРМ</span><span>Номер</span><span>Дата ↓</span><span>Время</span><span>Тип происшествия</span><span>Постр.</span><span>Адрес</span><span>Статус службы</span><span />
+              <span /><span className={styles.linksHeader}>Связи</span><span className={styles.emergencyHeader}>ЧС</span><span>Опер.</span><span>АРМ</span><span>Номер</span><span className={styles.dateHeader}>Дата <span className={styles.arrowDownIcon} /></span><span>Время</span><span>Тип происшествия</span><span>Постр.</span><span>Адрес</span><span>Статус службы</span><span />
             </div>
 
             <div className={styles.registryRows}>
               {loading && !incidents.length ? (
                 <div className={styles.registryEmpty}>Загрузка происшествий…</div>
-              ) : visibleIncidents.length ? visibleIncidents.map((incident) => (
-                <button
+              ) : visibleIncidents.length ? visibleIncidents.map((incident) => {
+                const incidentTime = formatTime(incident.reported_at)
+                return <button
                   key={incident.id}
                   className={`${styles.registryRow} ${!incident.opened_at ? styles.registryRowNew : ''}`}
                   type="button"
                   onClick={() => openCard(incident)}
                 >
-                  <span className={styles.linkCell}><span className={styles.chevronDownIcon} aria-hidden="true" /></span>
+                  <span className={styles.linkCell}><span className={`${styles.chevronIcon} ${styles.chevronDownIcon}`} aria-hidden="true" /></span>
+                  <span />
                   <span><span className={styles.emergencyBookmark} aria-hidden="true" /></span>
+                  <span><span className={styles.electricityIcon} aria-hidden="true" /></span>
+                  <span><span className={styles.timerIcon} aria-hidden="true" /></span>
                   <span className={`${styles.operatorCell} ${incident.opened_at ? styles.operatorCellZero : ''}`}>{incident.opened_at ? '0' : '!'}</span>
                   <span>{incident.claimant_workstation_number || '—'}</span>
                   <strong>{incident.incident_number}</strong>
                   <span>{formatDate(incident.reported_at)}</span>
-                  <time>{formatTime(incident.reported_at)}</time>
-                  <strong>{incident.incident_type}</strong>
+                  <time dateTime={incidentTime}><span>{incidentTime.slice(0, 5)}</span><sup>{incidentTime.slice(5)}</sup></time>
+                  <strong title={incident.incident_type}>{registryIncidentType(incident)}</strong>
                   <span>Нет</span>
-                  <strong className={styles.registryAddress}>{incident.address}</strong>
-                  <span className={styles.serviceState}>{incident.claimant_name ? `${incident.claimant_name} · АРМ ${incident.claimant_workstation_number} · ` : ''}{historyStatusLabels[incident.actions?.[incident.actions.length - 1]?.status] || lifecycleLabels[incident.lifecycle_state]}</span>
+                  <strong className={styles.registryAddress}><span className={styles.registryAddressText}>{incident.address}</span><span className={styles.locationOffIcon} aria-hidden="true" /></strong>
+                  <span className={styles.serviceState}>{incident.claimant_name ? `${incident.claimant_name} · АРМ ${incident.claimant_workstation_number} · ` : ''}{registryServiceStatus(incident)}</span>
                   <span className={styles.fileIconCell}><span className={styles.fileTextIcon} aria-hidden="true" /></span>
                   <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
                 </button>
-              )) : (
+              }) : (
                 <div className={styles.registryEmpty}>{filtersActive ? 'Происшествия не найдены' : 'Происшествий нет'}</div>
               )}
             </div>
 
             <footer className={styles.registryPager}>
               <span>Новые: {newCount}</span>
-              <span>Страница: 1⌄</span>
-              <span>Записей на странице: 10⌄</span>
+              <span>Страница: 1 <span className={styles.chevronIcon} aria-hidden="true" /></span>
+              <span>Записей на странице: 10 <span className={styles.chevronIcon} aria-hidden="true" /></span>
               <strong>{visibleIncidents.length ? `1-${visibleIncidents.length}` : '0'} из {visibleIncidents.length}</strong>
               <button type="button" disabled>‹</button><button type="button" disabled>›</button>
             </footer>
