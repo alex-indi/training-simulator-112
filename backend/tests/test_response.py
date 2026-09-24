@@ -307,16 +307,15 @@ def test_assignment_notifies_session_and_duplicate_constraint_is_conflict(monkey
     )
     run = TrainingRun(id=8, trainee_id=owner.id, dds_profile="ДДС")
     incident = create_delivered_incident(
-        training_session_id=12, source_snapshot=make_snapshot().model_dump(mode="json"),
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
     )
     incident.id = 7
     incident.training_session = session
     incident.training_run = run
     incident.dds_status = DDSResponseStatus.ACCEPTED
     incident.training_run_id = run.id
-    unit = ResponseUnit(
-        id=5, name="Группа", dds_profile="ДДС", description="", is_active=True
-    )
+    unit = ResponseUnit(id=5, name="Группа", dds_profile="ДДС", description="", is_active=True)
     result = MagicMock()
     result.one_or_none.return_value = unit
     database = MagicMock()
@@ -335,17 +334,27 @@ def test_assignment_notifies_session_and_duplicate_constraint_is_conflict(monkey
         assignment.events[0].id = 10
 
     database.add.side_effect = assign_ids
-    response = asyncio.run(assign_response_unit(
-        7, ResponseAssignmentCreate(response_unit_id=5), owner, database,
-    ))
+    response = asyncio.run(
+        assign_response_unit(
+            7,
+            ResponseAssignmentCreate(response_unit_id=5),
+            owner,
+            database,
+        )
+    )
     assert response.id == 9
     publish.assert_awaited_once_with("response.assignment_created", 12, 7)
 
     database.commit = AsyncMock(side_effect=IntegrityError("insert", {}, Exception("duplicate")))
     with pytest.raises(HTTPException) as error:
-        asyncio.run(assign_response_unit(
-            7, ResponseAssignmentCreate(response_unit_id=5), owner, database,
-        ))
+        asyncio.run(
+            assign_response_unit(
+                7,
+                ResponseAssignmentCreate(response_unit_id=5),
+                owner,
+                database,
+            )
+        )
     assert error.value.status_code == 409
     database.rollback.assert_awaited_once()
 
@@ -354,18 +363,23 @@ def test_response_state_transition_notifies_session(monkeypatch) -> None:
     instructor = User(id=2, username="instructor", role=UserRole.INSTRUCTOR)
     session = TrainingSession(id=12, instructor_id=2, state=TrainingSessionState.ACTIVE)
     incident = create_delivered_incident(
-        training_session_id=12, source_snapshot=make_snapshot().model_dump(mode="json"),
+        training_session_id=12,
+        source_snapshot=make_snapshot().model_dump(mode="json"),
     )
     incident.id = 7
     incident.training_session = session
-    unit = ResponseUnit(
-        id=5, name="Группа", dds_profile="ДДС", description="", is_active=True
-    )
+    unit = ResponseUnit(id=5, name="Группа", dds_profile="ДДС", description="", is_active=True)
     assignment = create_assignment(
-        incident_id=7, training_run_id=8, response_unit=unit, actor_user_id=3,
+        incident_id=7,
+        training_run_id=8,
+        response_unit=unit,
+        actor_user_id=3,
     )
     assignment.id = 9
     assignment.incident = incident
+    assignment.training_run = TrainingRun(
+        id=8, trainee_id=3, training_session_id=12, dds_profile="ДДС"
+    )
     assignment.events[0].id = 10
     result = MagicMock()
     result.one_or_none.return_value = assignment
@@ -374,13 +388,18 @@ def test_response_state_transition_notifies_session(monkeypatch) -> None:
     database.commit = AsyncMock(side_effect=lambda: setattr(assignment.events[-1], "id", 11))
     publish = AsyncMock()
     monkeypatch.setattr("app.modules.response.router.publish_session_event", publish)
+    monkeypatch.setattr("app.modules.response.router.notify_message_created", AsyncMock())
 
-    response = asyncio.run(apply_response_scenario_event(
-        9,
-        ResponseScenarioEventCreate(
-            event_key="acknowledged", target_state=ResponseAssignmentState.ACKNOWLEDGED,
-        ),
-        instructor, database,
-    ))
+    response = asyncio.run(
+        apply_response_scenario_event(
+            9,
+            ResponseScenarioEventCreate(
+                event_key="acknowledged",
+                target_state=ResponseAssignmentState.ACKNOWLEDGED,
+            ),
+            instructor,
+            database,
+        )
+    )
     assert response.state == ResponseAssignmentState.ACKNOWLEDGED
     publish.assert_awaited_once_with("response.state_changed", 12, 7)

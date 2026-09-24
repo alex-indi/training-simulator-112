@@ -217,9 +217,17 @@ function App() {
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
-    const refresh = () => requestJson('/api/incidents', currentUser.username)
-      .then((items) => { if (active) setIncidents(items) })
-      .catch((cause) => { if (active) setError(cause.message) })
+    const refresh = async () => {
+      try {
+        const items = await requestJson('/api/incidents', currentUser.username)
+        if (!active) return
+        setIncidents(items)
+        if (selectedIncidentId.current) {
+          const fresh = await requestJson(`/api/incidents/${selectedIncidentId.current}`, currentUser.username)
+          if (active) setSelectedIncident(fresh)
+        }
+      } catch (cause) { if (active) setError(cause.message) }
+    }
     const socket = io(apiUrl, { auth: { username: currentUser.username } })
     socket.on('connect', async () => {
       try {
@@ -234,6 +242,7 @@ function App() {
     socket.on('incident.opened', refresh)
     socket.on('incident.claimed', refresh)
     socket.on('incident.updated', refresh)
+    socket.on('training.control_changed', refresh)
     const refreshResponse = (notice) => {
       refresh()
       if (notice.incident_id !== selectedIncidentId.current) return
@@ -665,6 +674,7 @@ function App() {
               <div className={styles.reportPanel}>
                 <strong>{formatDateTime(selectedIncident.reported_at)}</strong>
                 <p>{selectedIncident.description}</p>
+                {selectedIncident.scenario_events?.map((item) => <p key={item.id}><b>Новая вводная · {formatDateTime(item.created_at)}</b><br />{item.body}</p>)}
                 <span>Источник: {selectedIncident.source}</span>
               </div>
             </section>
