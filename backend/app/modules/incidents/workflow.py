@@ -97,6 +97,8 @@ def create_delivered_incident(
     """Создаёт независимый snapshot карточки и фиксирует серверное время доставки."""
     delivered_at = server_time or datetime.now(UTC)
     snapshot = deepcopy(source_snapshot)
+    if snapshot.pop("reported_at_mode", None) == "DELIVERY":
+        snapshot["reported_at"] = delivered_at.isoformat()
 
     incident = Incident(
         training_session_id=training_session_id,
@@ -186,6 +188,9 @@ def perform_incident_action(
         created_at=created_at,
     )
     incident.dds_status = to_status
+    if action in {IncidentActionType.COMPLETE_WORK, IncidentActionType.REFUSE_WORK}:
+        incident.lifecycle_state = IncidentLifecycleState.FINISHED
+        incident.finished_at = created_at
     if incident.primary_status_at is None and action in {
         IncidentActionType.ACCEPT,
         IncidentActionType.REJECT,
