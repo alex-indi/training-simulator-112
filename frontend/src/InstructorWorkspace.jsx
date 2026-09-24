@@ -5,6 +5,7 @@ import { io } from 'socket.io-client'
 import styles from './InstructorWorkspace.module.css'
 import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
+import ScenarioLibrary from './ScenarioLibrary.jsx'
 
 const emptySettings = {
   title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -34,6 +35,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const openSessionId = session?.id
 
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
@@ -233,6 +235,8 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     reload()
   }
 
+  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} onBack={() => setLibraryOpen(false)} />
+
   if (session?.state === 'ACTIVE') return <main className={styles.shell}>
     <header className={styles.header}>
       <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Live-монитор</h1></div>
@@ -248,7 +252,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
 
   return <main className={styles.shell}>
     <header className={styles.header}>
-      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1></div>
+      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1><button type="button" onClick={() => setLibraryOpen(true)}>Библиотека сценариев</button></div>
       <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
     </header>
     {error && <p className={styles.error} role="alert">{error}</p>}
