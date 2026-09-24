@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 
 import styles from './InstructorWorkspace.module.css'
 import LiveMonitor from './LiveMonitor.jsx'
+import AssessmentWorkspace from './AssessmentWorkspace.jsx'
 
 const emptySettings = {
   title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -67,12 +68,12 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   }, [api])
 
   useEffect(() => {
-    if (!openSessionId || session?.state === 'ACTIVE') return undefined
+    if (!openSessionId) return undefined
     const timer = window.setInterval(() => {
       api(`/api/training/sessions/${openSessionId}`)
         .then((fresh) => setSession((current) => current?.id === fresh.id ? fresh : current))
         .catch(() => {})
-    }, 10000)
+    }, 5000)
     return () => window.clearInterval(timer)
   }, [api, openSessionId, session?.state])
 
@@ -242,6 +243,8 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
       <LiveMonitor sessionId={session.id} user={user} api={api} />
     </div>
   </main>
+
+  if (session?.state === 'COMPLETED') return <AssessmentWorkspace session={session} api={api} onBack={closeSession} />
 
   return <main className={styles.shell}>
     <header className={styles.header}>

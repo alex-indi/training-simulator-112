@@ -21,6 +21,7 @@ from app.modules.identity.router import router as identity_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
+from app.modules.training.assessment import router as assessment_router
 from app.modules.training.control import router as control_router
 from app.modules.training.delivery import router as delivery_router
 from app.modules.training.delivery import scheduler_loop
@@ -123,6 +124,7 @@ app.add_middleware(
 app.include_router(identity_router)
 app.include_router(training_router)
 app.include_router(control_router)
+app.include_router(assessment_router)
 app.include_router(monitor_router)
 app.include_router(template_router)
 app.include_router(delivery_router)
