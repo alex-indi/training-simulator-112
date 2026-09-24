@@ -1,4 +1,4 @@
-.shell { min-height: 100vh; background: #eef2f6; color: #17283b; font: 15px/1.45 system-ui, sans-serif; }
+.shell { min-height: 100vh; background: #eef2f6; color: #17283b; font: 15px/1.45 var(--app-font-family); }
 .header { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px max(24px, calc((100vw - 1240px)/2)); background: #12324d; color: white; }
 .header h1 { margin: 2px 0 0; font-size: 25px; }
 .header small { opacity: .75; }

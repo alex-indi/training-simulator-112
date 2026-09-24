@@ -1,4 +1,4 @@
-.monitor { color: #1b2838; font-family: Inter, system-ui, sans-serif; }
+.monitor { color: #1b2838; font-family: var(--app-font-family); }
 .monitor * { box-sizing: border-box; }
 .error { padding: 12px 16px; background: #fff0ed; color: #a73329; border-radius: 10px; }
 .hero { display: flex; align-items: center; gap: 28px; justify-content: space-between; background: #10293e; color: white; border-radius: 18px; padding: 22px 26px; }

@@ -90,10 +90,10 @@ function ResponseChat({ assignment, incidentNumber, username, apiUrl, requestJso
 
   return (
     <div className={styles.responseChat}>
-      <button type="button" className={styles.chatToggle} onClick={() => setOpen((value) => !value)}>
+      <button type="button" className={styles.chatToggle} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         Оперативная связь · {incidentNumber} · {assignment.response_unit.name}
         {unreadCount > 0 && <b className={styles.unreadBadge}>{unreadCount} новых</b>}
-        <span>{open ? '⌃' : '⌄'}</span>
+        <span className={`${styles.chevronIcon} ${open ? styles.chevronUp : ''}`} aria-hidden="true" />
       </button>
       {open && (
         <div className={styles.chatContent}>
