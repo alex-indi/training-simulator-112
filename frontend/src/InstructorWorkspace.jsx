@@ -5,6 +5,7 @@ import { io } from 'socket.io-client'
 import styles from './InstructorWorkspace.module.css'
 import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
+import ScenarioLibrary from './ScenarioLibrary.jsx'
 
 const emptySettings = {
   title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -28,12 +29,15 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   const [editingGroupId, setEditingGroupId] = useState(null)
   const [templateName, setTemplateName] = useState('')
   const [queue, setQueue] = useState([])
+  const [scenarioInstances, setScenarioInstances] = useState([])
+  const [instanceTargets, setInstanceTargets] = useState({})
   const [scenarioDraft, setScenarioDraft] = useState(emptyScenario)
   const [editingScenarioId, setEditingScenarioId] = useState(null)
   const [generateCount, setGenerateCount] = useState(3)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const openSessionId = session?.id
 
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
@@ -48,7 +52,12 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     if (sessionId) {
       const fresh = items.find((item) => item.id === sessionId)
       if (fresh) setSession(fresh)
-      setQueue(await api(`/api/training/sessions/${sessionId}/queue`))
+      const [items, instances] = await Promise.all([
+        api(`/api/training/sessions/${sessionId}/queue`),
+        api(`/api/training/sessions/${sessionId}/scenario-instances`),
+      ])
+      setQueue(items)
+      setScenarioInstances(instances)
     }
   }, [api])
 
@@ -110,7 +119,9 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     setSelected([])
     setGenerateCount(item.mode === 'FLOW' ? Math.min(100, Math.ceil(item.duration_minutes * 60 / item.delivery_interval_seconds) + 2) : 3)
     setQueue([])
+    setScenarioInstances([])
     api(`/api/training/sessions/${item.id}/queue`).then(setQueue).catch((cause) => setError(cause.message))
+    api(`/api/training/sessions/${item.id}/scenario-instances`).then(setScenarioInstances).catch((cause) => setError(cause.message))
     setStep(0)
   }
 
@@ -215,6 +226,16 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     await reload(session.id)
     setNotice('Набор утверждён')
   })
+  const prepareInstance = (instance) => runAction(async () => {
+    const target = instanceTargets[instance.id]
+    if (!target) return
+    const [kind, id] = target.split(':')
+    await api(`/api/scenario-instances/${instance.id}/materialize`, jsonOptions('POST', {
+      [kind === 'group' ? 'training_group_id' : 'training_run_id']: Number(id),
+    }))
+    await reload(session.id)
+    setNotice(`Экземпляр #${instance.id} добавлен в очередь`)
+  })
   const editScenario = (item) => {
     setEditingScenarioId(item.id)
     setScenarioDraft({ title: item.title, target: item.training_group_id ? `group:${item.training_group_id}` : `run:${item.training_run_id}`, address: item.snapshot.address, description: item.snapshot.description, incident_type: item.snapshot.incident_type })
@@ -233,6 +254,8 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     reload()
   }
 
+  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} onBack={() => { setLibraryOpen(false); if (session?.id) reload(session.id).catch((cause) => setError(cause.message)) }} />
+
   if (session?.state === 'ACTIVE') return <main className={styles.shell}>
     <header className={styles.header}>
       <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Live-монитор</h1></div>
@@ -248,7 +271,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
 
   return <main className={styles.shell}>
     <header className={styles.header}>
-      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1></div>
+      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1><button type="button" onClick={() => setLibraryOpen(true)}>Библиотека сценариев</button></div>
       <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
     </header>
     {error && <p className={styles.error} role="alert">{error}</p>}
@@ -284,16 +307,24 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
       </div><h4>Учебные группы</h4><div className={styles.cards}>{session.groups.map((group) => <div key={group.id} className={styles.card}><strong>{group.name}</strong><span>{group.dds_profile || 'Профиль не задан'} · {group.difficulty || 'Без сложности'}</span><small>{group.queue_mode === 'SHARED_QUEUE' ? 'Общая очередь' : 'Индивидуальная очередь'} · {group.run_ids.length} участников</small>{editable && <><button type="button" onClick={() => { setEditingGroupId(group.id); setGroupDraft({ name: group.name, dds_profile: group.dds_profile || '', difficulty: group.difficulty || 'Средняя', queue_mode: group.queue_mode }) }}>Изменить группу</button><button type="button" onClick={() => changeGroup(group, 'DELETE')}>Удалить группу</button></>}</div>)}</div>{editable && <div className={styles.groupForm}><input aria-label="Название группы" placeholder="Новая группа" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} /><input aria-label="Профиль ДДС группы" placeholder="Профиль ДДС" value={groupDraft.dds_profile} onChange={(event) => setGroupDraft((current) => ({ ...current, dds_profile: event.target.value }))} /><select aria-label="Сложность группы" value={groupDraft.difficulty} onChange={(event) => setGroupDraft((current) => ({ ...current, difficulty: event.target.value }))}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select><select aria-label="Тип очереди группы" value={groupDraft.queue_mode} onChange={(event) => setGroupDraft((current) => ({ ...current, queue_mode: event.target.value }))}><option value="INDIVIDUAL_QUEUE">Индивидуальная</option><option value="SHARED_QUEUE">Общая</option></select><button type="button" disabled={!groupDraft.name.trim() || busy} onClick={saveGroup}>{editingGroupId ? 'Сохранить группу' : 'Создать группу'}</button>{editingGroupId && <button type="button" onClick={() => { setEditingGroupId(null); setGroupDraft(emptyGroup) }}>Отмена</button>}</div>}<div className={styles.actions}><button type="button" onClick={() => setStep(3)}>К заданиям →</button></div></section>}
       {step === 3 && <section className={styles.section}>
         <h3>Подготовленные задания</h3>
+        <h4>Экземпляры из библиотеки</h4>
+        <p>Выберите очередь для подтверждённого экземпляра. Исходная карточка будет выдана обычным механизмом занятия, а события появятся по учебному времени.</p>
+        <div className={styles.cards}>{scenarioInstances.map((item) => {
+          const prepared = queue.find((entry) => entry.scenario_instance_id === item.id)
+          return <article className={styles.card} key={item.id}><strong>{item.name}</strong><span>{item.object_snapshot.name} · {item.object_snapshot.address}</span><small>Экземпляр #{item.id} · сложность {item.difficulty}/5 · {item.events.length} событий · {prepared ? prepared.delivery_state === 'DELIVERED' ? `Incident #${prepared.incident_id}` : 'В очереди' : 'Не подготовлен'}</small>{editable && !prepared && <><select aria-label={`Очередь для экземпляра ${item.id}`} value={instanceTargets[item.id] || ''} onChange={(event) => setInstanceTargets((current) => ({ ...current, [item.id]: event.target.value }))}><option value="">Выберите АРМ или группу</option>{session.runs.filter((run) => run.queue_mode === 'INDIVIDUAL_QUEUE').map((run) => <option key={run.id} value={`run:${run.id}`}>АРМ {run.workstation_number} · {run.trainee_name}</option>)}{session.groups.filter((group) => group.queue_mode === 'SHARED_QUEUE' && group.run_ids.length).map((group) => <option key={group.id} value={`group:${group.id}`}>Группа {group.name}</option>)}</select><button type="button" disabled={busy || !instanceTargets[item.id]} onClick={() => prepareInstance(item)}>Добавить в очередь</button></>}</article>
+        })}</div>
+        {!scenarioInstances.length && <p>Экземпляры библиотеки пока не привязаны к занятию.</p>}
+        {editable && <button type="button" onClick={() => setLibraryOpen(true)}>Открыть библиотеку сценариев</button>}
         <p>Карточки подготовлены до старта. Для FLOW требуется примерно {session.mode === 'FLOW' ? Math.ceil(session.duration_minutes * 60 / session.delivery_interval_seconds) : '—'} позиций на АРМ. Случайный порядок фиксируется при запуске.</p>
         {editable && <div className={styles.actions}>
           <label>На каждое АРМ или группу <input type="number" min="1" max="100" value={generateCount} onChange={(event) => setGenerateCount(event.target.value)} /></label>
-          <button type="button" disabled={busy || !session.runs.length} onClick={generateQueue}>{queue.length ? 'Перегенерировать набор' : 'Сформировать набор'}</button>
+          <button type="button" disabled={busy || !session.runs.length || queue.some((item) => item.scenario_instance_id)} onClick={generateQueue}>{queue.length ? 'Перегенерировать набор' : 'Сформировать набор'}</button>
           <button type="button" disabled={busy || !queue.length || queue.every((item) => item.approved)} onClick={approveQueue}>Утвердить набор</button>
         </div>}
         <div className={styles.scenarioList}>{queue.map((item) => <article className={styles.scenario} key={item.id}>
           <div><strong>{item.position}. {item.title}</strong><small>{item.training_group_id ? `Группа ${session.groups.find((group) => group.id === item.training_group_id)?.name || '—'}` : `АРМ ${session.runs.find((run) => run.id === item.training_run_id)?.workstation_number || '—'}`} · {item.approved ? 'Утверждена' : 'Ожидает утверждения'} · {item.delivery_state === 'DELIVERED' ? 'Выдана' : 'Не выдана'}{item.delivery_position ? ` · порядок ${item.delivery_position}` : ''}</small></div>
           <p>{item.snapshot.incident_type} · {item.snapshot.address}</p><p>{item.snapshot.description}</p>
-          {editable && <div className={styles.actions}><button type="button" onClick={() => editScenario(item)}>Изменить</button><button type="button" onClick={() => replaceScenario(item.id)}>Заменить</button><button type="button" onClick={() => removeScenario(item.id)}>Удалить</button></div>}
+          {editable && <div className={styles.actions}>{!item.scenario_instance_id && <><button type="button" onClick={() => editScenario(item)}>Изменить</button><button type="button" onClick={() => replaceScenario(item.id)}>Заменить</button></>}<button type="button" onClick={() => removeScenario(item.id)}>Удалить</button></div>}
         </article>)}</div>
         {!queue.length && <p>Пул пока пуст.</p>}
         {editable && <div className={styles.scenarioForm}><h4>{editingScenarioId ? 'Изменить карточку' : 'Добавить карточку'}</h4>

@@ -22,6 +22,16 @@ from app.modules.incident_classifier.router import router as classifier_router
 from app.modules.incidents.router import router as incidents_router
 from app.modules.response.realtime import configure_realtime, sio
 from app.modules.response.router import router as response_router
+from app.modules.scenario_library.instances import (
+    instance_router as scenario_instance_router,
+)
+from app.modules.scenario_library.instances import (
+    session_router as session_instances_router,
+)
+from app.modules.scenario_library.instances import (
+    template_router as scenario_generation_router,
+)
+from app.modules.scenario_library.router import router as scenario_library_router
 from app.modules.training.assessment import router as assessment_router
 from app.modules.training.control import router as control_router
 from app.modules.training.delivery import router as delivery_router
@@ -124,6 +134,10 @@ app.add_middleware(
 )
 app.include_router(identity_router)
 app.include_router(classifier_router)
+app.include_router(scenario_library_router)
+app.include_router(scenario_generation_router)
+app.include_router(scenario_instance_router)
+app.include_router(session_instances_router)
 app.include_router(training_router)
 app.include_router(control_router)
 app.include_router(assessment_router)

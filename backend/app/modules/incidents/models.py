@@ -72,6 +72,9 @@ class Incident(Base):
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         index=True,
     )
+    scenario_instance_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenario_instances.id", ondelete="RESTRICT"), unique=True
+    )
     training_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True
     )

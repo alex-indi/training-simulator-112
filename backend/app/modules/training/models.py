@@ -265,6 +265,9 @@ class ScenarioQueueItem(Base):
     scenario_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_scenarios.id", ondelete="SET NULL")
     )
+    scenario_instance_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenario_instances.id", ondelete="RESTRICT"), unique=True
+    )
     title: Mapped[str] = mapped_column(String(200))
     snapshot: Mapped[dict] = mapped_column(JSON)
     position: Mapped[int] = mapped_column(Integer)
@@ -399,6 +402,12 @@ class ScenarioEvent(Base):
         ForeignKey("incidents.id", ondelete="CASCADE"), index=True
     )
     instructor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
+    origin: Mapped[str] = mapped_column(
+        String(20), default="INSTRUCTOR", server_default="INSTRUCTOR"
+    )
+    scenario_instance_event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scenario_instance_events.id", ondelete="RESTRICT"), unique=True
+    )
     kind: Mapped[str] = mapped_column(String(60))
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
