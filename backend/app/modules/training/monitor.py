@@ -87,6 +87,7 @@ def _incident_read(
 ) -> dict:
     return {
         "id": incident.id,
+        "scenario_instance_id": incident.scenario_instance_id,
         "incident_number": incident.incident_number,
         "incident_type": incident.incident_type,
         "address": incident.address,
@@ -117,7 +118,13 @@ def _incident_read(
             for action in incident.actions
         ],
         "scenario_events": [
-            {"id": event.id, "kind": event.kind, "body": event.body, "created_at": event.created_at}
+            {
+                "id": event.id,
+                "kind": event.kind,
+                "body": event.body,
+                "origin": event.origin,
+                "created_at": event.created_at,
+            }
             for event in (incident.scenario_events or [])
         ],
         "response_assignments": [

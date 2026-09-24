@@ -191,6 +191,7 @@ class QueueItemRead(BaseModel):
     training_run_id: int | None
     training_group_id: int | None
     scenario_id: int | None
+    scenario_instance_id: int | None = None
     title: str
     snapshot: IncidentSnapshot
     position: int

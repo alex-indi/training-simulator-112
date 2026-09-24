@@ -21,9 +21,21 @@ from app.modules.incident_classifier.models import (
 )
 from app.modules.object_registry.models import CityObject, ObjectTag, ObjectType
 from app.modules.object_registry.queries import descendant_type_ids
-from app.modules.scenario_library.instance_models import ScenarioInstance, ScenarioInstanceEvent
+from app.modules.scenario_library.instance_models import (
+    ScenarioInstance,
+    ScenarioInstanceEvent,
+    ScenarioRuntimeEvent,
+)
 from app.modules.scenario_library.router import get_template, readiness_errors, require_editor
-from app.modules.training.models import TrainingSession, TrainingSessionState
+from app.modules.scenario_library.runtime import incident_snapshot
+from app.modules.training.delivery import _editable, _invalidate_readiness, _new_item
+from app.modules.training.models import (
+    QueueMode,
+    ScenarioQueueItem,
+    TrainingSession,
+    TrainingSessionState,
+)
+from app.modules.training.router import _ensure_session_owner, _load_session
 
 template_router = APIRouter(prefix="/api/scenario-templates", tags=["scenario-instances"])
 instance_router = APIRouter(prefix="/api/scenario-instances", tags=["scenario-instances"])
@@ -37,6 +49,93 @@ class GenerationInput(BaseModel):
     seed: int = Field(default=0, ge=0, le=2147483647)
     variant_mode: Literal["MANUAL", "RANDOM"] = "MANUAL"
     training_session_id: int | None = None
+
+
+class MaterializeInput(BaseModel):
+    training_run_id: int | None = Field(default=None, gt=0)
+    training_group_id: int | None = Field(default=None, gt=0)
+
+
+@instance_router.post("/{instance_id}/materialize")
+async def materialize(
+    instance_id: int,
+    data: MaterializeInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Prepare an immutable instance in the canonical queue; delivery creates Incident."""
+    await read_instance(instance_id, user, database)
+    instance = await database.get(ScenarioInstance, instance_id)
+    if instance.training_session_id is None:
+        raise HTTPException(409, "Сначала привяжите экземпляр к занятию")
+    session = await _load_session(database, instance.training_session_id, for_update=True)
+    _ensure_session_owner(session, user)
+    existing = await database.scalar(
+        select(ScenarioQueueItem).where(ScenarioQueueItem.scenario_instance_id == instance_id)
+    )
+    if existing is not None:
+        return {"queue_item_id": existing.id, "incident_id": existing.incident_id}
+    _editable(session, user)
+    if instance.status != "CONFIRMED":
+        raise HTTPException(409, "Экземпляр не подтверждён")
+    if (data.training_run_id is None) == (data.training_group_id is None):
+        raise HTTPException(422, "Укажите один АРМ или одну общую группу")
+    if data.training_run_id is not None and data.training_run_id not in {
+        run.id for run in session.runs if run.queue_mode == QueueMode.INDIVIDUAL_QUEUE
+    }:
+        raise HTTPException(422, "АРМ не принадлежит индивидуальной очереди занятия")
+    if data.training_group_id is not None and data.training_group_id not in {
+        group.id for group in session.groups if group.queue_mode == QueueMode.SHARED_QUEUE
+    }:
+        raise HTTPException(422, "Группа не принадлежит общей очереди занятия")
+    item = _new_item(
+        session,
+        data.training_run_id,
+        instance.name[:200],
+        incident_snapshot(instance),
+        group_id=data.training_group_id,
+    )
+    item.scenario_instance_id = instance.id
+    _invalidate_readiness(session)
+    await database.commit()
+    return {"queue_item_id": item.id, "incident_id": None}
+
+
+@instance_router.get("/{instance_id}/materialization")
+async def read_materialization(
+    instance_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    await read_instance(instance_id, user, database)
+    item = await database.scalar(
+        select(ScenarioQueueItem).where(ScenarioQueueItem.scenario_instance_id == instance_id)
+    )
+    events = []
+    if item and item.incident_id:
+        rows = (
+            await database.scalars(
+                select(ScenarioRuntimeEvent)
+                .where(ScenarioRuntimeEvent.incident_id == item.incident_id)
+                .order_by(ScenarioRuntimeEvent.offset_seconds, ScenarioRuntimeEvent.id)
+            )
+        ).all()
+        events = [
+            {
+                "scenario_instance_event_id": row.scenario_instance_event_id,
+                "event_type": row.event_type,
+                "offset_seconds": row.offset_seconds,
+                "status": row.status,
+                "released_at": row.released_at,
+            }
+            for row in rows
+        ]
+    return {
+        "queue_item_id": item.id if item else None,
+        "incident_id": item.incident_id if item else None,
+        "delivery_state": item.delivery_state if item else None,
+        "runtime_events": events,
+    }
 
 
 def _event_dict(row) -> dict:
@@ -310,7 +409,7 @@ def _serialize(row: ScenarioInstance) -> dict:
         "assessment_criteria_snapshot": row.assessment_criteria_snapshot,
         "template_snapshot": row.template_snapshot,
         "created_at": row.created_at,
-        "events": [_event_dict(e) for e in row.events],
+        "events": [{**_event_dict(e), "id": e.id} for e in row.events],
     }
 
 

@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -61,3 +71,27 @@ class ScenarioInstanceEvent(Base):
     payload_snapshot: Mapped[dict] = mapped_column(JSON)
 
     instance: Mapped[ScenarioInstance] = relationship(back_populates="events")
+
+
+class ScenarioRuntimeEvent(Base):
+    """Prepared event; release facts stay separate from immutable instance content."""
+
+    __tablename__ = "scenario_runtime_events"
+    __table_args__ = (
+        UniqueConstraint("incident_id", "scenario_instance_event_id"),
+        CheckConstraint("offset_seconds >= 0", name="ck_runtime_event_offset"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    incident_id: Mapped[int] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"), index=True
+    )
+    scenario_instance_event_id: Mapped[int] = mapped_column(
+        ForeignKey("scenario_instance_events.id", ondelete="RESTRICT")
+    )
+    event_type: Mapped[str] = mapped_column(String(40))
+    offset_seconds: Mapped[int] = mapped_column(Integer)
+    payload_snapshot: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", server_default="PENDING")
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    incident = relationship("Incident")
