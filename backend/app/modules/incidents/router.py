@@ -49,6 +49,7 @@ def _to_action_read_model(action: IncidentAction) -> IncidentActionRead:
         action=action.action,
         from_status=action.from_status,
         to_status=action.to_status,
+        order_number=action.order_number,
         comment=action.comment,
         created_at=action.created_at,
     )
@@ -510,6 +511,7 @@ async def change_incident_status(
             action=payload.action,
             actor_user_id=current_user.id,
             actor_display_name=current_user.full_name,
+            order_number=payload.order_number,
             comment=payload.comment,
         )
     except IncidentActionCommentRequiredError as error:

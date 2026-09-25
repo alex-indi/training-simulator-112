@@ -1,5 +1,6 @@
 :root {
-  font-family: Arial, "Segoe UI", sans-serif;
+  --app-font-family: "Noto Sans Variable", "Noto Sans", sans-serif;
+  font-family: var(--app-font-family);
   color: #172026;
   background: #8d9ba3;
   font-synthesis: none;

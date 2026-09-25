@@ -1,4 +1,4 @@
-.panel { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 10px 18px; background: #e5f1f6; color: #16394d; border-bottom: 1px solid #b7d0dd; font: 14px system-ui, sans-serif; }
+.panel { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 10px 18px; background: #e5f1f6; color: #16394d; border-bottom: 1px solid #b7d0dd; font: 14px var(--app-font-family); }
 .panel form, .panel label { display: flex; align-items: center; gap: 8px; }
 .panel select, .panel input { padding: 5px; border: 1px solid #8eaebf; border-radius: 4px; background: white; color: #16394d; }
 .panel input { width: 60px; }
