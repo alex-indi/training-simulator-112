@@ -870,7 +870,14 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <footer><select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select><small>{roleLabels[user.role]}</small><button type="button" onClick={onLogout}>Выйти</button></footer>
       </aside>
       <section className={styles.workspace}>
-        <header className={styles.topbar}><div><small>Системное управление</small><h1>{title}</h1></div>{['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}{section !== 'scenarios' && <button onClick={load}>Обновить</button>}<WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} /></header>
+        <header className={styles.topbar}>
+          <div className={styles.topbarMain}>
+            <div><h1>{title}</h1></div>
+            {['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}
+            {section !== 'scenarios' && <button onClick={load}>Обновить</button>}
+          </div>
+          <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
+        </header>
         {error && <div className={styles.error} role="alert">{error}</div>}
         {notice && <div className={styles.notice}>{notice}</div>}
         <div className={styles.content} aria-busy={loading}>{loading && data === null ? <div className={styles.loading}>Загрузка…</div> : content()}</div>

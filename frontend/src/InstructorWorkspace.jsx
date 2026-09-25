@@ -1,4 +1,3 @@
-/* eslint-disable react/prop-types */
 import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
@@ -54,11 +53,11 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
     if (sessionId) {
       const fresh = items.find((item) => item.id === sessionId)
       if (fresh) setSession(fresh)
-      const [items, instances] = await Promise.all([
+      const [queueItems, instances] = await Promise.all([
         api(`/api/training/sessions/${sessionId}/queue`),
         api(`/api/training/sessions/${sessionId}/scenario-instances`),
       ])
-      setQueue(items)
+      setQueue(queueItems)
       setScenarioInstances(instances)
     }
   }, [api])
@@ -256,26 +255,54 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
     reload()
   }
 
-  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} sessionId={session?.id} onBack={() => { setLibraryOpen(false); if (session?.id) reload(session.id).catch((cause) => setError(cause.message)) }} />
+  const openSessions = () => {
+    setLibraryOpen(false)
+    closeSession()
+  }
 
-  if (session?.state === 'ACTIVE') return <main className={styles.shell}>
-    <header className={styles.header}>
-      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Live-монитор</h1></div>
-      <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
-    </header>
+  const closeLibrary = () => {
+    setLibraryOpen(false)
+    if (session?.id) reload(session.id).catch((cause) => setError(cause.message))
+  }
+
+  const renderNavigation = () => <aside className={styles.navigation}>
+    <header><span>112</span><div><small>Учебный тренажёр</small><strong>Преподаватель</strong></div></header>
+    <nav aria-label="Разделы кабинета преподавателя">
+      <button type="button" className={!libraryOpen && !session ? styles.navigationActive : ''} onClick={openSessions}>Занятия</button>
+      <button type="button" className={libraryOpen ? styles.navigationActive : ''} onClick={() => setLibraryOpen(true)}>Библиотека сценариев</button>
+      {session && <>
+        <span className={styles.navigationLabel}>{session.id ? `Занятие №${session.id}` : 'Новое занятие'}</span>
+        {session.state === 'ACTIVE' && <button type="button" className={!libraryOpen ? styles.navigationActive : ''} onClick={() => setLibraryOpen(false)}>Live-монитор</button>}
+        {session.state === 'COMPLETED' && <button type="button" className={!libraryOpen ? styles.navigationActive : ''} onClick={() => setLibraryOpen(false)}>Результаты и оценивание</button>}
+        <button type="button" onClick={openSessions}>← Все занятия</button>
+      </>}
+    </nav>
+    <footer><select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select><small>Преподаватель</small><button type="button" onClick={onLogout}>Выйти</button></footer>
+  </aside>
+
+  const renderWorkspace = (title, content) => <main className={`${styles.shell} ${styles.instructorLayout}`}>
+    {renderNavigation()}
+    <section className={styles.workspace}>
+      <header className={styles.header}>
+        <div><h1>{title}</h1></div>
+        <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
+      </header>
+      {content}
+    </section>
+  </main>
+
+  if (libraryOpen) return renderWorkspace('Библиотека сценариев', <div className={styles.embeddedContent}><ScenarioLibrary embedded user={user} requestJson={requestJson} sessionId={session?.id} onBack={closeLibrary} /></div>)
+
+  if (session?.state === 'ACTIVE') return renderWorkspace('Live-монитор', <>
     <div className={styles.content}>
       <button className={styles.back} type="button" onClick={closeSession}>← Все занятия</button>
       <LiveMonitor sessionId={session.id} user={user} api={api} />
     </div>
-  </main>
+  </>)
 
-  if (session?.state === 'COMPLETED') return <AssessmentWorkspace session={session} api={api} onBack={closeSession} />
+  if (session?.state === 'COMPLETED') return renderWorkspace('Результаты и оценивание', <AssessmentWorkspace embedded session={session} api={api} onBack={closeSession} />)
 
-  return <main className={styles.shell}>
-    <header className={styles.header}>
-      <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1><button type="button" onClick={() => setLibraryOpen(true)}>Библиотека сценариев</button></div>
-      <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
-    </header>
+  return renderWorkspace(session ? steps[step] : 'Занятия', <>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     {!session ? <div className={styles.content}>
@@ -350,7 +377,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
       </section>}
       {step === 4 && <section className={styles.section}><h3>Готовность занятия</h3><div className={styles.summary}><div><span>Участники</span><strong>{session.readiness.participant_count}</strong></div><div><span>Рабочие места</span><strong>{session.workstation_count}</strong></div><div><span>Группы</span><strong>{session.readiness.group_count}</strong></div><div><span>Карточки</span><strong>{session.readiness.approved_count}/{session.readiness.prepared_count}</strong></div><div><span>Профили назначены</span><strong>{session.readiness.profiles_assigned}/{session.readiness.participant_count}</strong></div><div><span>Online / offline</span><strong>{session.readiness.online_count} / {session.readiness.offline_count}</strong></div><div><span>Режим</span><strong>{modeLabels[session.mode]}</strong></div><div><span>Продолжительность</span><strong>{session.duration_minutes || '—'} мин</strong></div><div><span>Интервал</span><strong>{session.mode === 'FLOW' ? `${session.delivery_interval_seconds} сек` : '—'}</strong></div></div>{session.readiness.warnings.map((warning) => <p key={warning} className={styles.warning}>⚠ {warning}</p>)}<div className={styles.actions}>{session.state === 'DRAFT' && <button type="button" disabled={busy || !session.readiness.can_start} onClick={prepare}>Проверить готовность</button>}{session.state === 'READY' && <button type="button" disabled={busy || !session.readiness.can_start} onClick={start}>Запустить занятие</button>}</div><div className={styles.templateForm}><h4>Сохранить как шаблон</h4><p>Сохраняются параметры занятия и групп без участников.</p><input aria-label="Название шаблона" placeholder="Название шаблона" value={templateName} onChange={(event) => setTemplateName(event.target.value)} /><button type="button" disabled={!templateName.trim() || busy} onClick={saveTemplate}>Сохранить шаблон</button></div></section>}
     </div>}
-  </main>
+  </>)
 }
 
 export default InstructorWorkspace
