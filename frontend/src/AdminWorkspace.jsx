@@ -32,6 +32,11 @@ const endpoints = {
 }
 
 const roleLabels = { ADMIN: 'Администратор', INSTRUCTOR: 'Преподаватель', TRAINEE: 'Диспетчер ДДС' }
+const aiHealthLabels = {
+  AVAILABLE: 'подключение установлено',
+  UNAVAILABLE: 'провайдер недоступен',
+  MISCONFIGURED: 'настройки неполные',
+}
 const userGroups = [
   ['ADMIN', 'Администраторы'],
   ['INSTRUCTOR', 'Преподаватели'],
@@ -443,7 +448,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <label>Base URL<input name="base_url" type="url" disabled={aiDraft.provider === 'OPENAI'} value={aiDraft.base_url} onChange={(event) => setAiDraft({ ...aiDraft, base_url: event.target.value })} /></label>
         <label>API key<input name="api_key" type="password" autoComplete="new-password" placeholder={data.api_key_configured ? 'Ключ сохранён — введите новый для замены' : 'Введите ключ провайдера'} value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} /></label>
         <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" value={aiDraft.timeout_seconds} onChange={(event) => setAiDraft({ ...aiDraft, timeout_seconds: event.target.value })} /></label>
-        <label className={styles.checkbox}><input name="enabled" type="checkbox" checked={aiDraft.enabled} onChange={(event) => setAiDraft({ ...aiDraft, enabled: event.target.checked })} /> Renderer включён</label>
+        <label className={styles.checkbox}><input name="enabled" type="checkbox" checked={aiDraft.enabled} onChange={(event) => setAiDraft({ ...aiDraft, enabled: event.target.checked })} /> Активировать модель</label>
         <div className={styles.secretState}>API key: <b>{data.api_key_configured ? '● configured' : '○ not configured'}</b>. Значение ключа никогда не возвращается.</div>
         <button disabled={loading}>Применить</button>
         <button disabled={loading} type="button" onClick={async () => {
@@ -453,7 +458,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
           finally { setLoading(false) }
         }}>Проверить подключение</button>
       </form>
-      {aiHealth && <p role="status">Провайдер: {aiHealth.provider} · модель: {aiHealth.model || '—'} · состояние: {aiHealth.status}</p>}
+      {aiHealth && <p role="status">Провайдер: {aiHealth.provider} · модель: {aiHealth.model || '—'} · состояние: {aiHealthLabels[aiHealth.status] || aiHealth.status}{aiHealth.available && !aiHealth.renderer_enabled ? ' · Модель не активирована' : ''}</p>}
       <h3>Usage за 31 день</h3>{!usage.length ? <Empty>Статистика usage не поступала</Empty> : <div className={styles.compactList}>{usage.map((item) => <article key={item.day}><b>{item.day}</b><span>запросов {item.requests}</span><small>input {item.input_tokens} · output {item.output_tokens} · fallback {item.fallbacks} · ошибок {item.errors}</small></article>)}</div>}
     </>
   )

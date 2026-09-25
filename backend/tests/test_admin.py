@@ -35,6 +35,7 @@ from app.modules.identity.models import User, UserRole
 from app.modules.identity.passwords import verify_password
 from app.modules.object_registry.models import ObjectType
 from app.services.text_generation.providers import OpenAICompatibleProvider
+from app.services.text_generation.renderer import ProviderHealth
 
 
 def make_user(user_id: int, role: UserRole, *, active: bool = True) -> User:
@@ -61,7 +62,13 @@ def test_admin_can_enter_admin_boundary() -> None:
     assert asyncio.run(require_admin(admin)) is admin
 
 
-def test_admin_ai_health_reports_disabled_without_contacting_provider() -> None:
+def test_admin_ai_health_checks_provider_when_renderer_is_disabled(monkeypatch) -> None:
+    async def available(provider) -> ProviderHealth:
+        assert provider.base_url == "http://local.test/v1"
+        assert provider.model == "local-test"
+        return ProviderHealth("AVAILABLE", provider.name, provider.model)
+
+    monkeypatch.setattr(OpenAICompatibleProvider, "healthcheck", available)
     session = AsyncMock()
     session.get.return_value = AIProviderConfig(
         id=1,
@@ -73,10 +80,11 @@ def test_admin_ai_health_reports_disabled_without_contacting_provider() -> None:
     )
     result = asyncio.run(ai_health(session))
     assert result == {
-        "status": "DISABLED",
-        "available": False,
+        "status": "AVAILABLE",
+        "available": True,
         "provider": "openai_compatible",
         "model": "local-test",
+        "renderer_enabled": False,
     }
 
 

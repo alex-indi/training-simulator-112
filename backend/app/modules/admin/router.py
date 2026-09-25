@@ -59,7 +59,7 @@ from app.modules.incident_classifier.models import (
 from app.modules.object_registry.models import CityObject, ObjectType
 from app.modules.training.models import TrainingScenario, TrainingSession, TrainingSessionState
 from app.services.text_generation.providers import OpenAICompatibleProvider, OpenAIProvider
-from app.services.text_generation.renderer import renderer_for_database
+from app.services.text_generation.renderer import TemplateTextGenerationProvider
 
 router = APIRouter(
     prefix="/api/admin",
@@ -691,28 +691,26 @@ async def ai_models(payload: AIModelCatalogRequest, session: Database) -> AIMode
 
 @router.post("/ai/health")
 async def ai_health(session: Database) -> dict[str, Any]:
-    stored = await session.get(AIProviderConfig, 1)
-    if stored is not None and not stored.enabled:
-        return {
-            "status": "DISABLED",
-            "available": False,
-            "provider": stored.provider.lower(),
-            "model": stored.model,
-        }
-    if stored is None and not get_settings().ai_text_enabled:
-        return {
-            "status": "DISABLED",
-            "available": False,
-            "provider": get_settings().ai_text_provider,
-            "model": get_settings().ai_text_model or None,
-        }
-    renderer = await renderer_for_database(session)
-    health = await renderer.provider.healthcheck()
+    config = await session.get(AIProviderConfig, 1) or _ai_from_environment()
+    provider_name = _validate_ai_endpoint(config.provider, config.base_url)
+    api_key = _effective_ai_api_key(config)
+    if provider_name == "template":
+        provider = TemplateTextGenerationProvider()
+    elif provider_name == "openai":
+        provider = OpenAIProvider(model=config.model, api_key=api_key)
+    else:
+        provider = OpenAICompatibleProvider(
+            base_url=config.base_url,
+            model=config.model,
+            api_key=api_key,
+        )
+    health = await provider.healthcheck()
     return {
         "status": health.status,
         "available": health.status == "AVAILABLE",
         "provider": health.provider,
         "model": health.model,
+        "renderer_enabled": config.enabled,
     }
 
 
