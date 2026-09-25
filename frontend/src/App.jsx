@@ -210,6 +210,7 @@ function App() {
   const [responseUnits, setResponseUnits] = useState([])
   const [responseAssignments, setResponseAssignments] = useState([])
   const [selectedResponseUnitId, setSelectedResponseUnitId] = useState('')
+  const [selectedDispatchServiceId, setSelectedDispatchServiceId] = useState('')
   const [expandedSearch, setExpandedSearch] = useState(false)
   const [filters, setFilters] = useState(emptyFilters)
   const [now, setNow] = useState(() => new Date())
@@ -460,6 +461,7 @@ function App() {
       setActionComment('')
       setResponseUnits(units)
       setResponseAssignments(assignments)
+      setSelectedDispatchServiceId(String((openedIncident.source_snapshot?.scenario_services || []).find((service) => !assignments.some((assignment) => assignment.dispatch_service_id === service.service_id))?.service_id || ''))
       setSelectedResponseUnitId(String(units.find(
         (unit) => !assignments.some((assignment) => assignment.response_unit.id === unit.id),
       )?.id || ''))
@@ -592,7 +594,7 @@ function App() {
 
   const submitResponseAssignment = async (event) => {
     event.preventDefault()
-    if (!selectedResponseUnitId) return
+    if (!selectedResponseUnitId || (selectedIncident?.scenario_instance_id && !selectedDispatchServiceId)) return
     setError('')
     setLoading(true)
     try {
@@ -602,11 +604,12 @@ function App() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ response_unit_id: Number(selectedResponseUnitId) }),
+          body: JSON.stringify({ response_unit_id: Number(selectedResponseUnitId), dispatch_service_id: selectedDispatchServiceId ? Number(selectedDispatchServiceId) : null }),
         },
       )
       const updated = [...responseAssignments, assignment]
       setResponseAssignments(updated)
+      setSelectedDispatchServiceId(String((selectedIncident.source_snapshot?.scenario_services || []).find((service) => !updated.some((item) => item.dispatch_service_id === service.service_id))?.service_id || ''))
       setSelectedResponseUnitId(String(responseUnits.find(
         (unit) => !updated.some((item) => item.response_unit.id === unit.id),
       )?.id || ''))
@@ -917,6 +920,7 @@ function App() {
                       ))}
                       {canAssignResponse && availableResponseUnits.length > 0 && (
                         <form onSubmit={submitResponseAssignment}>
+                          {!!selectedIncident.source_snapshot?.scenario_services?.length && <select aria-label="Служба сценария" value={selectedDispatchServiceId} onChange={(event) => setSelectedDispatchServiceId(event.target.value)} required><option value="">Выберите службу</option>{selectedIncident.source_snapshot.scenario_services.filter((service) => !responseAssignments.some((assignment) => assignment.dispatch_service_id === service.service_id)).map((service) => <option key={service.service_id} value={service.service_id}>{service.name}</option>)}</select>}
                           <select
                             aria-label="Доступная группа реагирования"
                             value={selectedResponseUnitId}
@@ -926,7 +930,7 @@ function App() {
                               <option key={unit.id} value={unit.id}>{unit.name}</option>
                             ))}
                           </select>
-                          <button type="submit" disabled={loading || !selectedResponseUnitId}>Назначить группу</button>
+                          <button type="submit" disabled={loading || !selectedResponseUnitId || (selectedIncident.scenario_instance_id && !selectedDispatchServiceId)}>Назначить группу</button>
                         </form>
                       )}
                       {!canAssignResponse && <small>Назначение доступно после принятия карточки.</small>}

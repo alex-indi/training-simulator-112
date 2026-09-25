@@ -143,7 +143,26 @@ async def read_materialization(
     }
 
 
-def _event_dict(row) -> dict:
+def _event_dict(row, services: list[dict] | None = None) -> dict:
+    if isinstance(row, ScenarioInstanceEvent):
+        payload = row.payload_snapshot
+    else:
+        target = next(
+            (
+                service
+                for service in services or []
+                if service["service_id"] == row.target_service_id
+            ),
+            None,
+        )
+        payload = {
+            "title": row.title,
+            "description": row.description,
+            "source_type": row.source_type,
+            "target_service_id": row.target_service_id,
+            "target_service_name": target["official_name"] if target else None,
+            "target_service_source": target["source_reference"] if target else None,
+        }
     result = {
         "sequence_number": row.sequence_number,
         "offset_seconds": row.offset_seconds,
@@ -151,11 +170,7 @@ def _event_dict(row) -> dict:
         "title": row.title,
         "description": row.description,
         "source_type": row.source_type,
-        "payload_snapshot": {
-            "title": row.title,
-            "description": row.description,
-            "source_type": row.source_type,
-        },
+        "payload_snapshot": payload,
     }
     if isinstance(row, ScenarioInstanceEvent):
         result["payload_snapshot"] = row.payload_snapshot
@@ -416,7 +431,7 @@ async def _build(
             "description": template.initial_description,
             "caller_text": template.initial_caller_text,
         },
-        "events": [_event_dict(event) for event in template.events],
+        "events": [_event_dict(event, services) for event in template.events],
         "expected_actions_snapshot": [
             {
                 "expected_action_type": a.expected_action_type,
@@ -481,7 +496,7 @@ def _serialize(row: ScenarioInstance) -> dict:
         "assessment_criteria_snapshot": row.assessment_criteria_snapshot,
         "template_snapshot": row.template_snapshot,
         "created_at": row.created_at,
-        "events": [{**_event_dict(e), "id": e.id} for e in row.events],
+        "events": [{**_event_dict(e, row.service_snapshot), "id": e.id} for e in row.events],
     }
 
 

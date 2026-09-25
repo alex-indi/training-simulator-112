@@ -190,6 +190,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     title="Прибытие",
                     description="Бригада прибыла",
                     source_type="RESPONSE_UNIT",
+                    target_service_id=service.id,
                 ),
             ],
             services=[ScenarioTemplateService(service_id=service.id, source="CLASSIFIER")],
@@ -261,6 +262,11 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 assert instance["service_snapshot"][0]["official_name"] == "Пожарная охрана"
                 assert instance["assessment_criteria_snapshot"][0]["weight"] == 3
                 assert instance["events"][0]["description"] == "Сообщил о дыме"
+                assert instance["events"][1]["payload_snapshot"]["target_service_id"] == service.id
+                assert (
+                    instance["events"][1]["payload_snapshot"]["target_service_name"]
+                    == "Пожарная охрана"
+                )
                 assert instance["status"] == "DRAFT"
                 assert instance["initial_state_snapshot"]["render"]["fallback_used"]
                 assert instance["events"][1]["render"]["rendered_text"] == "Бригада прибыла"

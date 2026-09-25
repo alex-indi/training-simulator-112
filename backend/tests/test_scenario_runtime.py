@@ -15,6 +15,7 @@ from app.db.dependencies import get_database_session
 from app.modules.admin import models as admin_models  # noqa: F401
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
+from app.modules.incident_classifier.models import DispatchService
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentAction
 from app.modules.response.models import ResponseAssignment, ResponseMessage, ResponseUnit
 from app.modules.scenario_library.instance_models import (
@@ -45,7 +46,8 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
     with Session(engine, expire_on_commit=False) as db:
         instructor = User(username="teacher", full_name="Teacher", role=UserRole.INSTRUCTOR)
         trainee = User(username="student", full_name="Student", role=UserRole.TRAINEE)
-        db.add_all([instructor, trainee])
+        service = DispatchService(official_name="Пожарная охрана", source_reference="TEST:101")
+        db.add_all([instructor, trainee, service])
         db.flush()
         template = ScenarioTemplate(
             name="Исходный шаблон",
@@ -79,7 +81,7 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
             status="CONFIRMED",
             classifier_snapshot={"final_incident_type": "Пожар", "features": []},
             object_snapshot={"name": "Школа", "address": "Исходный адрес"},
-            service_snapshot=[{"official_name": "Пожарная охрана"}],
+            service_snapshot=[{"service_id": service.id, "official_name": "Пожарная охрана"}],
             initial_state_snapshot={
                 "title": "Дым",
                 "description": "Первый звонок",
@@ -116,6 +118,7 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                     source_type="RESPONSE_UNIT",
                     payload_snapshot={
                         "description": "Группа прибыла",
+                        "target_service_id": service.id,
                         "render": {"rendered_text": "Прибыли к месту"},
                     },
                 ),
@@ -164,6 +167,7 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                         incident_id=incident.id,
                         response_unit_id=unit.id,
                         training_run_id=run.id,
+                        dispatch_service_id=service.id,
                     )
                 )
                 db.commit()

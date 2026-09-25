@@ -90,6 +90,7 @@ def test_library_lifecycle_and_permissions():
             incident_group="Пожар", final_incident_type="Пожар", source_reference="SRC:1"
         )
         service = DispatchService(official_name="Пожарная охрана", source_reference="CAT:1")
+        other_service = DispatchService(official_name="Скорая помощь", source_reference="CAT:2")
         object_type = ObjectType(code="SCHOOL", name="Школа", source="test")
         empty_type = ObjectType(code="HOSPITAL", name="Больница", source="test")
         db.add_all(
@@ -98,6 +99,7 @@ def test_library_lifecycle_and_permissions():
                 trainee,
                 rule,
                 service,
+                other_service,
                 object_type,
                 empty_type,
                 ObjectTagDefinition(code="children", name="Дети"),
@@ -233,6 +235,46 @@ def test_library_lifecycle_and_permissions():
                 assert copy.status_code == 201, copy.text
                 assert copy.json()["status"] == "DRAFT"
                 assert copy.json()["events"][0]["title"] == "Заявитель"
+                copy_id = copy.json()["id"]
+                message_events = [
+                    *payload["events"],
+                    {
+                        "offset_seconds": 60,
+                        "event_type": "RESPONSE_MESSAGE",
+                        "title": "Доклад группы",
+                    },
+                ]
+                missing_target = await client.patch(
+                    f"/api/scenario-templates/{copy_id}",
+                    json={**payload, "events": message_events},
+                )
+                assert missing_target.status_code == 200
+                assert "Выберите службу для сообщения группы" in (
+                    await client.get(f"/api/scenario-templates/{copy_id}/validate")
+                ).json()["errors"]
+                assert (
+                    await client.post(f"/api/scenario-templates/{copy_id}/ready")
+                ).status_code == 422
+                outside_target = await client.patch(
+                    f"/api/scenario-templates/{copy_id}",
+                    json={**payload, "events": [
+                        *payload["events"],
+                        {**message_events[1], "target_service_id": other_service.id},
+                    ]},
+                )
+                assert outside_target.status_code == 422
+                addressed = await client.patch(
+                    f"/api/scenario-templates/{copy_id}",
+                    json={**payload, "events": [
+                        *payload["events"],
+                        {**message_events[1], "target_service_id": service.id},
+                    ]},
+                )
+                assert addressed.status_code == 200
+                assert addressed.json()["events"][1]["target_service_id"] == service.id
+                assert (
+                    await client.get(f"/api/scenario-templates/{copy_id}/validate")
+                ).json()["errors"] == []
                 principal["user"] = trainee
                 assert (
                     await client.get(f"/api/scenario-templates/{scenario_id}")

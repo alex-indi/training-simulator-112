@@ -103,6 +103,7 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
     return IncidentRead(
         id=incident.id,
         training_session_id=incident.training_session_id,
+        scenario_instance_id=incident.scenario_instance_id,
         training_run_id=incident.training_run_id,
         training_group_id=incident.training_group_id,
         claimed_by_training_run_id=incident.claimed_by_training_run_id,

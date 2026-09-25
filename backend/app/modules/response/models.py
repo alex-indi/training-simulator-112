@@ -63,7 +63,10 @@ class ResponseAssignment(Base):
     """Состояние одной группы в конкретном происшествии и TrainingRun."""
 
     __tablename__ = "response_assignments"
-    __table_args__ = (UniqueConstraint("incident_id", "response_unit_id"),)
+    __table_args__ = (
+        UniqueConstraint("incident_id", "response_unit_id"),
+        UniqueConstraint("incident_id", "dispatch_service_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     incident_id: Mapped[int] = mapped_column(
@@ -71,6 +74,9 @@ class ResponseAssignment(Base):
     )
     response_unit_id: Mapped[int] = mapped_column(
         ForeignKey("response_units.id", ondelete="RESTRICT"), index=True
+    )
+    dispatch_service_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dispatch_services.id", ondelete="RESTRICT"), index=True
     )
     training_run_id: Mapped[int] = mapped_column(
         ForeignKey("training_runs.id", ondelete="RESTRICT"), index=True

@@ -82,7 +82,22 @@ async def import_seed() -> dict[str, int]:
                         "initial_title": entry["initial_title"],
                         "initial_description": entry["initial_description"],
                         "initial_caller_text": entry["initial_caller_text"],
-                        "events": entry["events"],
+                        "events": [
+                            {
+                                **{key: value for key, value in event.items()
+                                   if key != "target_service_source_reference"},
+                                "target_service_id": (
+                                    service_ids[
+                                        entry["service_source_references"].index(
+                                            event["target_service_source_reference"]
+                                        )
+                                    ]
+                                    if event.get("target_service_source_reference")
+                                    else None
+                                ),
+                            }
+                            for event in entry["events"]
+                        ],
                         "services": [
                             {"service_id": item, "source": "CLASSIFIER"} for item in service_ids
                         ],
