@@ -65,6 +65,9 @@ class ObjectTypeWrite(BaseModel):
 
 
 class ObjectTypeUpdate(BaseModel):
+    code: str | None = Field(
+        default=None, min_length=2, max_length=120, pattern=r"^[A-Z0-9_]+$"
+    )
     name: str | None = Field(default=None, min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=2000)
     parent_id: int | None = None
@@ -73,6 +76,7 @@ class ObjectTypeUpdate(BaseModel):
 
 class ObjectTypeRead(ObjectTypeWrite):
     id: int
+    description: str | None
     is_active: bool
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,7 +90,16 @@ class ClassifierRead(BaseModel):
     feature_3: str | None
     incident_type: str
     related_services: list
+    related_service_ids: list[int]
     source: str = "SRC-006"
+
+
+class ClassifierUpdate(BaseModel):
+    source_code: str | None = Field(default=None, max_length=160)
+    incident_group: str | None = Field(default=None, min_length=1, max_length=1000)
+    incident_type: str | None = Field(default=None, min_length=1, max_length=1000)
+    feature_names: list[str] | None = Field(default=None, max_length=3)
+    related_service_ids: list[int] | None = None
 
 
 class ServiceRead(BaseModel):
@@ -98,6 +111,13 @@ class ServiceRead(BaseModel):
     source: str
     data_status: str
     external_id: str
+
+
+class ServiceUpdate(BaseModel):
+    official_name: str | None = Field(default=None, min_length=1, max_length=2000)
+    level: str | None = Field(default=None, max_length=120)
+    organization: str | None = Field(default=None, max_length=2000)
+    external_id: str | None = Field(default=None, min_length=1, max_length=500)
 
 
 class RegistryObjectRead(BaseModel):
@@ -114,6 +134,21 @@ class RegistryObjectRead(BaseModel):
     source: str
     dataset_id: str
     external_id: str
+
+
+class RegistryObjectUpdate(BaseModel):
+    official_name: str | None = Field(default=None, min_length=1, max_length=500)
+    object_type_id: int | None = None
+    address: str | None = Field(default=None, max_length=4000)
+    district: str | None = Field(default=None, max_length=250)
+    administrative_area: str | None = Field(default=None, max_length=250)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    tags: list[str] | None = None
+    attributes: dict[str, Any] | None = None
+    source: str | None = Field(default=None, min_length=1, max_length=250)
+    dataset_id: str | None = Field(default=None, max_length=250)
+    external_id: str | None = Field(default=None, min_length=1, max_length=250)
 
 
 class ImportRunRead(BaseModel):
@@ -200,7 +235,7 @@ class ScenarioAdminRead(BaseModel):
     author_id: int
     author: str
     status: str
-    difficulty: str | None
+    difficulty: int | None
     incident_type: str | None
     updated_at: datetime
     archived: bool

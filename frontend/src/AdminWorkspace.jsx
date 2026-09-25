@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 
 import styles from './AdminWorkspace.module.css'
+import ScenarioLibrary from './ScenarioLibrary.jsx'
 
 const sections = [
   ['overview', 'Обзор'],
@@ -72,13 +73,20 @@ const auditActionLabels = {
   USER_GROUP_UPDATED: 'Учебная группа изменена',
   USER_ROLE_CHANGED: 'Роль пользователя изменена',
   USER_UPDATED: 'Пользователь изменён',
+  CLASSIFIER_RULE_UPDATED: 'Правило классификатора изменено',
+  REGISTRY_OBJECT_UPDATED: 'Объект Москвы изменён',
+  SERVICE_UPDATED: 'Служба 112 изменена',
 }
 const auditEntityLabels = {
   AI_PROVIDER: 'Настройки AI',
   OBJECT_TYPE: 'Тип объекта',
   TRAINING_SCENARIO: 'Учебный сценарий',
+  SCENARIO_TEMPLATE: 'Шаблон сценария',
   USER: 'Пользователь',
   USER_GROUP: 'Учебная группа',
+  CITY_OBJECT: 'Объект Москвы',
+  CLASSIFIER_RULE: 'Правило классификатора',
+  DISPATCH_SERVICE: 'Служба 112',
 }
 const auditFieldLabels = {
   api_key_configured: 'API key настроен',
@@ -97,6 +105,28 @@ const auditFieldLabels = {
   role: 'Роль',
   timeout_seconds: 'Таймаут, сек.',
   username: 'Логин',
+  address: 'Адрес',
+  administrative_area: 'Округ',
+  attributes: 'Дополнительные сведения',
+  dataset_id: 'Набор данных',
+  district: 'Район',
+  external_id: 'External ID',
+  feature_1: 'Признак 1',
+  feature_2: 'Признак 2',
+  feature_3: 'Признак 3',
+  incident_group: 'Группа происшествий',
+  incident_type: 'Тип происшествия',
+  latitude: 'Широта',
+  level: 'Уровень',
+  longitude: 'Долгота',
+  object_type_id: 'Тип объекта',
+  official_name: 'Официальное название',
+  organization: 'Организация',
+  related_service_ids: 'Связанные службы',
+  related_services: 'Связанные службы',
+  source: 'Источник',
+  source_code: 'Код классификатора',
+  tags: 'Теги',
 }
 const userGroups = [
   ['ADMIN', 'Администраторы'],
@@ -126,7 +156,10 @@ function formatAuditValue(field, value) {
   if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
   if (field === 'role') return roleLabels[value] || value
   if (field === 'provider') return value === 'OPENAI_COMPATIBLE' ? 'OpenAI-compatible' : value
-  if (Array.isArray(value)) return value.join(', ') || 'Не задано'
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => formatAuditValue(field, item)).join('; ') : 'Не задано'
+  }
+  if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${objectAttributeLabels[key] || key}: ${formatAuditValue(key, item)}`).join('; ')
   return String(value)
 }
 
@@ -143,6 +176,31 @@ function auditChanges(item) {
       before: item.before ? formatAuditValue(key, before[key]) : null,
       after: item.after ? formatAuditValue(key, after[key]) : null,
     }))
+}
+
+function objectAttributeToInput(code, value) {
+  if (code === 'working_hours' && Array.isArray(value)) {
+    return value.filter((item) => item && !item.is_deleted)
+      .sort((left, right) => weekdayOrder.indexOf(left.DayWeek) - weekdayOrder.indexOf(right.DayWeek))
+      .map((item) => `${item.DayWeek}: ${item.WorkHours || ''}`).join('\n')
+  }
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${item}`).join('\n')
+  return value === null || value === undefined ? '' : String(value)
+}
+
+function parseObjectAttributeInput(code, value, original) {
+  if (code === 'working_hours') {
+    return value.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+      const [day, ...hours] = line.split(':')
+      return { DayWeek: day.trim(), WorkHours: hours.join(':').trim(), is_deleted: 0 }
+    })
+  }
+  if (Array.isArray(original)) return value.split(',').map((item) => item.trim()).filter(Boolean)
+  if (typeof original === 'boolean') return value === 'true'
+  if (typeof original === 'number') return Number(value)
+  return value
 }
 
 function Empty({ children = 'Данных пока нет' }) {
@@ -176,6 +234,11 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [groupDraft, setGroupDraft] = useState({ name: '', description: '' })
   const [groupModal, setGroupModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
+  const [catalogModal, setCatalogModal] = useState(null)
+  const [catalogDraft, setCatalogDraft] = useState({})
+  const [catalogServiceSearch, setCatalogServiceSearch] = useState('')
+  const [serviceOptions, setServiceOptions] = useState([])
+  const [objectTypeOptions, setObjectTypeOptions] = useState([])
   const [typeDraft, setTypeDraft] = useState({ code: '', name: '', description: '', parent_id: '' })
   const loadRequestId = useRef(0)
   const aiModelsRequestId = useRef(0)
@@ -275,6 +338,91 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     } catch (cause) {
       setError(cause.message)
       return false
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openCatalogEditor = async (kind, item) => {
+    setError('')
+    setCatalogServiceSearch('')
+    if (kind === 'classifier' && !serviceOptions.length) {
+      try { setServiceOptions(await requestJson('/api/admin/services?limit=500', username)) }
+      catch (cause) { setError(cause.message); return }
+    }
+    if ((kind === 'object' || kind === 'type') && !objectTypeOptions.length) {
+      try { setObjectTypeOptions(await requestJson('/api/admin/object-types', username)) }
+      catch (cause) { setError(cause.message); return }
+    }
+    if (kind === 'classifier') setCatalogDraft({
+      source_code: item.source_code || '',
+      incident_group: item.incident_group,
+      incident_type: item.incident_type,
+      feature_names: [item.feature_1 || '', item.feature_2 || '', item.feature_3 || ''],
+      related_service_ids: item.related_service_ids || [],
+    })
+    if (kind === 'service') setCatalogDraft({
+      official_name: item.official_name,
+      level: item.level || '',
+      organization: item.organization || '',
+      external_id: item.external_id,
+    })
+    if (kind === 'object') setCatalogDraft({
+      official_name: item.official_name,
+      object_type_id: item.object_type_id,
+      address: item.address || '',
+      district: item.district || '',
+      administrative_area: item.administrative_area || '',
+      latitude: item.latitude ?? '',
+      longitude: item.longitude ?? '',
+      tags: item.tags.join(', '),
+      attributes: Object.fromEntries(Object.entries(item.attributes).map(([code, value]) => [code, objectAttributeToInput(code, value)])),
+      source: item.source,
+      dataset_id: item.dataset_id,
+      external_id: item.external_id,
+    })
+    if (kind === 'type') setCatalogDraft({
+      code: item.code,
+      name: item.name,
+      description: item.description || '',
+      parent_id: item.parent_id ?? '',
+      is_active: item.is_active,
+    })
+    setCatalogModal({ kind, item })
+  }
+
+  const submitCatalog = async (event) => {
+    event.preventDefault()
+    const { kind, item } = catalogModal
+    const paths = {
+      classifier: `/api/admin/classifier/${item.id}`,
+      service: `/api/admin/services/${item.id}`,
+      object: `/api/admin/object-registry/${item.id}`,
+      type: `/api/admin/object-types/${item.id}`,
+    }
+    let payload = { ...catalogDraft }
+    if (kind === 'classifier') payload.feature_names = payload.feature_names.map((value) => value.trim()).filter(Boolean)
+    if (kind === 'object') payload = {
+      ...payload,
+      object_type_id: Number(payload.object_type_id),
+      latitude: payload.latitude === '' ? null : Number(payload.latitude),
+      longitude: payload.longitude === '' ? null : Number(payload.longitude),
+      tags: payload.tags.split(',').map((value) => value.trim()).filter(Boolean),
+      attributes: Object.fromEntries(Object.entries(payload.attributes).map(([code, value]) => [code, parseObjectAttributeInput(code, value, item.attributes[code])])),
+    }
+    if (kind === 'type') payload.parent_id = payload.parent_id === '' ? null : Number(payload.parent_id)
+    setLoading(true)
+    setError('')
+    try {
+      const updated = await requestJson(paths[kind], username, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      if (kind === 'object') setSelectedObject(updated)
+      setCatalogModal(null)
+      await load()
+      setNotice('Изменения сохранены и записаны в аудит.')
+    } catch (cause) {
+      setError(cause.message)
     } finally {
       setLoading(false)
     }
@@ -501,14 +649,57 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </section>
   </div>
 
-  const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span></div>)}</div>
+  const renderCatalogModal = () => catalogModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={`${styles.modal} ${styles.catalogModal}`} role="dialog" aria-modal="true" aria-labelledby="catalog-modal-title">
+      <header className={styles.modalHeader}><div><small>Редактирование справочника</small><h2 id="catalog-modal-title">{{ classifier: 'Правило классификатора', service: 'Служба 112', object: 'Объект Москвы', type: 'Тип объекта' }[catalogModal.kind]}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setCatalogModal(null)}>×</button></header>
+      <form className={`${styles.modalForm} ${styles.catalogForm}`} onSubmit={submitCatalog}>
+        {catalogModal.kind === 'classifier' && <>
+          <label><span>Группа происшествий</span><input required value={catalogDraft.incident_group} onChange={(event) => setCatalogDraft({ ...catalogDraft, incident_group: event.target.value })} /></label>
+          <label><span>Тип происшествия</span><input required value={catalogDraft.incident_type} onChange={(event) => setCatalogDraft({ ...catalogDraft, incident_type: event.target.value })} /></label>
+          <label><span>Код</span><input value={catalogDraft.source_code} onChange={(event) => setCatalogDraft({ ...catalogDraft, source_code: event.target.value })} /></label>
+          {catalogDraft.feature_names.map((value, index) => <label key={index}><span>Признак {index + 1}</span><input value={value} onChange={(event) => setCatalogDraft({ ...catalogDraft, feature_names: catalogDraft.feature_names.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /></label>)}
+          <fieldset className={`${styles.servicePicker} ${styles.fullField}`}><legend>Связанные службы</legend><input aria-label="Поиск службы для правила" placeholder="Найти службу…" value={catalogServiceSearch} onChange={(event) => setCatalogServiceSearch(event.target.value)} /><div>{serviceOptions.filter((service) => service.official_name.toLowerCase().includes(catalogServiceSearch.trim().toLowerCase())).map((service) => <label key={service.id}><input type="checkbox" checked={catalogDraft.related_service_ids.includes(service.id)} onChange={(event) => setCatalogDraft({ ...catalogDraft, related_service_ids: event.target.checked ? [...catalogDraft.related_service_ids, service.id] : catalogDraft.related_service_ids.filter((id) => id !== service.id) })} /><span>{service.official_name}</span></label>)}</div><small>Выбрано служб: {catalogDraft.related_service_ids.length}</small></fieldset>
+        </>}
+        {catalogModal.kind === 'service' && <>
+          <label className={styles.fullField}><span>Официальное название</span><textarea required rows="3" value={catalogDraft.official_name} onChange={(event) => setCatalogDraft({ ...catalogDraft, official_name: event.target.value })} /></label>
+          <label><span>Уровень</span><input value={catalogDraft.level} onChange={(event) => setCatalogDraft({ ...catalogDraft, level: event.target.value })} /></label>
+          <label><span>External ID</span><input required value={catalogDraft.external_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, external_id: event.target.value })} /></label>
+          <label className={styles.fullField}><span>Организация</span><textarea rows="3" value={catalogDraft.organization} onChange={(event) => setCatalogDraft({ ...catalogDraft, organization: event.target.value })} /></label>
+        </>}
+        {catalogModal.kind === 'object' && <>
+          <label className={styles.fullField}><span>Название</span><textarea required rows="2" value={catalogDraft.official_name} onChange={(event) => setCatalogDraft({ ...catalogDraft, official_name: event.target.value })} /></label>
+          <label><span>Тип объекта</span><select required value={catalogDraft.object_type_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, object_type_id: event.target.value })}>{objectTypeOptions.map((type) => <option key={type.id} value={type.id}>{type.name} ({type.code})</option>)}</select></label>
+          <label><span>Район</span><input value={catalogDraft.district} onChange={(event) => setCatalogDraft({ ...catalogDraft, district: event.target.value })} /></label>
+          <label className={styles.fullField}><span>Адрес</span><textarea rows="3" value={catalogDraft.address} onChange={(event) => setCatalogDraft({ ...catalogDraft, address: event.target.value })} /></label>
+          <label><span>Округ</span><input value={catalogDraft.administrative_area} onChange={(event) => setCatalogDraft({ ...catalogDraft, administrative_area: event.target.value })} /></label>
+          <label><span>Теги через запятую</span><input value={catalogDraft.tags} onChange={(event) => setCatalogDraft({ ...catalogDraft, tags: event.target.value })} /></label>
+          <label><span>Широта</span><input type="number" step="any" value={catalogDraft.latitude} onChange={(event) => setCatalogDraft({ ...catalogDraft, latitude: event.target.value })} /></label>
+          <label><span>Долгота</span><input type="number" step="any" value={catalogDraft.longitude} onChange={(event) => setCatalogDraft({ ...catalogDraft, longitude: event.target.value })} /></label>
+          <label><span>Источник</span><input required value={catalogDraft.source} onChange={(event) => setCatalogDraft({ ...catalogDraft, source: event.target.value })} /></label>
+          <label><span>Набор данных</span><input value={catalogDraft.dataset_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, dataset_id: event.target.value })} /></label>
+          <label className={styles.fullField}><span>External ID</span><input required value={catalogDraft.external_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, external_id: event.target.value })} /></label>
+          <fieldset className={`${styles.attributeEditor} ${styles.fullField}`}><legend>Дополнительные сведения</legend>{Object.entries(catalogDraft.attributes).map(([code, value]) => <label key={code}><span>{objectAttributeLabels[code] || code.replaceAll('_', ' ')}</span>{typeof catalogModal.item.attributes[code] === 'boolean' ? <select value={value} onChange={(event) => setCatalogDraft({ ...catalogDraft, attributes: { ...catalogDraft.attributes, [code]: event.target.value } })}><option value="true">Да</option><option value="false">Нет</option></select> : <textarea rows={code === 'working_hours' ? 7 : 2} value={value} onChange={(event) => setCatalogDraft({ ...catalogDraft, attributes: { ...catalogDraft.attributes, [code]: event.target.value } })} />}</label>)}</fieldset>
+        </>}
+        {catalogModal.kind === 'type' && <>
+          <label><span>Код</span><input required pattern="[A-Z0-9_]+" value={catalogDraft.code} onChange={(event) => setCatalogDraft({ ...catalogDraft, code: event.target.value.toUpperCase() })} /></label>
+          <label><span>Название</span><input required value={catalogDraft.name} onChange={(event) => setCatalogDraft({ ...catalogDraft, name: event.target.value })} /></label>
+          <label className={styles.fullField}><span>Описание</span><textarea rows="4" value={catalogDraft.description} onChange={(event) => setCatalogDraft({ ...catalogDraft, description: event.target.value })} /></label>
+          <label><span>Родительский тип</span><select value={catalogDraft.parent_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, parent_id: event.target.value })}><option value="">Без родителя</option>{objectTypeOptions.filter((type) => type.id !== catalogModal.item.id).map((type) => <option key={type.id} value={type.id}>{type.name} ({type.code})</option>)}</select></label>
+          <label className={styles.checkbox}><input type="checkbox" checked={catalogDraft.is_active} onChange={(event) => setCatalogDraft({ ...catalogDraft, is_active: event.target.checked })} /> Активен</label>
+        </>}
+        <footer className={`${styles.modalActions} ${styles.fullField}`}><button type="button" onClick={() => setCatalogModal(null)}>Отмена</button><button className={styles.primaryButton} disabled={loading}>Сохранить изменения</button></footer>
+      </form>
+    </section>
+  </div>
 
-  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={`${styles.table} ${styles.serviceTable}`}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Статус</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><span>{item.data_status}</span></div>)}</div>
+  const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span><button onClick={() => openCatalogEditor('classifier', item)}>Изменить</button></div>)}</div>
+
+  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={`${styles.table} ${styles.serviceTable}`}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Статус</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><span>{item.data_status}</span><button onClick={() => openCatalogEditor('service', item)}>Изменить</button></div>)}</div>
 
   const renderObjects = () => (
     <div className={styles.split}>
       {!filteredRows.length ? <Empty>Object Registry ещё не импортирован</Empty> : <div className={styles.objectList}>{filteredRows.map((item) => <button key={item.id} onClick={() => setSelectedObject(item)}><strong>{item.official_name}</strong><span>{item.address}</span><small>{item.district || 'район не указан'} · {item.dataset_id}</small></button>)}</div>}
-      <aside className={styles.details}>{selectedObject ? <><h3>{selectedObject.official_name}</h3><dl><dt>Адрес</dt><dd>{selectedObject.address}</dd><dt>Район / округ</dt><dd>{selectedObject.district || '—'} / {selectedObject.administrative_area || '—'}</dd><dt>Координаты</dt><dd>{selectedObject.latitude ?? '—'}, {selectedObject.longitude ?? '—'}</dd><dt>Источник</dt><dd>{selectedObject.source}</dd><dt>Dataset / external ID</dt><dd>{selectedObject.dataset_id} / {selectedObject.external_id}</dd><dt>Теги</dt><dd>{selectedObject.tags.join(', ') || '—'}</dd></dl><section className={styles.attributes}><h4>Дополнительные сведения</h4><dl>{Object.entries(selectedObject.attributes).map(([code, value]) => <div key={code}><dt>{objectAttributeLabels[code] || code.replaceAll('_', ' ')}</dt><dd>{renderObjectAttributeValue(code, value)}</dd></div>)}</dl></section></> : <p>Выберите объект для просмотра полной карточки.</p>}</aside>
+      <aside className={styles.details}>{selectedObject ? <><div className={styles.detailsHeader}><h3>{selectedObject.official_name}</h3><button onClick={() => openCatalogEditor('object', selectedObject)}>Изменить</button></div><dl><dt>Адрес</dt><dd>{selectedObject.address}</dd><dt>Район / округ</dt><dd>{selectedObject.district || '—'} / {selectedObject.administrative_area || '—'}</dd><dt>Координаты</dt><dd>{selectedObject.latitude ?? '—'}, {selectedObject.longitude ?? '—'}</dd><dt>Источник</dt><dd>{selectedObject.source}</dd><dt>Dataset / external ID</dt><dd>{selectedObject.dataset_id} / {selectedObject.external_id}</dd><dt>Теги</dt><dd>{selectedObject.tags.join(', ') || '—'}</dd></dl><section className={styles.attributes}><h4>Дополнительные сведения</h4><dl>{Object.entries(selectedObject.attributes).map(([code, value]) => <div key={code}><dt>{objectAttributeLabels[code] || code.replaceAll('_', ' ')}</dt><dd>{renderObjectAttributeValue(code, value)}</dd></div>)}</dl></section></> : <p>Выберите объект для просмотра полной карточки.</p>}</aside>
     </div>
   )
 
@@ -521,7 +712,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <select value={typeDraft.parent_id} onChange={(event) => setTypeDraft({ ...typeDraft, parent_id: event.target.value })}><option value="">Без родителя</option>{filteredRows.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.id}>{item.code}</option>)}</select>
         <button disabled={loading}>Создать тип</button>
       </form>
-      {!filteredRows.length ? <Empty>Типы объектов ещё не настроены</Empty> : <div className={styles.typeTree}>{filteredRows.map((item) => <article key={item.id} className={!item.is_active ? styles.inactive : ''}><code>{item.code}</code><strong>{item.name}</strong><span>{item.parent_id ? `parent #${item.parent_id}` : 'корневой тип'}</span><p>{item.description || 'Без описания'}</p><button onClick={() => mutate(`/api/admin/object-types/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !item.is_active }) }, 'Тип объекта обновлён.')}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></article>)}</div>}
+      {!filteredRows.length ? <Empty>Типы объектов ещё не настроены</Empty> : <div className={styles.typeTree}>{filteredRows.map((item) => <article key={item.id} className={!item.is_active ? styles.inactive : ''}><code>{item.code}</code><strong>{item.name}</strong><span>{item.parent_id ? `parent #${item.parent_id}` : 'корневой тип'}</span><p>{item.description || 'Без описания'}</p><div className={styles.rowActions}><button onClick={() => openCatalogEditor('type', item)}>Изменить</button><button onClick={() => mutate(`/api/admin/object-types/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !item.is_active }) }, 'Тип объекта обновлён.')}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></div></article>)}</div>}
     </>
   )
 
@@ -561,7 +752,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </>
   )
 
-  const renderScenarios = () => !filteredRows.length ? <Empty>Сценарии отсутствуют</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.author}</span><span>{item.status}</span><small>{item.incident_type || 'тип не указан'} · {item.difficulty || 'сложность не указана'} · {formatDateTime(item.updated_at)}</small><button onClick={() => mutate(`/api/admin/scenarios/${item.id}/${item.archived ? 'restore' : 'archive'}`, { method: 'POST' }, 'Состояние сценария изменено.')}>{item.archived ? 'Восстановить' : 'Архивировать'}</button></article>)}</div>
+  const renderScenarios = () => <ScenarioLibrary user={user} requestJson={requestJson} embedded />
 
   const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.auditList}>{filteredRows.map((item) => {
     const changes = auditChanges(item)
@@ -581,7 +772,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <footer><select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select><small>{roleLabels[user.role]}</small><button type="button" onClick={onLogout}>Выйти</button></footer>
       </aside>
       <section className={styles.workspace}>
-        <header className={styles.topbar}><div><small>Системное управление</small><h1>{title}</h1></div>{['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}<button onClick={load}>Обновить</button></header>
+        <header className={styles.topbar}><div><small>Системное управление</small><h1>{title}</h1></div>{['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}{section !== 'scenarios' && <button onClick={load}>Обновить</button>}</header>
         {error && <div className={styles.error} role="alert">{error}</div>}
         {notice && <div className={styles.notice}>{notice}</div>}
         <div className={styles.content} aria-busy={loading}>{loading && data === null ? <div className={styles.loading}>Загрузка…</div> : content()}</div>
@@ -589,6 +780,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
       {renderUserModal()}
       {renderGroupModal()}
       {renderDeleteModal()}
+      {renderCatalogModal()}
     </main>
   )
 }

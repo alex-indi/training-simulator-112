@@ -34,14 +34,17 @@ from app.modules.admin.schemas import (
     AIUsageRead,
     AuditRead,
     ClassifierRead,
+    ClassifierUpdate,
     DataQualityRead,
     ImportRunRead,
     ObjectTypeRead,
     ObjectTypeUpdate,
     ObjectTypeWrite,
     RegistryObjectRead,
+    RegistryObjectUpdate,
     ScenarioAdminRead,
     ServiceRead,
+    ServiceUpdate,
     UserCreate,
     UserGroupCreate,
     UserGroupRead,
@@ -54,11 +57,18 @@ from app.modules.identity.passwords import hash_password
 from app.modules.incident_classifier.models import (
     DispatchService,
     IncidentClassifierRule,
+    IncidentFeature,
     IncidentRuleFeature,
     IncidentRuleService,
 )
-from app.modules.object_registry.models import CityObject, ObjectAttribute, ObjectType
-from app.modules.training.models import TrainingScenario, TrainingSession, TrainingSessionState
+from app.modules.object_registry.models import (
+    CityObject,
+    ObjectAttribute,
+    ObjectTag,
+    ObjectTagDefinition,
+    ObjectType,
+)
+from app.modules.scenario_library.models import ScenarioTemplate
 from app.services.text_generation.providers import OpenAICompatibleProvider, OpenAIProvider
 from app.services.text_generation.renderer import TemplateTextGenerationProvider
 
@@ -123,9 +133,7 @@ async def dashboard(session: Database) -> dict[str, Any]:
         "users": await count(User),
         "active_users": await count(User, User.is_active.is_(True)),
         "user_groups": await count(UserGroup),
-        "ready_scenarios": await count(
-            TrainingSession, TrainingSession.state == TrainingSessionState.READY
-        ),
+        "ready_scenarios": await count(ScenarioTemplate, ScenarioTemplate.status == "READY"),
         "classifier_rules": await count(IncidentClassifierRule),
         "services": await count(DispatchService),
         "objects": await count(CityObject),
@@ -345,6 +353,25 @@ async def delete_user(user_id: int, session: Database, admin: Admin) -> None:
         ) from cause
 
 
+def _classifier_read(row: IncidentClassifierRule) -> ClassifierRead:
+    feature_links = sorted(row.features, key=lambda link: int(link.feature.level))
+    return ClassifierRead(
+        id=row.id,
+        source_code=row.source_code,
+        incident_group=row.incident_group,
+        feature_1=feature_links[0].feature.name if len(feature_links) > 0 else None,
+        feature_2=feature_links[1].feature.name if len(feature_links) > 1 else None,
+        feature_3=feature_links[2].feature.name if len(feature_links) > 2 else None,
+        incident_type=row.final_incident_type,
+        related_services=[link.service.official_name for link in row.services],
+        related_service_ids=[link.service_id for link in row.services],
+    )
+
+
+def _classifier_snapshot(row: IncidentClassifierRule) -> dict[str, Any]:
+    return _classifier_read(row).model_dump(mode="json")
+
+
 @router.get("/classifier", response_model=list[ClassifierRead])
 async def classifier(
     session: Database,
@@ -370,25 +397,98 @@ async def classifier(
     rows = list(
         (await session.scalars(statement.order_by(IncidentClassifierRule.id).limit(limit))).all()
     )
-    result = [
-        ClassifierRead(
-            id=row.id,
-            source_code=row.source_code,
-            incident_group=row.incident_group,
-            feature_1=row.features[0].feature.name if len(row.features) > 0 else None,
-            feature_2=row.features[1].feature.name if len(row.features) > 1 else None,
-            feature_3=row.features[2].feature.name if len(row.features) > 2 else None,
-            incident_type=row.final_incident_type,
-            related_services=[link.service.official_name for link in row.services],
-        )
-        for row in rows
-    ]
+    result = [_classifier_read(row) for row in rows]
     if service:
         needle = service.casefold()
         result = [
             row for row in result if any(needle in name.casefold() for name in row.related_services)
         ]
     return result
+
+
+@router.patch("/classifier/{rule_id}", response_model=ClassifierRead)
+async def update_classifier_rule(
+    rule_id: int, payload: ClassifierUpdate, session: Database, admin: Admin
+) -> ClassifierRead:
+    statement = (
+        select(IncidentClassifierRule)
+        .where(IncidentClassifierRule.id == rule_id)
+        .options(
+            selectinload(IncidentClassifierRule.features).selectinload(
+                IncidentRuleFeature.feature
+            ),
+            selectinload(IncidentClassifierRule.services).selectinload(
+                IncidentRuleService.service
+            ),
+        )
+    )
+    rule = await session.scalar(statement)
+    if rule is None:
+        raise HTTPException(status_code=404, detail="Правило классификатора не найдено")
+    before = _classifier_snapshot(rule)
+    changes = payload.model_dump(exclude_unset=True)
+    if "source_code" in changes:
+        rule.source_code = changes["source_code"] or None
+    if "incident_group" in changes:
+        rule.incident_group = changes["incident_group"].strip()
+    if "incident_type" in changes:
+        rule.final_incident_type = changes["incident_type"].strip()
+    if payload.feature_names is not None:
+        rule.features.clear()
+        columns = ("112 - Признак.1 (тип происшествия)", "112-Признак.2", "112-Признак.3")
+        for index, raw_name in enumerate(payload.feature_names, start=1):
+            name = raw_name.strip()
+            if not name:
+                continue
+            feature = await session.scalar(
+                select(IncidentFeature).where(
+                    IncidentFeature.level == str(index),
+                    func.lower(IncidentFeature.name) == name.lower(),
+                )
+            )
+            if feature is None:
+                feature = IncidentFeature(
+                    name=name,
+                    level=str(index),
+                    source_column=columns[index - 1],
+                    source_value=name,
+                )
+                session.add(feature)
+            rule.features.append(IncidentRuleFeature(feature=feature))
+    if payload.related_service_ids is not None:
+        service_ids = list(dict.fromkeys(payload.related_service_ids))
+        selected_services = list(
+            (
+                await session.scalars(
+                    select(DispatchService).where(DispatchService.id.in_(service_ids))
+                )
+            ).all()
+        )
+        if len(selected_services) != len(service_ids):
+            raise HTTPException(status_code=422, detail="Одна из выбранных служб не найдена")
+        rule.services.clear()
+        for service_item in selected_services:
+            rule.services.append(
+                IncidentRuleService(service=service_item, source_reference="ADMIN")
+            )
+    await session.flush()
+    after = _classifier_snapshot(rule)
+    session.add(_audit(admin, "CLASSIFIER_RULE_UPDATED", "CLASSIFIER_RULE", rule.id, before, after))
+    await session.commit()
+    return _classifier_read(rule)
+
+
+def _service_read(row: DispatchService) -> ServiceRead:
+    return ServiceRead(
+        id=row.id,
+        official_name=row.official_name,
+        service_type="Диспетчерская служба",
+        level=row.service_level,
+        organization=row.organization,
+        source="SRC-006",
+        data_status="VALID",
+        external_id=row.source_reference,
+    )
 
 
 @router.get("/services", response_model=list[ServiceRead])
@@ -404,19 +504,36 @@ async def services(
     if level:
         statement = statement.where(DispatchService.service_level == level)
     rows = (await session.scalars(statement.order_by(DispatchService.id).limit(limit))).all()
-    return [
-        ServiceRead(
-            id=row.id,
-            official_name=row.official_name,
-            service_type="Диспетчерская служба",
-            level=row.service_level,
-            organization=row.organization,
-            source="SRC-006",
-            data_status="VALID",
-            external_id=row.source_reference,
-        )
-        for row in rows
-    ]
+    return [_service_read(row) for row in rows]
+
+
+@router.patch("/services/{service_id}", response_model=ServiceRead)
+async def update_service(
+    service_id: int, payload: ServiceUpdate, session: Database, admin: Admin
+) -> ServiceRead:
+    item: DispatchService = await _one_or_404(session, DispatchService, service_id)
+    before = _service_read(item).model_dump(mode="json")
+    changes = payload.model_dump(exclude_unset=True)
+    field_map = {
+        "official_name": "official_name",
+        "level": "service_level",
+        "organization": "organization",
+        "external_id": "source_reference",
+    }
+    for source_field, model_field in field_map.items():
+        if source_field in changes:
+            value = changes[source_field]
+            setattr(item, model_field, value.strip() if isinstance(value, str) else value)
+    after = _service_read(item).model_dump(mode="json")
+    session.add(_audit(admin, "SERVICE_UPDATED", "DISPATCH_SERVICE", item.id, before, after))
+    try:
+        await session.commit()
+    except IntegrityError as cause:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409, detail="Служба с таким external ID уже существует"
+        ) from cause
+    return _service_read(item)
 
 
 def _deserialize_object_attribute(attribute: ObjectAttribute) -> Any:
@@ -429,6 +546,36 @@ def _deserialize_object_attribute(attribute: ObjectAttribute) -> Any:
     except (json.JSONDecodeError, TypeError, ValueError):
         pass
     return attribute.value
+
+
+def _serialize_object_attribute(value: Any) -> tuple[str, str]:
+    if isinstance(value, bool):
+        return json.dumps(value), "boolean"
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True), "json"
+    if isinstance(value, int):
+        return str(value), "integer"
+    return str(value), "text"
+
+
+def _registry_object_read(row: CityObject) -> RegistryObjectRead:
+    return RegistryObjectRead(
+        id=row.id,
+        official_name=row.name,
+        object_type_id=row.object_type_id,
+        address=row.address or "",
+        district=row.district,
+        administrative_area=row.administrative_area,
+        latitude=float(row.latitude) if row.latitude is not None else None,
+        longitude=float(row.longitude) if row.longitude is not None else None,
+        tags=[item.tag for item in row.tags],
+        attributes={
+            item.attribute_code: _deserialize_object_attribute(item) for item in row.attributes
+        },
+        source=row.source,
+        dataset_id=row.source_dataset_id or "",
+        external_id=row.external_id,
+    )
 
 
 @router.get("/object-registry", response_model=list[RegistryObjectRead])
@@ -462,31 +609,94 @@ async def object_registry(
     if source:
         statement = statement.where(CityObject.source == source)
     rows = list((await session.scalars(statement.order_by(CityObject.id).limit(limit))).all())
-    result = [
-        RegistryObjectRead(
-            id=row.id,
-            official_name=row.name,
-            object_type_id=row.object_type_id,
-            address=row.address or "",
-            district=row.district,
-            administrative_area=row.administrative_area,
-            latitude=float(row.latitude) if row.latitude is not None else None,
-            longitude=float(row.longitude) if row.longitude is not None else None,
-            tags=[item.tag for item in row.tags],
-            attributes={
-                item.attribute_code: _deserialize_object_attribute(item)
-                for item in row.attributes
-            },
-            source=row.source,
-            dataset_id=row.source_dataset_id or "",
-            external_id=row.external_id,
-        )
-        for row in rows
-    ]
+    result = [_registry_object_read(row) for row in rows]
     if tag:
         needle = tag.casefold()
         result = [row for row in result if any(needle in value.casefold() for value in row.tags)]
     return result
+
+
+@router.patch("/object-registry/{object_id}", response_model=RegistryObjectRead)
+async def update_registry_object(
+    object_id: int, payload: RegistryObjectUpdate, session: Database, admin: Admin
+) -> RegistryObjectRead:
+    item = await session.scalar(
+        select(CityObject)
+        .where(CityObject.id == object_id)
+        .options(selectinload(CityObject.tags), selectinload(CityObject.attributes))
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Объект не найден")
+    before = _registry_object_read(item).model_dump(mode="json")
+    changes = payload.model_dump(exclude_unset=True)
+    if "object_type_id" in changes and payload.object_type_id is None:
+        raise HTTPException(status_code=422, detail="Тип объекта обязателен")
+    if payload.object_type_id is not None:
+        await _one_or_404(session, ObjectType, payload.object_type_id)
+    field_map = {
+        "official_name": "name",
+        "object_type_id": "object_type_id",
+        "address": "address",
+        "district": "district",
+        "administrative_area": "administrative_area",
+        "latitude": "latitude",
+        "longitude": "longitude",
+        "source": "source",
+        "dataset_id": "source_dataset_id",
+        "external_id": "external_id",
+    }
+    for source_field, model_field in field_map.items():
+        if source_field in changes:
+            value = changes[source_field]
+            setattr(item, model_field, value.strip() if isinstance(value, str) else value)
+    if payload.tags is not None:
+        tags = list(dict.fromkeys(tag.strip() for tag in payload.tags if tag.strip()))
+        known_tags = set(
+            (
+                await session.scalars(
+                    select(ObjectTagDefinition.code).where(ObjectTagDefinition.code.in_(tags))
+                )
+            ).all()
+        )
+        unknown_tags = [tag for tag in tags if tag not in known_tags]
+        if unknown_tags:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Неизвестные теги: {', '.join(unknown_tags)}",
+            )
+        item.tags.clear()
+        item.tags.extend(ObjectTag(tag=tag) for tag in tags)
+    if payload.attributes is not None:
+        existing = {attribute.attribute_code: attribute for attribute in item.attributes}
+        requested_codes: set[str] = set()
+        for code in payload.attributes:
+            normalized_code = code.strip()
+            if normalized_code != code or not normalized_code or len(normalized_code) > 120:
+                raise HTTPException(status_code=422, detail="Некорректный код атрибута")
+            requested_codes.add(normalized_code)
+        for attribute in list(item.attributes):
+            if attribute.attribute_code not in requested_codes:
+                item.attributes.remove(attribute)
+        for code, value in payload.attributes.items():
+            serialized, value_type = _serialize_object_attribute(value)
+            attribute = existing.get(code)
+            if attribute is None:
+                attribute = ObjectAttribute(attribute_code=code)
+                item.attributes.append(attribute)
+            attribute.value = serialized
+            attribute.value_type = value_type
+    item.updated_at = datetime.now(UTC)
+    await session.flush()
+    after = _registry_object_read(item).model_dump(mode="json")
+    session.add(_audit(admin, "REGISTRY_OBJECT_UPDATED", "CITY_OBJECT", item.id, before, after))
+    try:
+        await session.commit()
+    except IntegrityError as cause:
+        await session.rollback()
+        raise HTTPException(
+            status_code=409, detail="Объект с такими источником и external ID уже существует"
+        ) from cause
+    return _registry_object_read(item)
 
 
 @router.get("/object-types", response_model=list[ObjectTypeRead])
@@ -525,12 +735,21 @@ async def update_object_type(
 ) -> ObjectType:
     item: ObjectType = await _one_or_404(session, ObjectType, object_type_id)
     before = {
+        "code": item.code,
         "name": item.name,
         "description": item.description,
         "parent_id": item.parent_id,
         "is_active": item.is_active,
     }
     changes = payload.model_dump(exclude_unset=True)
+    if "code" in changes:
+        duplicate_code = await session.scalar(
+            select(ObjectType.id).where(
+                ObjectType.code == changes["code"], ObjectType.id != item.id
+            )
+        )
+        if duplicate_code:
+            raise HTTPException(status_code=409, detail="Тип объекта с таким кодом уже существует")
     if changes.get("parent_id") == item.id:
         raise HTTPException(
             status_code=422, detail="Тип объекта не может быть родителем самому себе"
@@ -540,6 +759,7 @@ async def update_object_type(
     for key, value in changes.items():
         setattr(item, key, value)
     after = {
+        "code": item.code,
         "name": item.name,
         "description": item.description,
         "parent_id": item.parent_id,
@@ -743,22 +963,27 @@ async def ai_usage(session: Database) -> list[AIUsageDaily]:
 async def scenarios(session: Database) -> list[ScenarioAdminRead]:
     rows = (
         await session.execute(
-            select(TrainingScenario, User)
-            .join(User, User.id == TrainingScenario.instructor_id)
-            .order_by(TrainingScenario.created_at.desc())
+            select(ScenarioTemplate, User)
+            .join(User, User.id == ScenarioTemplate.created_by_user_id)
+            .options(selectinload(ScenarioTemplate.classifier_rule))
+            .order_by(ScenarioTemplate.updated_at.desc())
         )
     ).all()
     return [
         ScenarioAdminRead(
             id=scenario.id,
-            title=scenario.title,
+            title=scenario.name,
             author_id=author.id,
             author=author.full_name,
-            status="ARCHIVED" if scenario.is_archived else "ACTIVE",
-            difficulty=scenario.snapshot.get("difficulty"),
-            incident_type=scenario.snapshot.get("incident_type"),
-            updated_at=scenario.created_at,
-            archived=scenario.is_archived,
+            status=scenario.status,
+            difficulty=scenario.difficulty,
+            incident_type=(
+                scenario.classifier_rule.final_incident_type
+                if scenario.classifier_rule is not None
+                else None
+            ),
+            updated_at=scenario.updated_at,
+            archived=scenario.status == "ARCHIVED",
         )
         for scenario, author in rows
     ]
@@ -766,12 +991,19 @@ async def scenarios(session: Database) -> list[ScenarioAdminRead]:
 
 @router.post("/scenarios/{scenario_id}/archive", status_code=204)
 async def archive_scenario(scenario_id: int, session: Database, admin: Admin) -> None:
-    scenario: TrainingScenario = await _one_or_404(session, TrainingScenario, scenario_id)
-    before = {"archived": scenario.is_archived}
-    scenario.is_archived = True
+    scenario: ScenarioTemplate = await _one_or_404(session, ScenarioTemplate, scenario_id)
+    before = {"status": scenario.status}
+    scenario.status = "ARCHIVED"
+    scenario.archived_at = datetime.now(UTC)
+    scenario.updated_at = scenario.archived_at
     session.add(
         _audit(
-            admin, "SCENARIO_ARCHIVED", "TRAINING_SCENARIO", scenario.id, before, {"archived": True}
+            admin,
+            "SCENARIO_ARCHIVED",
+            "SCENARIO_TEMPLATE",
+            scenario.id,
+            before,
+            {"status": "ARCHIVED"},
         )
     )
     await session.commit()
@@ -779,9 +1011,11 @@ async def archive_scenario(scenario_id: int, session: Database, admin: Admin) ->
 
 @router.post("/scenarios/{scenario_id}/restore", status_code=204)
 async def restore_scenario(scenario_id: int, session: Database, admin: Admin) -> None:
-    scenario: TrainingScenario = await _one_or_404(session, TrainingScenario, scenario_id)
-    before = {"archived": scenario.is_archived}
-    scenario.is_archived = False
+    scenario: ScenarioTemplate = await _one_or_404(session, ScenarioTemplate, scenario_id)
+    before = {"status": scenario.status}
+    scenario.status = "READY"
+    scenario.archived_at = None
+    scenario.updated_at = datetime.now(UTC)
     session.add(
         _audit(
             admin,
@@ -789,7 +1023,7 @@ async def restore_scenario(scenario_id: int, session: Database, admin: Admin) ->
             "TRAINING_SCENARIO",
             scenario.id,
             before,
-            {"archived": False},
+            {"status": "READY"},
         )
     )
     await session.commit()

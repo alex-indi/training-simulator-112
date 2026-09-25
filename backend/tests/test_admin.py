@@ -11,6 +11,7 @@ from app.modules.admin.dependencies import require_admin
 from app.modules.admin.models import AdminAudit, AIProviderConfig, UserGroup
 from app.modules.admin.router import (
     _deserialize_object_attribute,
+    _serialize_object_attribute,
     ai_health,
     ai_models,
     create_user,
@@ -26,6 +27,7 @@ from app.modules.admin.schemas import (
     AIConfigRead,
     AIConfigUpdate,
     AIModelCatalogRequest,
+    ObjectTypeRead,
     UserCreate,
     UserGroupCreate,
     UserGroupUpdate,
@@ -68,6 +70,21 @@ def test_object_attribute_values_are_deserialized_by_declared_type(
     attribute = MagicMock(value_type=value_type, value=value)
 
     assert _deserialize_object_attribute(attribute) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (True, ("true", "boolean")),
+        (3, ("3", "integer")),
+        (["Сокольническая", "Кольцевая"], ('["Сокольническая", "Кольцевая"]', "json")),
+        ("Больница", ("Больница", "text")),
+    ],
+)
+def test_object_attribute_values_are_serialized_with_type(
+    value: object, expected: tuple[str, str]
+) -> None:
+    assert _serialize_object_attribute(value) == expected
 
 
 @pytest.mark.parametrize("role", [UserRole.INSTRUCTOR, UserRole.TRAINEE])
@@ -447,4 +464,22 @@ def test_source_driven_catalogues_have_no_create_endpoint() -> None:
     assert set(methods_by_path["/api/admin/classifier"]) == {"get"}
     assert set(methods_by_path["/api/admin/services"]) == {"get"}
     assert set(methods_by_path["/api/admin/object-registry"]) == {"get"}
+    assert set(methods_by_path["/api/admin/classifier/{rule_id}"]) == {"patch"}
+    assert set(methods_by_path["/api/admin/services/{service_id}"]) == {"patch"}
+    assert set(methods_by_path["/api/admin/object-registry/{object_id}"]) == {"patch"}
     assert "object_types" in ObjectType.__tablename__
+
+
+def test_object_type_read_accepts_legacy_null_description() -> None:
+    payload = ObjectTypeRead.model_validate(
+        {
+            "id": 1,
+            "code": "LEGACY_TYPE",
+            "name": "Тип без описания",
+            "description": None,
+            "parent_id": None,
+            "is_active": True,
+        }
+    )
+
+    assert payload.description is None

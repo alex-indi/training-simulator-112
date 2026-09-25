@@ -85,6 +85,7 @@ def test_library_lifecycle_and_permissions():
     Base.metadata.create_all(engine, tables=[model.__table__ for model in tables])
     with Session(engine, expire_on_commit=False) as db:
         instructor = User(username="instructor", full_name="Instructor", role=UserRole.INSTRUCTOR)
+        admin = User(username="admin", full_name="Administrator", role=UserRole.ADMIN)
         trainee = User(username="trainee", full_name="Trainee", role=UserRole.TRAINEE)
         rule = IncidentClassifierRule(
             incident_group="Пожар", final_incident_type="Пожар", source_reference="SRC:1"
@@ -96,6 +97,7 @@ def test_library_lifecycle_and_permissions():
         db.add_all(
             [
                 instructor,
+                admin,
                 trainee,
                 rule,
                 service,
@@ -275,6 +277,18 @@ def test_library_lifecycle_and_permissions():
                 assert (
                     await client.get(f"/api/scenario-templates/{copy_id}/validate")
                 ).json()["errors"] == []
+                denied_author = await client.patch(
+                    f"/api/scenario-templates/{copy_id}",
+                    json={**payload, "created_by_user_id": admin.id},
+                )
+                assert denied_author.status_code == 403
+                principal["user"] = admin
+                admin_created = await client.post(
+                    "/api/scenario-templates",
+                    json={"name": "Сценарий преподавателя", "created_by_user_id": instructor.id},
+                )
+                assert admin_created.status_code == 201, admin_created.text
+                assert admin_created.json()["created_by_user_id"] == instructor.id
                 principal["user"] = trainee
                 assert (
                     await client.get(f"/api/scenario-templates/{scenario_id}")
