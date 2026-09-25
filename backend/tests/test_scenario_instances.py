@@ -4,13 +4,15 @@ import asyncio
 
 import httpx
 from fastapi import FastAPI
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from test_scenario_library import AsyncAdapter
 
 from app.db.base import Base
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import AdminAudit, AIProviderConfig, AIUsageDaily, UserGroup
+from app.modules.admin.router import router as admin_router
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incident_classifier.models import (
@@ -41,14 +43,37 @@ from app.modules.scenario_library.models import (
     ScenarioTemplateService,
 )
 from app.modules.training.models import TrainingSession
+from app.services.text_generation.providers import OpenAICompatibleProvider
+from app.services.text_generation.renderer import (
+    ProviderHealth,
+    TextGenerationResult,
+)
 
 
-def test_generation_snapshot_permissions_and_session_attachment():
+def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
+    async def fake_generate(self, request, prompt):
+        return TextGenerationResult(
+            text="Подготовленный локальный текст",
+            provider=self.name,
+            model=self.model,
+            input_tokens=7,
+            output_tokens=3,
+        )
+
+    async def fake_healthcheck(self):
+        return ProviderHealth("AVAILABLE", self.name, self.model)
+
+    monkeypatch.setattr(OpenAICompatibleProvider, "generate", fake_generate)
+    monkeypatch.setattr(OpenAICompatibleProvider, "healthcheck", fake_healthcheck)
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     tables = [
         User,
+        UserGroup,
+        AIProviderConfig,
+        AIUsageDaily,
+        AdminAudit,
         IncidentClassifierRule,
         IncidentFeature,
         IncidentRuleFeature,
@@ -74,6 +99,7 @@ def test_generation_snapshot_permissions_and_session_attachment():
     with Session(engine, expire_on_commit=False) as db:
         instructor = User(username="instructor", full_name="Instructor", role=UserRole.INSTRUCTOR)
         trainee = User(username="trainee", full_name="Trainee", role=UserRole.TRAINEE)
+        admin = User(username="admin", full_name="Admin", role=UserRole.ADMIN)
         rule = IncidentClassifierRule(
             incident_group="Пожар", final_incident_type="Пожар в школе", source_reference="SRC:1"
         )
@@ -86,6 +112,7 @@ def test_generation_snapshot_permissions_and_session_attachment():
             [
                 instructor,
                 trainee,
+                admin,
                 rule,
                 feature,
                 service,
@@ -155,7 +182,15 @@ def test_generation_snapshot_permissions_and_session_attachment():
                     title="Заявитель",
                     description="Сообщил о дыме",
                     source_type="CALLER",
-                )
+                ),
+                ScenarioEventTemplate(
+                    sequence_number=1,
+                    offset_seconds=60,
+                    event_type="RESPONSE_MESSAGE",
+                    title="Прибытие",
+                    description="Бригада прибыла",
+                    source_type="RESPONSE_UNIT",
+                ),
             ],
             services=[ScenarioTemplateService(service_id=service.id, source="CLASSIFIER")],
             expected_actions=[
@@ -172,6 +207,7 @@ def test_generation_snapshot_permissions_and_session_attachment():
         app.include_router(template_router)
         app.include_router(instance_router)
         app.include_router(session_router)
+        app.include_router(admin_router)
         principal = {"user": instructor}
 
         async def db_override():
@@ -217,17 +253,90 @@ def test_generation_snapshot_permissions_and_session_attachment():
                 generated = await client.post(f"{path}/instances", json=payload)
                 assert generated.status_code == 201, generated.text
                 instance = generated.json()
+                assert [
+                    item["id"] for item in (await client.get("/api/scenario-instances")).json()
+                ] == [instance["id"]]
                 assert instance["object_snapshot"]["address"] == "Пехотная, 1"
                 assert instance["classifier_snapshot"]["features"][0]["name"] == "Дым"
                 assert instance["service_snapshot"][0]["official_name"] == "Пожарная охрана"
                 assert instance["assessment_criteria_snapshot"][0]["weight"] == 3
                 assert instance["events"][0]["description"] == "Сообщил о дыме"
+                assert instance["status"] == "DRAFT"
+                assert instance["initial_state_snapshot"]["render"]["fallback_used"]
+                assert instance["events"][1]["render"]["rendered_text"] == "Бригада прибыла"
+                usage = db.scalar(select(AIUsageDaily))
+                assert usage.requests == 2 and usage.fallbacks == 2
+                base = f"/api/scenario-instances/{instance['id']}"
+                edited = await client.patch(
+                    f"{base}/initial-message", json={"text": "Сообщение преподавателя"}
+                )
+                assert edited.status_code == 200, edited.text
+                assert (
+                    edited.json()["initial_state_snapshot"]["render"]["render_origin"] == "MANUAL"
+                )
+                assert (
+                    edited.json()["initial_state_snapshot"]["description"] == "Из здания идёт дым"
+                )
+                event_id = instance["events"][1]["id"]
+                changed = await client.patch(
+                    f"{base}/events/{event_id}/message", json={"text": "Прибыли к месту"}
+                )
+                assert changed.status_code == 200, changed.text
+                assert changed.json()["events"][1]["render"]["render_origin"] == "MANUAL"
+                assert (await client.get(base)).json()["events"][1]["render"][
+                    "rendered_text"
+                ] == "Прибыли к месту"
+                confirmed = await client.post(f"{base}/confirm")
+                assert confirmed.status_code == 200, confirmed.text
+                assert confirmed.json()["status"] == "CONFIRMED"
+                assert (
+                    await client.patch(f"{base}/initial-message", json={"text": "Поздно"})
+                ).status_code == 409
+                assert (await client.post(f"{base}/events/{event_id}/rerender")).status_code == 409
                 repeated = await client.post(f"{path}/instances", json=payload)
                 assert repeated.json()["object_snapshot"] == instance["object_snapshot"]
                 assert (
                     repeated.json()["events"][0]["payload_snapshot"]
                     == instance["events"][0]["payload_snapshot"]
                 )
+                principal["user"] = admin
+                configuration = await client.put(
+                    "/api/admin/ai",
+                    json={
+                        "provider": "OPENAI_COMPATIBLE",
+                        "model": "local-test",
+                        "base_url": "http://local.test/v1",
+                        "enabled": True,
+                        "timeout_seconds": 7,
+                    },
+                )
+                assert configuration.status_code == 200, configuration.text
+                assert "api_key" not in configuration.json()
+                wrong_endpoint = await client.put(
+                    "/api/admin/ai",
+                    json={
+                        "provider": "OPENAI",
+                        "model": "test-model",
+                        "base_url": "http://local.test/v1",
+                        "enabled": True,
+                        "timeout_seconds": 7,
+                    },
+                )
+                assert wrong_endpoint.status_code == 422
+                assert (await client.post("/api/admin/ai/health")).json()["status"] == "AVAILABLE"
+                principal["user"] = instructor
+                configured = await client.post(f"{path}/instances", json=payload)
+                assert configured.status_code == 201, configured.text
+                assert (
+                    configured.json()["initial_state_snapshot"]["render"]["model"] == "local-test"
+                )
+                assert configured.json()["events"][1]["render"]["provider"] == "openai_compatible"
+                db.expire_all()
+                principal["user"] = admin
+                daily = (await client.get("/api/admin/ai/usage")).json()[0]
+                assert daily["requests"] == 6
+                assert daily["input_tokens"] == 14 and daily["output_tokens"] == 6
+                principal["user"] = instructor
                 assert (
                     await client.post(f"{path}/instances", json={"object_id": 999})
                 ).status_code == 422
@@ -261,6 +370,7 @@ def test_generation_snapshot_permissions_and_session_attachment():
                 assert (
                     await client.get(f"/api/training/sessions/{session.id}/scenario-instances")
                 ).status_code == 403
+                assert (await client.get("/api/scenario-instances")).status_code == 403
 
         asyncio.run(run())
     engine.dispose()

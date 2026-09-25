@@ -53,6 +53,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [data, setData] = useState(null)
   const [quality, setQuality] = useState([])
   const [usage, setUsage] = useState([])
+  const [aiHealth, setAiHealth] = useState(null)
   const [traineeGroups, setTraineeGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -226,6 +227,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const updateAI = (event) => {
     event.preventDefault()
+    setAiHealth(null)
     const form = new FormData(event.currentTarget)
     return mutate('/api/admin/ai', {
       method: 'PUT',
@@ -384,16 +386,22 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderAI = () => data && (
     <>
-      <form className={styles.settingsForm} onSubmit={updateAI}>
-        <label>Provider<input name="provider" defaultValue={data.provider} /></label>
+      <form className={styles.settingsForm} onSubmit={updateAI} key={data.updated_at || 'initial'}>
+        <label>Provider<select name="provider" defaultValue={data.provider.toUpperCase()}><option value="OPENAI">OpenAI</option><option value="OPENAI_COMPATIBLE">OpenAI-compatible</option><option value="TEMPLATE">Шаблонный режим</option></select></label>
         <label>Model<input name="model" defaultValue={data.model} /></label>
         <label>Base URL<input name="base_url" type="url" defaultValue={data.base_url} /></label>
         <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" defaultValue={data.timeout_seconds} /></label>
         <label className={styles.checkbox}><input name="enabled" type="checkbox" defaultChecked={data.enabled} /> Renderer включён</label>
         <div className={styles.secretState}>API key: <b>{data.api_key_configured ? '● configured' : '○ not configured'}</b>. Значение ключа никогда не возвращается.</div>
         <button disabled={loading}>Применить</button>
-        <button disabled={loading} type="button" onClick={() => mutate('/api/admin/ai/health', { method: 'POST' }, 'Проверка подключения завершена.')}>Проверить подключение</button>
+        <button disabled={loading} type="button" onClick={async () => {
+          setLoading(true); setError(''); setAiHealth(null)
+          try { setAiHealth(await requestJson('/api/admin/ai/health', username, { method: 'POST' })) }
+          catch (cause) { setError(cause.message) }
+          finally { setLoading(false) }
+        }}>Проверить подключение</button>
       </form>
+      {aiHealth && <p role="status">Провайдер: {aiHealth.provider} · модель: {aiHealth.model || '—'} · состояние: {aiHealth.status}</p>}
       <h3>Usage за 31 день</h3>{!usage.length ? <Empty>Статистика usage не поступала</Empty> : <div className={styles.compactList}>{usage.map((item) => <article key={item.day}><b>{item.day}</b><span>запросов {item.requests}</span><small>input {item.input_tokens} · output {item.output_tokens} · fallback {item.fallbacks} · ошибок {item.errors}</small></article>)}</div>}
     </>
   )

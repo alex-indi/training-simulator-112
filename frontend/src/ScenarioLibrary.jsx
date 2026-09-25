@@ -9,6 +9,50 @@ const toInput = (item) => Object.fromEntries(Object.keys(blank()).map((key) => [
 const formatOffset = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 const asOptions = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
+function RenderEditor({ title, facts, render, editable, busy, onSave, onRerender }) {
+  const [text, setText] = useState(render?.rendered_text || '')
+  useEffect(() => { setText(render?.rendered_text || '') }, [render?.rendered_text])
+  return <div className={styles.fact}>
+    <h4>{title}</h4>
+    <p><b>Исходные факты:</b> {facts.filter(Boolean).join(' · ')}</p>
+    <label>Текст для обучаемого<textarea value={text} disabled={!editable} onChange={(event) => setText(event.target.value)} /></label>
+    <small>Источник: {render?.render_origin || '—'} · {render?.provider || '—'} · {render?.prompt_version || '—'}{render?.fallback_used ? ' · шаблонный резерв' : ''}</small>
+    {editable && <div className={styles.actions}>
+      <button type="button" disabled={busy || !text.trim() || text === render?.rendered_text} onClick={() => onSave(text)}>Сохранить правку</button>
+      <button type="button" disabled={busy} onClick={onRerender}>Перегенерировать</button>
+    </div>}
+  </div>
+}
+
+function InstanceReview({ instance, busy, api, perform, onChange, sessions, trainingSessionId, onSelectSession }) {
+  const editable = instance.status === 'DRAFT'
+  const action = (path, options) => perform(async () => {
+    const updated = await api(path, options)
+    onChange(updated)
+  })
+  const base = `/api/scenario-instances/${instance.id}`
+  const initial = instance.initial_state_snapshot
+  return <section className={styles.panel}>
+    <h3>Экземпляр #{instance.id} · {instance.status}</h3>
+    <p>{instance.name} · сложность {instance.difficulty}/5</p>
+    <p>Объект: {instance.object_snapshot.name} · {instance.object_snapshot.address}</p>
+    <p>Классификация: {instance.classifier_snapshot.final_incident_type}</p>
+    <p>Занятие: {instance.training_session_id ? `#${instance.training_session_id}` : 'не привязано'}</p>
+    <h4>Службы</h4><ul>{instance.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul>
+    <RenderEditor title="Исходная карточка" facts={[initial.title, initial.description, initial.caller_text]} render={initial.render} editable={editable} busy={busy}
+      onSave={(text) => action(`${base}/initial-message`, asOptions('PATCH', { text }))}
+      onRerender={() => action(`${base}/rerender-initial-message`, { method: 'POST' })} />
+    <h4>Timeline</h4><ol>{instance.events.map((event) => <li key={event.id}>T+{formatOffset(event.offset_seconds)} · {event.title}
+      {event.event_type === 'RESPONSE_MESSAGE' ? <RenderEditor title="Сообщение группы" facts={[event.title, event.description, event.source_type]} render={event.render} editable={editable} busy={busy}
+        onSave={(text) => action(`${base}/events/${event.id}/message`, asOptions('PATCH', { text }))}
+        onRerender={() => action(`${base}/events/${event.id}/rerender`, { method: 'POST' })} /> : <p>{event.description}</p>}
+    </li>)}</ol>
+    {editable && <button type="button" disabled={busy} onClick={() => action(`${base}/confirm`, { method: 'POST' })}>Подтвердить тексты и экземпляр</button>}
+    {!instance.training_session_id && <label>Использовать в занятии<select value={trainingSessionId || ''} onChange={(event) => onSelectSession(Number(event.target.value) || null)}><option value="">Выберите занятие</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title} · #{session.id}</option>)}</select></label>}
+    {!instance.training_session_id && <button type="button" disabled={busy || !trainingSessionId} onClick={() => action(`${base}/attach`, asOptions('POST', { training_session_id: trainingSessionId }))}>Привязать к занятию</button>}
+  </section>
+}
+
 export default function ScenarioLibrary({ user, requestJson, onBack }) {
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const [filters, setFilters] = useState({ q: '', status: 'READY', difficulty: '', incident_group: '', incident_type: '', object_type_id: '', district: '', administrative_area: '', service_id: '', created_by: '' })
@@ -33,6 +77,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
   const [generationPreview, setGenerationPreview] = useState(null)
   const [generationCandidates, setGenerationCandidates] = useState([])
   const [generatedInstance, setGeneratedInstance] = useState(null)
+  const [availableInstances, setAvailableInstances] = useState([])
   const [sessions, setSessions] = useState([])
 
   const load = useCallback(async () => {
@@ -41,9 +86,12 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
     try {
       const params = new URLSearchParams({ limit: '24', offset: String(offset) })
       Object.entries(filters).forEach(([key, value]) => { if (value !== '') params.set(key, value) })
-      const result = await api(`/api/scenario-templates?${params}`)
+      const [result, instances] = await Promise.all([
+        api(`/api/scenario-templates?${params}`), api('/api/scenario-instances'),
+      ])
       setItems(result.items)
       setTotal(result.total)
+      setAvailableInstances(instances)
     } catch (cause) { setError(cause.message) } finally { setLoading(false) }
   }, [api, filters, offset])
 
@@ -110,7 +158,15 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
   })
   const createInstance = () => perform(async () => {
     const created = await api(`/api/scenario-templates/${generation.id}/instances`, asOptions('POST', generationInput))
-    setGeneratedInstance(created); setGenerationPreview(null); setNotice(`Экземпляр #${created.id} создан`)
+    setGeneratedInstance(created); setGenerationPreview(null); setNotice(`Экземпляр #${created.id} создан`); await load()
+  })
+  const openInstance = (instance) => perform(async () => {
+    const availableSessions = await api('/api/training/sessions')
+    setSessions(availableSessions.filter((session) => ['DRAFT', 'READY'].includes(session.state)))
+    setGeneration({ id: instance.scenario_template_id, name: instance.template_snapshot.name })
+    setGeneratedInstance(instance)
+    setGenerationPreview(null)
+    setGenerationInput((old) => ({ ...old, training_session_id: instance.training_session_id }))
   })
   const updateList = (field, index, patch) => change(field, draft[field].map((item, position) => position === index ? { ...item, ...patch } : item))
   const removeList = (field, index) => change(field, draft[field].filter((_, position) => position !== index))
@@ -139,9 +195,10 @@ export default function ScenarioLibrary({ user, requestJson, onBack }) {
         {generationPreview && <div className={styles.preview}><div><h4>Объект</h4><p>{generationPreview.object_snapshot?.name || 'Выберите объект'}</p><p>{generationPreview.object_snapshot?.address}</p><p>Подходящих объектов: {generationPreview.matching_object_count}</p></div><div><h4>Классификация и службы</h4><p>{generationPreview.classifier_snapshot.final_incident_type}</p><ul>{generationPreview.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul><h4>Timeline</h4><ol>{generationPreview.events.map((event, index) => <li key={index}>T+{formatOffset(event.offset_seconds)} · {event.title} — {event.description}</li>)}</ol></div></div>}
         {generationPreview?.object_snapshot && <button type="button" disabled={busy} onClick={createInstance}>Сгенерировать экземпляр</button>}
       </section>}
-      {generatedInstance && <section className={styles.panel}><h3>Экземпляр #{generatedInstance.id}</h3><p>{generatedInstance.name} · сложность {generatedInstance.difficulty}/5</p><p>Объект: {generatedInstance.object_snapshot.name} · {generatedInstance.object_snapshot.address}</p><p>Классификация: {generatedInstance.classifier_snapshot.final_incident_type}</p><p>Занятие: {generatedInstance.training_session_id ? `#${generatedInstance.training_session_id}` : 'не привязано'}</p><h4>Службы</h4><ul>{generatedInstance.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul><h4>Timeline</h4><ol>{generatedInstance.events.map((event, index) => <li key={index}>T+{formatOffset(event.offset_seconds)} · {event.title} — {event.description}</li>)}</ol>{!generatedInstance.training_session_id && <label>Использовать в занятии<select value={generationInput.training_session_id || ''} onChange={(event) => setGenerationInput((old) => ({ ...old, training_session_id: Number(event.target.value) || null }))}><option value="">Выберите занятие</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title} · #{session.id}</option>)}</select></label>}{!generatedInstance.training_session_id && <button type="button" disabled={busy || !generationInput.training_session_id} onClick={() => perform(async () => { const attached = await api(`/api/scenario-instances/${generatedInstance.id}/attach`, asOptions('POST', { training_session_id: generationInput.training_session_id })); setGeneratedInstance(attached); setNotice('Экземпляр привязан к занятию') })}>Привязать к занятию</button>}</section>}
+      {generatedInstance && <InstanceReview instance={generatedInstance} busy={busy} api={api} perform={perform} onChange={(updated) => { setGeneratedInstance(updated); if (updated.status !== generatedInstance.status) load() }} sessions={sessions} trainingSessionId={generationInput.training_session_id} onSelectSession={(id) => setGenerationInput((old) => ({ ...old, training_session_id: id }))} />}
     </div>}
     {!selected && !generation && <div className={styles.content}>
+      {availableInstances.some((instance) => instance.status === 'DRAFT') && <section className={styles.panel}><h3>Экземпляры на проверке</h3><div className={styles.cards}>{availableInstances.filter((instance) => instance.status === 'DRAFT').map((instance) => <button className={styles.card} type="button" key={instance.id} onClick={() => openInstance(instance)}><b>#{instance.id} · {instance.name}</b><small>{instance.object_snapshot.name} · тексты ждут подтверждения</small></button>)}</div></section>}
       <div className={styles.topline}><div><h2>Сценарии</h2><p>Подготовленные методические шаблоны. В библиотеке по умолчанию показаны проверенные READY-сценарии.</p></div><button type="button" onClick={() => { setSelected({ status: 'DRAFT' }); setDraft(blank()); setStep(0); setValidation(null); setDirty(false) }}>+ Создать сценарий</button></div>
       <div className={styles.filters}>
         <label>Поиск<input value={filters.q} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Название" /></label>

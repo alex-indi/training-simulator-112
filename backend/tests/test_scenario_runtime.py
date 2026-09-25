@@ -12,9 +12,11 @@ from test_scenario_library import AsyncAdapter
 
 from app.db.base import Base
 from app.db.dependencies import get_database_session
+from app.modules.admin import models as admin_models  # noqa: F401
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentAction
+from app.modules.response.models import ResponseAssignment, ResponseMessage, ResponseUnit
 from app.modules.scenario_library.instance_models import (
     ScenarioInstance,
     ScenarioInstanceEvent,
@@ -78,7 +80,11 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
             classifier_snapshot={"final_incident_type": "Пожар", "features": []},
             object_snapshot={"name": "Школа", "address": "Исходный адрес"},
             service_snapshot=[{"official_name": "Пожарная охрана"}],
-            initial_state_snapshot={"title": "Дым", "description": "Первый звонок"},
+            initial_state_snapshot={
+                "title": "Дым",
+                "description": "Первый звонок",
+                "render": {"rendered_text": "Подготовленное сообщение о дыме"},
+            },
             expected_actions_snapshot=[{"action": "ACCEPT"}],
             assessment_criteria_snapshot=[{"name": "Время"}],
             template_snapshot={"name": "Исходный шаблон"},
@@ -100,6 +106,18 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                     description="Есть пострадавший",
                     source_type="CALLER",
                     payload_snapshot={"description": "Есть пострадавший"},
+                ),
+                ScenarioInstanceEvent(
+                    sequence_number=2,
+                    offset_seconds=60,
+                    event_type="RESPONSE_MESSAGE",
+                    title="Прибытие",
+                    description="Группа прибыла",
+                    source_type="RESPONSE_UNIT",
+                    payload_snapshot={
+                        "description": "Группа прибыла",
+                        "render": {"rendered_text": "Прибыли к месту"},
+                    },
                 ),
             ],
         )
@@ -126,6 +144,7 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                 assert again.json() == first.json()
                 item = db.scalar(select(ScenarioQueueItem))
                 assert item.snapshot["address"] == "Исходный адрес"
+                assert item.snapshot["description"] == "Подготовленное сообщение о дыме"
                 assert "assessment" not in str(item.snapshot)
                 assert "Есть пострадавший" not in str(item.snapshot)
                 item.approved = True
@@ -137,11 +156,22 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                     item.incident_id
                 ]
                 incident = db.get(Incident, item.incident_id)
+                unit = ResponseUnit(name="Пожарный расчёт", dds_profile="Пожарная охрана")
+                db.add(unit)
+                db.flush()
+                db.add(
+                    ResponseAssignment(
+                        incident_id=incident.id,
+                        response_unit_id=unit.id,
+                        training_run_id=run.id,
+                    )
+                )
+                db.commit()
                 assert incident.scenario_instance_id == instance.id
                 assert incident.dds_status == DDSResponseStatus.AWAITING_DECISION
                 assert db.query(IncidentAction).filter_by(incident_id=incident.id).count() == 1
-                event = db.scalar(select(ScenarioRuntimeEvent))
-                assert event.status == "PENDING"
+                events = db.scalars(select(ScenarioRuntimeEvent)).all()
+                assert all(event.status == "PENDING" for event in events)
                 assert db.query(ScenarioEvent).count() == 0
                 training.paused_at = start + timedelta(seconds=30)
                 db.add(
@@ -154,7 +184,7 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                 )
                 db.commit()
                 await tick_session(AsyncAdapter(db), training.id, start + timedelta(seconds=90))
-                assert event.status == "PENDING"
+                assert all(event.status == "PENDING" for event in events)
                 training.paused_at = None
                 pause = db.scalar(select(SessionPause))
                 pause.finished_at = start + timedelta(seconds=90)
@@ -162,10 +192,11 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                 db.commit()
                 db.expire(training, ["pauses"])
                 await tick_session(AsyncAdapter(db), training.id, start + timedelta(seconds=91))
-                assert event.status == "PENDING"
+                assert all(event.status == "PENDING" for event in events)
                 await tick_session(AsyncAdapter(db), training.id, start + timedelta(seconds=121))
-                assert event.status == "RELEASED"
-                assert event.released_at is not None
+                assert all(event.status == "RELEASED" for event in events)
+                assert all(event.released_at is not None for event in events)
+                assert db.scalar(select(ResponseMessage)).body == "Прибыли к месту"
                 assert db.scalar(select(ScenarioEvent)).origin == "SCENARIO"
                 assert incident.dds_status == DDSResponseStatus.AWAITING_DECISION
                 principal["user"] = trainee

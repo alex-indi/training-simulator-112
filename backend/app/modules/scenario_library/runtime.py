@@ -25,8 +25,8 @@ def incident_snapshot(instance: ScenarioInstance) -> dict:
     initial = instance.initial_state_snapshot
     obj = instance.object_snapshot
     classifier = instance.classifier_snapshot
-    description = initial["description"]
-    if initial.get("caller_text"):
+    description = initial.get("render", {}).get("rendered_text") or initial["description"]
+    if not initial.get("render") and initial.get("caller_text"):
         description = f"{description}\n{initial['caller_text']}"
     snapshot = IncidentSnapshot(
         incident_number=f"СЦ-{instance.id}",
@@ -110,7 +110,8 @@ async def release_due_events(
             continue
         instance = await database.get(ScenarioInstance, incident.scenario_instance_id)
         body = (
-            row.payload_snapshot.get("description")
+            row.payload_snapshot.get("render", {}).get("rendered_text")
+            or row.payload_snapshot.get("description")
             or row.payload_snapshot.get("title")
             or row.event_type
         )
