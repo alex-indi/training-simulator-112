@@ -88,6 +88,9 @@ def _assignment_options():
         selectinload(ResponseAssignment.incident)
         .selectinload(Incident.training_session)
         .selectinload(TrainingSession.trainees),
+        selectinload(ResponseAssignment.incident)
+        .selectinload(Incident.training_session)
+        .selectinload(TrainingSession.runs),
         selectinload(ResponseAssignment.incident).selectinload(Incident.training_run),
     )
 

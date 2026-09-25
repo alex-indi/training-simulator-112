@@ -3,12 +3,7 @@ import { io } from 'socket.io-client'
 import PropTypes from 'prop-types'
 
 import styles from './App.module.css'
-
-const senderLabels = {
-  DISPATCHER: 'Диспетчер ДДС',
-  RESPONSE_UNIT: 'Старший группы',
-  SYSTEM: 'Система',
-}
+import { responseSenderLabels } from './uiLabels.js'
 
 function ResponseChat({ assignment, incidentNumber, username, apiUrl, requestJson, formatDateTime }) {
   const [messages, setMessages] = useState([])
@@ -103,7 +98,7 @@ function ResponseChat({ assignment, incidentNumber, username, apiUrl, requestJso
             {messages.map((message) => (
               <article key={message.id} className={`${styles.chatMessage} ${styles[`chat${message.sender_type}`]}`}>
                 <header>
-                  <strong>{senderLabels[message.sender_type]}</strong>
+                  <strong>{responseSenderLabels[message.sender_type]}</strong>
                   <time>{formatDateTime(message.created_at)}</time>
                 </header>
                 <p>{message.body}</p>

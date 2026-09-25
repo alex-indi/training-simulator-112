@@ -35,6 +35,13 @@ from app.modules.training.router import _ensure_session_owner, _load_session
 
 router = APIRouter(prefix="/api/training", tags=["assessment"])
 REACTION_LIMIT_SECONDS = 30
+ACTION_NAMES = {
+    IncidentActionType.ACCEPT: "принятие карточки",
+    IncidentActionType.START_RESPONSE: "начало реагирования",
+    IncidentActionType.MARK_ARRIVAL: "прибытие",
+    IncidentActionType.START_WORK: "начало работ",
+    IncidentActionType.COMPLETE_WORK: "завершение работ",
+}
 
 
 class DecisionRequest(BaseModel):
@@ -186,7 +193,7 @@ def assess_run(
                         _deviation(
                             incident,
                             "MISSING_ACTION",
-                            prefix + f"Пропущено действие {action_type.value}",
+                            prefix + f"Пропущено действие: {ACTION_NAMES[action_type]}",
                             5,
                         )
                     )

@@ -32,8 +32,12 @@ async function login(page, username) {
 async function join(page, title, workstation) {
   await page.getByLabel('Занятие', { exact: true }).selectOption({ label: title })
   await page.getByLabel('Рабочее место').fill(String(workstation))
-  await page.getByRole('button', { name: 'Занять АРМ' }).click()
-  await expect(page.getByText(`АРМ ${String(workstation).padStart(2, '0')}`)).toBeVisible()
+  const [response] = await Promise.all([
+    page.waitForResponse((item) => item.url().endsWith('/join') && item.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Занять АРМ' }).click(),
+  ])
+  expect(response.ok(), await response.text()).toBeTruthy()
+  await expect(page.getByRole('button', { name: 'Занять АРМ' })).toHaveCount(0)
 }
 
 function snapshot(number, profile) {
