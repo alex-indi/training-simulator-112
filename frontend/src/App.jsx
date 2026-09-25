@@ -8,7 +8,7 @@ import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
 import TrainingResults from './TrainingResults.jsx'
 import ResponseChat from './ResponseChat'
-import { ddsStatusLabels, incidentHistoryLabels, responseStateLabels } from './uiLabels.js'
+import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels, responseStateLabels } from './uiLabels.js'
 import { previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
@@ -813,7 +813,7 @@ function App() {
                 <strong>{formatDateTime(selectedIncident.reported_at)}</strong>
                 <p>{selectedIncident.description}</p>
                 {selectedIncident.scenario_events?.map((item) => <p key={item.id}><b>Новая вводная · {formatDateTime(item.created_at)}</b><br />{item.body}</p>)}
-                <span>Источник: {selectedIncident.source}</span>
+                <span>Источник: {incidentSourceLabels[selectedIncident.source] || selectedIncident.source}</span>
               </div>
             </section>
 

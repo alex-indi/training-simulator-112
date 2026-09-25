@@ -44,6 +44,14 @@ EVENT_TYPES = {
     "SITUATION_CHANGE",
     "SYSTEM_EVENT",
 }
+RESPONSE_PROGRESS_STATES = (
+    "ASSIGNED",
+    "ACKNOWLEDGED",
+    "EN_ROUTE",
+    "ARRIVED",
+    "WORKING",
+    "COMPLETED",
+)
 
 
 class ObjectRuleInput(BaseModel):
@@ -60,6 +68,9 @@ class EventInput(BaseModel):
     description: str = ""
     source_type: str = "SYSTEM"
     target_service_id: int | None = Field(default=None, gt=0)
+    target_response_state: (
+        Literal["ACKNOWLEDGED", "EN_ROUTE", "ARRIVED", "WORKING", "COMPLETED"] | None
+    ) = None
 
 
 class ServiceInput(BaseModel):
@@ -175,6 +186,7 @@ def serialize(row: ScenarioTemplate) -> dict:
                 "description": event.description,
                 "source_type": event.source_type,
                 "target_service_id": event.target_service_id,
+                "target_response_state": event.target_response_state,
             }
             for event in row.events
         ],
@@ -273,15 +285,15 @@ async def validate_references(database: AsyncSession, data: TemplateInput) -> No
                 raise HTTPException(status_code=422, detail=f"Неизвестный тег объекта {tag}")
     if len({service.service_id for service in data.services}) != len(data.services):
         raise HTTPException(status_code=422, detail="Служба указана дважды")
-    for service_id in {service.service_id for service in data.services} | {
-        action.expected_service_id
-        for action in data.expected_actions
-        if action.expected_service_id is not None
-    } | {
-        event.target_service_id
-        for event in data.events
-        if event.target_service_id is not None
-    }:
+    for service_id in (
+        {service.service_id for service in data.services}
+        | {
+            action.expected_service_id
+            for action in data.expected_actions
+            if action.expected_service_id is not None
+        }
+        | {event.target_service_id for event in data.events if event.target_service_id is not None}
+    ):
         if await database.get(DispatchService, service_id) is None:
             raise HTTPException(status_code=422, detail=f"Неизвестная служба {service_id}")
     if data.classifier_rule_id is None and any(
@@ -312,6 +324,12 @@ async def validate_references(database: AsyncSession, data: TemplateInput) -> No
         for event in data.events
     ):
         raise HTTPException(status_code=422, detail="Служба сообщения должна входить в сценарий")
+    if any(
+        event.target_response_state is not None
+        and (event.event_type != "RESPONSE_MESSAGE" or event.target_service_id is None)
+        for event in data.events
+    ):
+        raise HTTPException(status_code=422, detail="Состояние группы требует адресного сообщения")
     if len(data.events) > 100:
         raise HTTPException(status_code=422, detail="Слишком много событий")
 
@@ -384,12 +402,29 @@ async def readiness_errors(database: AsyncSession, row: ScenarioTemplate) -> lis
     if row.events and row.events[0].event_type != "INITIAL_REPORT":
         errors.append("Первым должно идти начальное событие")
     service_ids = {service.service_id for service in row.services}
+    service_states = {service_id: "ASSIGNED" for service_id in service_ids}
     for event in row.events:
         if event.event_type == "RESPONSE_MESSAGE":
             if event.target_service_id is None:
                 errors.append("Выберите службу для сообщения группы")
             elif event.target_service_id not in service_ids:
                 errors.append("Служба сообщения должна входить в сценарий")
+            if (
+                event.target_response_state is not None
+                and event.target_service_id in service_states
+            ):
+                state = event.target_response_state
+                previous = service_states[event.target_service_id]
+                if (
+                    state not in RESPONSE_PROGRESS_STATES
+                    or RESPONSE_PROGRESS_STATES.index(state)
+                    != RESPONSE_PROGRESS_STATES.index(previous) + 1
+                ):
+                    errors.append("Неверная последовательность состояний группы")
+                else:
+                    service_states[event.target_service_id] = state
+        elif event.target_response_state is not None:
+            errors.append("Состояние группы требует сообщения службы")
     return errors
 
 

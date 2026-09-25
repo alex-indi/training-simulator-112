@@ -189,6 +189,7 @@ def _event_dict(row, services: list[dict] | None = None) -> dict:
             "target_service_id": row.target_service_id,
             "target_service_name": target["official_name"] if target else None,
             "target_service_source": target["source_reference"] if target else None,
+            "target_response_state": row.target_response_state,
         }
     result = {
         "sequence_number": row.sequence_number,

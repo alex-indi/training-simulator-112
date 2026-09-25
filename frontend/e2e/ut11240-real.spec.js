@@ -86,6 +86,7 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
     await expect(first.getByText(number).first()).toBeVisible()
     await expect(second.getByText(number).first()).toBeVisible()
     await first.getByText(number).first().click()
+    await expect(first.getByText('Источник: Учебный сценарий')).toBeVisible()
     await first.getByRole('button', { name: 'Взять в работу' }).click()
     await second.getByText(number).first().click()
     await expect(second.getByText(/просмотр без права изменения/)).toBeVisible()
@@ -125,6 +126,11 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
       await first.getByRole('button', { name: new RegExp(`Оперативная связь .* Учебная группа ${code} ${session.id}`) }).click()
       await expect(first.getByText(messages.find((message) => message.sender_type === 'RESPONSE_UNIT').body)).toBeVisible()
     }
+    await expect.poll(async () => {
+      const current = await json(await api.get(`/api/response/incidents/${incident.id}/assignments`))
+      return current.map((item) => item.state)
+    }, { timeout: 40000 }).toEqual(['EN_ROUTE', 'EN_ROUTE'])
+    await expect(first.locator('[class*="responseAssignment"] > b')).toHaveText(['Выехала', 'Выехала'])
     expect((await json(await api.get(`/api/incidents/${incident.id}`))).dds_status).toBe('ACCEPTED')
     const traineeApi = await apiRequest.newContext({
       baseURL: apiBase,

@@ -10,7 +10,13 @@ from sqlalchemy.orm import selectinload
 
 from app.modules.incidents.models import Incident
 from app.modules.incidents.schemas import IncidentSnapshot
-from app.modules.response.models import ResponseAssignment, ResponseMessage, ResponseMessageSender
+from app.modules.response.models import (
+    ResponseAssignment,
+    ResponseAssignmentState,
+    ResponseMessage,
+    ResponseMessageSender,
+)
+from app.modules.response.workflow import apply_scenario_event
 from app.modules.scenario_library.instance_models import (
     ScenarioInstance,
     ScenarioInstanceEvent,
@@ -18,6 +24,20 @@ from app.modules.scenario_library.instance_models import (
 )
 from app.modules.training.clock import active_seconds
 from app.modules.training.models import ScenarioEvent, TrainingRun, TrainingSession
+
+RESPONSE_STATE_ORDER = {
+    state: index
+    for index, state in enumerate(
+        (
+            ResponseAssignmentState.ASSIGNED,
+            ResponseAssignmentState.ACKNOWLEDGED,
+            ResponseAssignmentState.EN_ROUTE,
+            ResponseAssignmentState.ARRIVED,
+            ResponseAssignmentState.WORKING,
+            ResponseAssignmentState.COMPLETED,
+        )
+    )
+}
 
 
 def incident_snapshot(instance: ScenarioInstance) -> dict:
@@ -85,10 +105,10 @@ async def prepare_runtime_events(database: AsyncSession, incident: Incident) -> 
 
 async def release_due_events(
     database: AsyncSession, session: TrainingSession, now: datetime
-) -> tuple[list[int], list[tuple[ResponseMessage, int]]]:
+) -> tuple[list[int], list[tuple[ResponseMessage, int]], list[int]]:
     """Release planned facts using the session's existing server clock and pause records."""
     if session.paused_at or session.finish_mode:
-        return [], []
+        return [], [], []
     rows = (
         await database.scalars(
             select(ScenarioRuntimeEvent)
@@ -98,11 +118,13 @@ async def release_due_events(
                 ScenarioRuntimeEvent.status == "PENDING",
             )
             .options(selectinload(ScenarioRuntimeEvent.incident))
+            .order_by(ScenarioRuntimeEvent.offset_seconds, ScenarioRuntimeEvent.id)
         )
     ).all()
     runs = {run.id: run for run in session.runs}
     released = []
     messages = []
+    state_changed = []
     for row in rows:
         incident = row.incident
         run_id = incident.training_run_id or incident.claimed_by_training_run_id
@@ -134,9 +156,24 @@ async def release_due_events(
                     ResponseAssignment.incident_id == incident.id,
                     ResponseAssignment.dispatch_service_id == target_service_id,
                 )
+                .options(selectinload(ResponseAssignment.events))
             )
             if assignment is None:
                 continue
+            target_state = row.payload_snapshot.get("target_response_state")
+            if target_state is not None:
+                planned = ResponseAssignmentState(target_state)
+                if (
+                    assignment.state in RESPONSE_STATE_ORDER
+                    and RESPONSE_STATE_ORDER[assignment.state] < RESPONSE_STATE_ORDER[planned]
+                ):
+                    apply_scenario_event(
+                        assignment,
+                        target_state=planned,
+                        event_key=f"scenario-state:{row.scenario_instance_event_id}",
+                        server_time=now,
+                    )
+                    state_changed.append(incident.id)
         if row.event_type not in {"SYSTEM_EVENT", "RESPONSE_MESSAGE"}:
             database.add(
                 ScenarioEvent(
@@ -163,4 +200,4 @@ async def release_due_events(
         row.status = "RELEASED"
         row.released_at = now
         released.append(incident.id)
-    return list(set(released)), messages
+    return list(set(released)), messages, list(set(state_changed))
