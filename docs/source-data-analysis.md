@@ -1,6 +1,6 @@
 # Анализ исходных данных классификатора и служб 112
 
-**Источники:** `materials/customer/SRC-006-incident-classifier-v046-24.xlsx` и `materials/customer/СЛУЖБЫ 112.docx`. Второй файл в проекте не содержит суффикса `(1)`, указанного в WEEEK. Исходные файлы заказчика не добавляются в Git.
+**Источники:** `materials/customer/SRC-006-incident-classifier-v046-24.xlsx` и `materials/customer/СЛУЖБЫ 112.docx`. Второй файл в проекте не содержит суффикса `(1)`, указанного в WEEEK. Исходные файлы заказчика, включая `materials/customer/` и архивы `materials/customer.*`, хранятся только локально вне Git. Не добавляйте их в commit и не публикуйте в репозитории.
 
 SHA-256 исходных версий: SRC-006 — `1d907424ab96ae397cf4b67dfd0193aa94deda56fba2d2ca4f8df8f2c2585937`; каталог — `3f736a75014d4ae9129da415d8bb834066fa037d9ca5372b90d8c09f8be6220c`.
 
