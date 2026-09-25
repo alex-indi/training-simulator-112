@@ -156,6 +156,7 @@ class AITextRenderer:
         fingerprint = input_hash(request, self.provider.name, self.provider.model)
         started = monotonic()
         result = None
+        provider_error = False
         if self.enabled and self.provider.name != "template":
             for attempt in range(2):
                 try:
@@ -168,6 +169,7 @@ class AITextRenderer:
                     if isinstance(exc, asyncio.CancelledError):
                         raise
                     result = None
+                    provider_error = True
                     logger.warning(
                         "AI render failed: provider=%s model=%s task=%s attempt=%s error=%s",
                         self.provider.name,
@@ -195,7 +197,7 @@ class AITextRenderer:
             result.input_tokens,
             result.output_tokens,
         )
-        return TextGenerationResult(
+        snapshot = TextGenerationResult(
             text=result.text,
             provider=result.provider,
             model=result.model,
@@ -204,6 +206,8 @@ class AITextRenderer:
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
         ).snapshot(fingerprint)
+        snapshot["provider_error"] = provider_error
+        return snapshot
 
 
 def _validate_text(value: Any) -> None:
@@ -225,12 +229,12 @@ def get_renderer(settings: Settings | None = None) -> AITextRenderer:
 
 
 async def renderer_for_database(database, settings: Settings | None = None) -> AITextRenderer:
-    """Use an explicitly configured admin setting, or environment defaults."""
+    """A saved admin setting takes precedence over environment defaults."""
     from app.modules.admin.models import AIProviderConfig
 
     config = settings or get_settings()
     stored = await database.get(AIProviderConfig, 1)
-    if stored is not None and stored.model:
+    if stored is not None:
         config = config.model_copy(
             update={
                 "ai_text_enabled": stored.enabled,

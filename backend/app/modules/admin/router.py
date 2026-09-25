@@ -112,7 +112,7 @@ async def dashboard(session: Database) -> dict[str, Any]:
     last_import = await session.scalar(
         select(ImportRun).order_by(ImportRun.started_at.desc()).limit(1)
     )
-    ai_config = await session.get(AIProviderConfig, 1)
+    ai_config = await session.get(AIProviderConfig, 1) or _ai_from_environment()
     return {
         "users": await count(User),
         "active_users": await count(User, User.is_active.is_(True)),
@@ -125,9 +125,9 @@ async def dashboard(session: Database) -> dict[str, Any]:
         "objects": await count(CityObject),
         "data_quality_open": await count(DataQualityIssue, DataQualityIssue.status == "OPEN"),
         "ai": {
-            "enabled": bool(ai_config and ai_config.enabled),
-            "provider": ai_config.provider if ai_config else "OPENAI_COMPATIBLE",
-            "model": ai_config.model if ai_config else "",
+            "enabled": ai_config.enabled,
+            "provider": ai_config.provider,
+            "model": ai_config.model,
             "api_key_configured": bool(
                 get_settings().ai_text_api_key or get_settings().openai_api_key
             ),
@@ -563,10 +563,22 @@ async def data_quality(session: Database, status_filter: str = "OPEN") -> list[D
     )
 
 
+def _ai_from_environment() -> AIProviderConfig:
+    settings = get_settings()
+    return AIProviderConfig(
+        id=1,
+        provider=settings.ai_text_provider.upper(),
+        model=settings.ai_text_model,
+        base_url=settings.ai_text_base_url or "https://api.openai.com/v1",
+        enabled=settings.ai_text_enabled,
+        timeout_seconds=int(settings.ai_text_timeout_seconds),
+    )
+
+
 async def _ai_config(session: AsyncSession) -> AIProviderConfig:
     config = await session.get(AIProviderConfig, 1)
     if config is None:
-        config = AIProviderConfig(id=1)
+        config = _ai_from_environment()
         session.add(config)
         await session.flush()
     return config
@@ -585,6 +597,8 @@ def _ai_read(config: AIProviderConfig) -> AIConfigRead:
 
 
 def _ai_configuration_present(config: AIProviderConfig) -> bool:
+    if config.provider.lower() == "template":
+        return True
     if not config.model:
         return False
     if (
@@ -597,8 +611,7 @@ def _ai_configuration_present(config: AIProviderConfig) -> bool:
 
 @router.get("/ai", response_model=AIConfigRead)
 async def get_ai(session: Database) -> AIConfigRead:
-    config = await _ai_config(session)
-    await session.commit()
+    config = await session.get(AIProviderConfig, 1) or _ai_from_environment()
     return _ai_read(config)
 
 
@@ -609,6 +622,13 @@ async def update_ai(payload: AIConfigUpdate, session: Database, admin: Admin) ->
     url = urlsplit(payload.base_url)
     if url.scheme not in {"http", "https"} or not url.netloc or url.username or url.password:
         raise HTTPException(status_code=422, detail="Некорректный AI endpoint")
+    if (
+        payload.provider.lower() == "openai"
+        and payload.base_url.rstrip("/") != "https://api.openai.com/v1"
+    ):
+        raise HTTPException(status_code=422, detail="Для OpenAI используйте официальный endpoint")
+    if payload.enabled and payload.provider.lower() != "template" and not payload.model.strip():
+        raise HTTPException(status_code=422, detail="Укажите модель AI")
     config = await _ai_config(session)
     before = _ai_read(config).model_dump(mode="json")
     for key, value in payload.model_dump().items():
@@ -622,6 +642,21 @@ async def update_ai(payload: AIConfigUpdate, session: Database, admin: Admin) ->
 
 @router.post("/ai/health")
 async def ai_health(session: Database) -> dict[str, Any]:
+    stored = await session.get(AIProviderConfig, 1)
+    if stored is not None and not stored.enabled:
+        return {
+            "status": "DISABLED",
+            "available": False,
+            "provider": stored.provider.lower(),
+            "model": stored.model,
+        }
+    if stored is None and not get_settings().ai_text_enabled:
+        return {
+            "status": "DISABLED",
+            "available": False,
+            "provider": get_settings().ai_text_provider,
+            "model": get_settings().ai_text_model or None,
+        }
     renderer = await renderer_for_database(session)
     health = await renderer.provider.healthcheck()
     return {
@@ -713,9 +748,9 @@ async def audit(
 @router.get("/system")
 async def system(session: Database) -> dict[str, Any]:
     await session.execute(text("SELECT 1"))
-    ai_config = await session.get(AIProviderConfig, 1)
-    ai_status = "NOT_CONFIGURED"
-    if ai_config and ai_config.enabled:
+    ai_config = await session.get(AIProviderConfig, 1) or _ai_from_environment()
+    ai_status = "DISABLED"
+    if ai_config.enabled:
         ai_status = "CONFIGURED" if _ai_configuration_present(ai_config) else "ERROR"
     return {
         "services": {

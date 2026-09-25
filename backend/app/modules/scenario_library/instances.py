@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -191,10 +191,39 @@ def _response_request(event: dict) -> TextGenerationRequest:
 
 async def _render_content(content: dict, database: AsyncSession) -> None:
     renderer = await renderer_for_database(database)
-    content["initial_state_snapshot"]["render"] = await renderer.render(_initial_request(content))
+    rendered = [await renderer.render(_initial_request(content))]
+    content["initial_state_snapshot"]["render"] = rendered[0]
     for event in content["events"]:
         if event["event_type"] == "RESPONSE_MESSAGE":
-            event["payload_snapshot"]["render"] = await renderer.render(_response_request(event))
+            result = await renderer.render(_response_request(event))
+            event["payload_snapshot"]["render"] = result
+            rendered.append(result)
+    await _record_usage(database, rendered)
+
+
+async def _record_usage(database: AsyncSession, rendered: list[dict]) -> None:
+    """Count committed render operations for the existing admin usage view."""
+    from datetime import UTC, datetime
+
+    statement = text(
+        "INSERT INTO ai_usage_daily "
+        "(day, requests, input_tokens, output_tokens, fallbacks, errors) "
+        "VALUES (:day, :requests, :input_tokens, :output_tokens, :fallbacks, :errors) "
+        "ON CONFLICT (day) DO UPDATE SET "
+        "requests = ai_usage_daily.requests + excluded.requests, "
+        "input_tokens = ai_usage_daily.input_tokens + excluded.input_tokens, "
+        "output_tokens = ai_usage_daily.output_tokens + excluded.output_tokens, "
+        "fallbacks = ai_usage_daily.fallbacks + excluded.fallbacks, "
+        "errors = ai_usage_daily.errors + excluded.errors"
+    ).bindparams(
+        day=datetime.now(UTC).date(),
+        requests=len(rendered),
+        input_tokens=sum(item.get("input_tokens") or 0 for item in rendered),
+        output_tokens=sum(item.get("output_tokens") or 0 for item in rendered),
+        fallbacks=sum(bool(item.get("fallback_used")) for item in rendered),
+        errors=sum(bool(item.get("provider_error")) for item in rendered),
+    )
+    await database.execute(statement)
 
 
 async def _matching_objects(database: AsyncSession, template) -> list:
@@ -533,6 +562,7 @@ async def rerender_initial(
     snapshot["render"] = await (await renderer_for_database(database)).render(
         _initial_request(content)
     )
+    await _record_usage(database, [snapshot["render"]])
     row.initial_state_snapshot = snapshot
     await database.commit()
     return await read_instance(instance_id, user, database)
@@ -575,6 +605,7 @@ async def rerender_event(
     snapshot["render"] = await (await renderer_for_database(database)).render(
         _response_request(_event_dict(event))
     )
+    await _record_usage(database, [snapshot["render"]])
     event.payload_snapshot = snapshot
     await database.commit()
     return await read_instance(instance_id, user, database)

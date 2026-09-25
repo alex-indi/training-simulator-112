@@ -227,6 +227,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const updateAI = (event) => {
     event.preventDefault()
+    setAiHealth(null)
     const form = new FormData(event.currentTarget)
     return mutate('/api/admin/ai', {
       method: 'PUT',
@@ -385,8 +386,8 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderAI = () => data && (
     <>
-      <form className={styles.settingsForm} onSubmit={updateAI}>
-        <label>Provider<input name="provider" defaultValue={data.provider} /></label>
+      <form className={styles.settingsForm} onSubmit={updateAI} key={data.updated_at || 'initial'}>
+        <label>Provider<select name="provider" defaultValue={data.provider.toUpperCase()}><option value="OPENAI">OpenAI</option><option value="OPENAI_COMPATIBLE">OpenAI-compatible</option><option value="TEMPLATE">Шаблонный режим</option></select></label>
         <label>Model<input name="model" defaultValue={data.model} /></label>
         <label>Base URL<input name="base_url" type="url" defaultValue={data.base_url} /></label>
         <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" defaultValue={data.timeout_seconds} /></label>
