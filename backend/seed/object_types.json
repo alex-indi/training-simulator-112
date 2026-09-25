@@ -8,6 +8,7 @@
   {"code": "HEALTHCARE", "name": "Здравоохранение", "parent_code": "BUILDING", "description": null, "source": "MVP seed"},
   {"code": "HOSPITAL", "name": "Больница", "parent_code": "HEALTHCARE", "description": null, "source": "MVP seed"},
   {"code": "POLYCLINIC", "name": "Поликлиника", "parent_code": "HEALTHCARE", "description": null, "source": "MVP seed"},
-  {"code": "TRANSPORT", "name": "Транспорт", "parent_code": null, "description": null, "source": "MVP seed"},
+  {"code": "EMERGENCY_STATION", "name": "Станция скорой медицинской помощи", "parent_code": "HEALTHCARE", "description": null, "source": "MVP seed"},
+  {"code": "TRANSPORT", "name": "Транспорт", "parent_code": "BUILDING", "description": "Здания и сооружения транспортной инфраструктуры", "source": "MVP seed"},
   {"code": "METRO_STATION", "name": "Станция метро", "parent_code": "TRANSPORT", "description": null, "source": "MVP seed"}
 ]

@@ -139,7 +139,13 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
         available_actions=get_available_actions(incident) if can_act and incident.opened_at else [],
         actions=[_to_action_read_model(action) for action in incident.actions],
         scenario_events=[
-            {"id": event.id, "kind": event.kind, "body": event.body, "created_at": event.created_at}
+            {
+                "id": event.id,
+                "kind": event.kind,
+                "body": event.body,
+                "origin": event.origin,
+                "created_at": event.created_at,
+            }
             for event in (incident.scenario_events or [])
         ],
         created_at=incident.created_at,

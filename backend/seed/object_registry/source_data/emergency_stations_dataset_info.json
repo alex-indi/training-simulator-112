@@ -1,0 +1,499 @@
+{
+  "Id": 516,
+  "IdentificationNumber": "7707089084-medicalemergency",
+  "CategoryId": 3,
+  "CategoryCaption": "Здравоохранение",
+  "DepartmentId": 1002,
+  "DepartmentCaption": "Департамент здравоохранения города Москвы",
+  "Caption": "Скорая и неотложная медицинская помощь",
+  "Description": "Скорая и неотложная медицинская помощь, расположенная в пределах установленных границ города Москвы.",
+  "FullDescription": "<p>Набор данных &lt;&lt;Скорая и неотложная медицинская помощь&gt;&gt; позволяет получить подробную информацию о станциях скорой и неотложной медицинской помощи, посмотреть их местоположение на карте. По каждой станции скорой и неотложной помощи можно посмотреть ее полное наименование, точный адрес, график работы и другие контактные данные. Помимо этого, для удобства пользователей в наборе данных опубликована информация о руководителе учреждения -- его фамилия, имя, отчество, должность, контактный телефон.</p>\n<p>Скорая медицинская помощь (СМП) --- вид медицинской помощи, оказываемой гражданам при заболеваниях, несчастных случаях, травмах, отравлениях и других состояниях, требующих срочного медицинского вмешательства.</p>\n<p>Условия оказания скорой медицинской помощи:</p>\n<ul>\n<li>вне медицинской организации (по месту вызова бригады, а также в транспортном средстве при медицинской эвакуации);</li>\n<li>амбулаторно (в условиях, не предусматривающих круглосуточного медицинского наблюдения и лечения);</li>\n<li>стационарно (в условиях, обеспечивающих круглосуточное наблюдение и лечение).</li>\n</ul>\n<p>Станции (отделения) скорой медицинской помощи осуществляют:</p>\n<ul>\n<li>круглосуточное оказание своевременной и качественной медицинской помощи в соответствии со стандартами медицинской помощи заболевшим и пострадавшим, находящимся вне лечебно-профилактических учреждений, в том числе при катастрофах и стихийных бедствиях;</li>\n<li>осуществление своевременной транспортировки больных, в том числе инфекционных, пострадавших и рожениц, нуждающихся в экстренной стационарной помощи;</li>\n<li>оказание медицинской помощи больным и пострадавшим, обратившимся за помощью непосредственно на станцию скорой медицинской помощи, в кабинете для приема амбулаторных больных;</li>\n<li>извещение муниципальных органов управления здравоохранением обо всех чрезвычайных ситуациях и несчастных случаях в зоне обслуживания станции скорой медицинской помощи;</li>\n<li>обеспечение равномерного комплектования выездных бригад скорой медицинской помощи медицинским персоналом по всем сменам и полное обеспечение их согласно примерному перечню оснащения выездной бригады скорой медицинской помощи.</li>\n</ul>\n",
+  "Keywords": "бригада скорой помощи, вызвать врача, вызов скорой помощи, здоровье, здравоохранение, инсульт, инфаркт, медицинская помощь детям, неотложная медицинская помощь, неотложная помощь, несчастный случай, отделения неотложной помощи, первая медицинская помощь, помощь  раненым при ДТП, помощь в чрезвычайных ситуациях, помощь при несчастных случаях, скорая помощь, скорая помощь при сердечных приступах, станции скорой помощи в составе медучреждений, станция скорой помощи, телефон 03, экстренная медицинская помощь",
+  "ContainsGeodata": true,
+  "VersionNumber": "2.237",
+  "VersionDate": "22.09.2026 18:00:13",
+  "ItemsCount": 76,
+  "Columns": [
+    {
+      "Name": "Category",
+      "Caption": "Категория",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "FullName",
+      "Caption": "Полное наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "ShortName",
+      "Caption": "Сокращённое наименование",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "OrgInfo",
+      "Caption": "Информация о юридическом лице",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "FullName",
+          "Caption": "Полное наименование учреждения",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefPhone",
+          "Caption": "Телефон руководителя",
+          "Visible": true,
+          "Type": "CATALOG",
+          "SubColumns": [
+            {
+              "Name": "ChiefPhone",
+              "Caption": "Телефон руководителя",
+              "Visible": true,
+              "Type": "STRING",
+              "SubColumns": null
+            }
+          ]
+        },
+        {
+          "Name": "INN",
+          "Caption": "ИНН",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "KPP",
+          "Caption": "КПП",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "OGRN",
+          "Caption": "ОГРН",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "LegalAddress",
+          "Caption": "Юридический адрес",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefName",
+          "Caption": "ФИО руководителя учреждения",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefPosition",
+          "Caption": "Должность руководителя",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "ChiefGender",
+          "Caption": "Пол руководителя",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "ObjectAddress",
+      "Caption": "Адреса объекта",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "AdmArea",
+          "Caption": "Административный округ",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "District",
+          "Caption": "Район",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "PostalCode",
+          "Caption": "Почтовый индекс",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "Address",
+          "Caption": "Адрес",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        },
+        {
+          "Name": "Availability",
+          "Caption": "Доступность",
+          "Visible": true,
+          "Type": "CATALOG",
+          "SubColumns": [
+            {
+              "Name": "available_k",
+              "Caption": "Доступность объекта (инвалиды-колясочники)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_o",
+              "Caption": "Доступность объекта (инвалиды-опорники)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_z",
+              "Caption": "Доступность объекта (инвалиды по зрению)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_s",
+              "Caption": "Доступность объекта (инвалиды по слуху)",
+              "Visible": true,
+              "Type": "DICTIONARY",
+              "SubColumns": null
+            },
+            {
+              "Name": "available_element",
+              "Caption": "Элементы доступности",
+              "Visible": true,
+              "Type": "CATALOG",
+              "SubColumns": [
+                {
+                  "Name": "Group_mgn",
+                  "Caption": "Группа",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "Area_mgn",
+                  "Caption": "Зона учреждения",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "Element_mgn",
+                  "Caption": "Элемент инфраструктуры",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "available_degree",
+                  "Caption": "Степень доступности",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                },
+                {
+                  "Name": "available_index",
+                  "Caption": "Показатель доступности",
+                  "Visible": true,
+                  "Type": "DICTIONARY",
+                  "SubColumns": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Name": "Extrainfo",
+          "Caption": "Дополнительная информация",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "ChiefName",
+      "Caption": "ФИО руководителя",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "ChiefPosition",
+      "Caption": "Должность руководителя",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "ChiefGender",
+      "Caption": "Пол руководителя",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "ChiefPhone",
+      "Caption": "Телефон руководителя",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "ChiefPhone",
+          "Caption": "Телефон руководителя",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "PublicPhone",
+      "Caption": "Общий телефон",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "PublicPhone",
+          "Caption": "Общий телефон",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "Fax",
+      "Caption": "Факс",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "Fax",
+          "Caption": "Факс",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "Email",
+      "Caption": "Адрес электронной почты",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "Email",
+          "Caption": "Адрес электронной почты",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "CloseFlag",
+      "Caption": "Признак закрытия",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "CloseReason",
+      "Caption": "Причина закрытия",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "CloseDate",
+      "Caption": "Дата закрытия",
+      "Visible": true,
+      "Type": "DATE",
+      "SubColumns": null
+    },
+    {
+      "Name": "ReopenDate",
+      "Caption": "Дата повторного открытия",
+      "Visible": true,
+      "Type": "DATE",
+      "SubColumns": null
+    },
+    {
+      "Name": "BedSpace",
+      "Caption": "Коечный фонд",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "PaidServiceInfo",
+      "Caption": "Информация о платных услугах",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "WorkingHours",
+      "Caption": "График работы",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "DayWeek",
+          "Caption": "День недели",
+          "Visible": true,
+          "Type": "DICTIONARY",
+          "SubColumns": null
+        },
+        {
+          "Name": "WorkHours",
+          "Caption": "Часы работы",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "global_id",
+      "Caption": "global_id",
+      "Visible": true,
+      "Type": null,
+      "SubColumns": null
+    },
+    {
+      "Name": "ClarificationWorkingHours",
+      "Caption": "Уточнение графика работы",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "Specialization",
+      "Caption": "Информация о специализации",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "BeneficialDrugPrescription",
+      "Caption": "Дополнительное лекарственное обеспечение",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "DrugStore",
+      "Caption": "Наличие аптечного киоска",
+      "Visible": true,
+      "Type": "FLAG",
+      "SubColumns": null
+    },
+    {
+      "Name": "AmbulanceStation",
+      "Caption": "Наличие станции неотложной помощи",
+      "Visible": true,
+      "Type": "FLAG",
+      "SubColumns": null
+    },
+    {
+      "Name": "AmbulanceStationPhone",
+      "Caption": "Перечень телефонов неотложной помощи",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "AmbulancePhone",
+          "Caption": "Телефон неотложной помощи",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": null
+        }
+      ]
+    },
+    {
+      "Name": "DoctorsSpecialtiesListForSelfRecording",
+      "Caption": "Перечень специальностей врачей (для самозаписи)",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "Extrainfo",
+      "Caption": "Дополнительная информация",
+      "Visible": true,
+      "Type": "STRING",
+      "SubColumns": null
+    },
+    {
+      "Name": "AgeRestriction",
+      "Caption": "Возрастные ограничения",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "DrugStoreType",
+      "Caption": "Тип аптеки",
+      "Visible": true,
+      "Type": "DICTIONARY",
+      "SubColumns": null
+    },
+    {
+      "Name": "geoData",
+      "Caption": "Геоданные",
+      "Visible": true,
+      "Type": "CATALOG",
+      "SubColumns": [
+        {
+          "Name": "coordinates",
+          "Caption": "Координаты",
+          "Visible": true,
+          "Type": "ARRAY",
+          "SubColumns": []
+        },
+        {
+          "Name": "type",
+          "Caption": "Тип геоданных",
+          "Visible": true,
+          "Type": "STRING",
+          "SubColumns": []
+        }
+      ]
+    },
+    {
+      "Name": "geodata_center",
+      "Caption": "Центроид",
+      "Visible": true,
+      "Type": "ARRAY",
+      "SubColumns": null
+    }
+  ]
+}
