@@ -61,6 +61,7 @@ class AIProviderConfig(Base):
     base_url: Mapped[str] = mapped_column(
         String(500), default="https://api.openai.com/v1", server_default="https://api.openai.com/v1"
     )
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     timeout_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
     updated_at: Mapped[datetime] = mapped_column(

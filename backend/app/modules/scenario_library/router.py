@@ -107,6 +107,7 @@ class TemplateInput(BaseModel):
     services: list[ServiceInput] = Field(default_factory=list)
     expected_actions: list[ActionInput] = Field(default_factory=list)
     criteria: list[CriterionInput] = Field(default_factory=list)
+    created_by_user_id: int | None = Field(default=None, gt=0)
 
 
 async def require_editor(user: Annotated[User, Depends(get_current_user)]) -> User:
@@ -145,6 +146,20 @@ async def get_template(database: AsyncSession, template_id: int) -> ScenarioTemp
     if row is None:
         raise HTTPException(status_code=404, detail="Сценарий не найден")
     return row
+
+
+async def resolve_author(database: AsyncSession, user: User, author_id: int | None) -> int:
+    if author_id is None:
+        return user.id
+    if user.role != UserRole.ADMIN and author_id != user.id:
+        raise HTTPException(status_code=403, detail="Назначать автора может только администратор")
+    author = await database.get(User, author_id)
+    if author is None or author.role not in (UserRole.INSTRUCTOR, UserRole.ADMIN):
+        raise HTTPException(
+            status_code=422,
+            detail="Автором сценария может быть преподаватель или администратор",
+        )
+    return author.id
 
 
 def serialize(row: ScenarioTemplate) -> dict:
@@ -608,7 +623,8 @@ async def create_template(
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
     await validate_references(database, data)
-    row = ScenarioTemplate(created_by_user_id=user.id)
+    author_id = await resolve_author(database, user, data.created_by_user_id)
+    row = ScenarioTemplate(created_by_user_id=author_id)
     populate(row, data)
     database.add(row)
     await database.commit()
@@ -627,6 +643,8 @@ async def update_template(
     if row.status != "DRAFT":
         raise HTTPException(status_code=409, detail="Редактируется только черновик; создайте копию")
     await validate_references(database, data)
+    if data.created_by_user_id is not None:
+        row.created_by_user_id = await resolve_author(database, user, data.created_by_user_id)
     row.object_rule = None
     row.events = []
     row.services = []
