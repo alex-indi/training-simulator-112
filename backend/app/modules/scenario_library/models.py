@@ -110,6 +110,7 @@ class ScenarioEventTemplate(Base):
     target_service_id: Mapped[int | None] = mapped_column(
         ForeignKey("dispatch_services.id", ondelete="RESTRICT"), index=True
     )
+    target_response_state: Mapped[str | None] = mapped_column(String(20))
     template: Mapped[ScenarioTemplate] = relationship(back_populates="events")
 
 

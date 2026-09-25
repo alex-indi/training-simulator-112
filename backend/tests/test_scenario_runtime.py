@@ -17,7 +17,13 @@ from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incident_classifier.models import DispatchService
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentAction
-from app.modules.response.models import ResponseAssignment, ResponseMessage, ResponseUnit
+from app.modules.response.models import (
+    ResponseAssignment,
+    ResponseAssignmentEvent,
+    ResponseAssignmentState,
+    ResponseMessage,
+    ResponseUnit,
+)
 from app.modules.scenario_library.instance_models import (
     ScenarioInstance,
     ScenarioInstanceEvent,
@@ -119,6 +125,7 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                     payload_snapshot={
                         "description": "Группа прибыла",
                         "target_service_id": service.id,
+                        "target_response_state": "ACKNOWLEDGED",
                         "render": {"rendered_text": "Прибыли к месту"},
                     },
                 ),
@@ -201,6 +208,16 @@ def test_instance_queue_delivery_and_pause_hide_future_events():
                 assert all(event.status == "RELEASED" for event in events)
                 assert all(event.released_at is not None for event in events)
                 assert db.scalar(select(ResponseMessage)).body == "Прибыли к месту"
+                assignment = db.scalar(select(ResponseAssignment))
+                assert assignment.state == ResponseAssignmentState.ACKNOWLEDGED
+                assert (
+                    db.scalar(
+                        select(ResponseAssignmentEvent).where(
+                            ResponseAssignmentEvent.event_key.like("scenario-state:%")
+                        )
+                    ).to_state
+                    == ResponseAssignmentState.ACKNOWLEDGED
+                )
                 assert db.scalar(select(ScenarioEvent)).origin == "SCENARIO"
                 assert incident.dds_status == DDSResponseStatus.AWAITING_DECISION
                 principal["user"] = trainee

@@ -112,7 +112,7 @@ def test_response_message_waits_for_target_and_is_delivered_once():
         async def tick():
             return await release_due_events(AsyncAdapter(db), session, tick_time)
 
-        assert asyncio.run(tick()) == ([], [])
+        assert asyncio.run(tick()) == ([], [], [])
         assert event.status == "PENDING"
 
         unit_101 = ResponseUnit(name="Группа 101", dds_profile="ДДС")
@@ -125,7 +125,7 @@ def test_response_message_waits_for_target_and_is_delivered_once():
         assignment_101.dispatch_service_id = service_101.id
         db.add(assignment_101)
         db.flush()
-        assert asyncio.run(tick()) == ([], [])
+        assert asyncio.run(tick()) == ([], [], [])
         assert event.status == "PENDING"
 
         assignment_103 = ResponseAssignment(
@@ -134,14 +134,15 @@ def test_response_message_waits_for_target_and_is_delivered_once():
         assignment_103.dispatch_service_id = service_103.id
         db.add(assignment_103)
         db.flush()
-        released, notifications = asyncio.run(tick())
+        released, notifications, state_changes = asyncio.run(tick())
         db.flush()
         assert released == [incident.id]
+        assert state_changes == []
         assert len(notifications) == 1
         assert notifications[0][0].response_assignment_id == assignment_103.id
         assert notifications[0][1] == trainee.id
         assert event.status == "RELEASED"
-        assert asyncio.run(tick()) == ([], [])
+        assert asyncio.run(tick()) == ([], [], [])
         messages = db.scalars(select(ResponseMessage)).all()
         assert len(messages) == 1
         assert messages[0].response_assignment_id == assignment_103.id

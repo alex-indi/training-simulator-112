@@ -11,11 +11,14 @@ from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.db.session import create_database_engine, create_session_factory
+from app.modules.admin import models as admin_models  # noqa: F401
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import Incident
 from app.modules.incidents.router import claim_incident
 from app.modules.incidents.workflow import create_delivered_incident
 from app.modules.response import models as response_models  # noqa: F401
+from app.modules.scenario_library import instance_models as scenario_instance_models  # noqa: F401
+from app.modules.scenario_library import models as scenario_models  # noqa: F401
 from app.modules.training.models import (
     QueueMode,
     TrainingGroup,

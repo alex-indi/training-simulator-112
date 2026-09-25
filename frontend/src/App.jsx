@@ -8,6 +8,7 @@ import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingEnrollment from './TrainingEnrollment.jsx'
 import TrainingResults from './TrainingResults.jsx'
 import ResponseChat from './ResponseChat'
+import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels, responseStateLabels } from './uiLabels.js'
 import { previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
@@ -25,17 +26,6 @@ const lifecycleLabels = {
   FINISHED: 'Завершена',
 }
 
-const ddsStatusLabels = {
-  AWAITING_DECISION: 'Ожидает решения',
-  ACCEPTED: 'Принята',
-  REJECTED: 'Не принята',
-  RESPONSE_STARTED: 'Начало реагирования',
-  ARRIVED: 'Прибытие',
-  WORKING: 'Проведение работ',
-  COMPLETED: 'Работы завершены',
-  WORK_REFUSED: 'Отказ от выполнения работ',
-}
-
 const actionLabels = {
   ACCEPT: 'Принята',
   REJECT: 'Не принята',
@@ -46,32 +36,16 @@ const actionLabels = {
   REFUSE_WORK: 'Отказ от выполнения работ',
 }
 
-const historyStatusLabels = {
-  SERVICE_ADDED: 'Добавлена',
-  SERVICE_RECEIVED: 'Получена службой',
-  ...ddsStatusLabels,
-}
-
 function registryServiceStatus(incident) {
   const latestStatus = incident.actions?.[incident.actions.length - 1]?.status
   if (latestStatus === 'SERVICE_RECEIVED') return 'Добавлена'
-  if (latestStatus) return historyStatusLabels[latestStatus] || lifecycleLabels[incident.lifecycle_state]
+  if (latestStatus) return incidentHistoryLabels[latestStatus] || lifecycleLabels[incident.lifecycle_state]
   return incident.lifecycle_state === 'OPENED' ? 'Добавлена' : lifecycleLabels[incident.lifecycle_state]
 }
 
 function registryIncidentType(incident) {
   const code = incident.source_snapshot?.classifier_code
   return code == null || String(code).trim() === '' ? incident.incident_type : String(code)
-}
-
-const responseStateLabels = {
-  ASSIGNED: 'Назначена',
-  ACKNOWLEDGED: 'Задание подтверждено',
-  EN_ROUTE: 'Выехала',
-  ARRIVED: 'Прибыла',
-  WORKING: 'Выполняет работы',
-  COMPLETED: 'Работы завершила',
-  CANCELLED: 'Назначение отменено',
 }
 
 const commentRequiredActions = new Set(['REJECT', 'REFUSE_WORK'])
@@ -446,8 +420,10 @@ function App() {
         requestJson(`/api/response/units?incident_id=${incident.id}`, currentUser.username),
         requestJson(`/api/response/incidents/${incident.id}/assignments`, currentUser.username),
       ])
-      const services = (openedIncident.source_snapshot?.notified_services || [])
-        .filter((service) => service.trim().toUpperCase() !== 'ДДС')
+      const services = [...new Set([
+        ...(openedIncident.source_snapshot?.notified_services || []),
+        openedIncident.viewer_dds_profile,
+      ].filter((service) => service && service.trim().toUpperCase() !== 'ДДС'))]
       setSelectedIncident(openedIncident)
       setPreviewStatuses({})
       setSelectedService(openedIncident.can_edit && openedIncident.viewer_dds_profile === 'ДДС'
@@ -737,7 +713,8 @@ function App() {
   const isPreviewMode = selectedIncident?.can_edit && ownService === 'ДДС'
   const services = isPreviewMode
     ? previewServiceTiles
-    : (snapshot?.notified_services || []).filter((service) => service.trim().toUpperCase() !== 'ДДС')
+    : [...new Set([...(snapshot?.notified_services || []), ownService]
+      .filter((service) => service && service.trim().toUpperCase() !== 'ДДС'))]
   const features = snapshot?.features || []
   const hasStatusTile = (service) => isPreviewMode
     ? Boolean(previewStatuses[service]?.length)
@@ -836,7 +813,7 @@ function App() {
                 <strong>{formatDateTime(selectedIncident.reported_at)}</strong>
                 <p>{selectedIncident.description}</p>
                 {selectedIncident.scenario_events?.map((item) => <p key={item.id}><b>Новая вводная · {formatDateTime(item.created_at)}</b><br />{item.body}</p>)}
-                <span>Источник: {selectedIncident.source}</span>
+                <span>Источник: {incidentSourceLabels[selectedIncident.source] || selectedIncident.source}</span>
               </div>
             </section>
 
@@ -880,7 +857,7 @@ function App() {
                         <article key={entry.id} className={styles.historyEntry} title={entry.order_number ? `Номер наряда: ${entry.order_number}` : undefined}>
                           <span className={styles.historyActor} title={entry.actor_display_name}>оп. {selectedIncident.viewer_workstation_number || 0}</span>
                           <span className={styles.historyArrow} aria-hidden="true">›</span>
-                          <span className={styles.historyEvent}><time>{formatDateTime(entry.created_at)}</time> {historyStatusLabels[entry.status] || entry.status}</span>
+                          <span className={styles.historyEvent}><time>{formatDateTime(entry.created_at)}</time> {incidentHistoryLabels[entry.status] || entry.status}</span>
                           {entry.comment && <span className={styles.historyArrow} aria-hidden="true">›</span>}
                           {entry.comment && <p>{entry.comment}</p>}
                         </article>

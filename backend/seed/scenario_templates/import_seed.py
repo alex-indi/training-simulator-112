@@ -99,7 +99,15 @@ async def import_seed() -> dict[str, int]:
                             for event in entry["events"]
                         ],
                         "services": [
-                            {"service_id": item, "source": "CLASSIFIER"} for item in service_ids
+                            {
+                                "service_id": item,
+                                "source": entry.get("service_sources", {}).get(
+                                    reference, "CLASSIFIER"
+                                ),
+                            }
+                            for reference, item in zip(
+                                entry["service_source_references"], service_ids, strict=True
+                            )
                         ],
                         "expected_actions": entry["expected_actions"],
                         "criteria": entry["criteria"],

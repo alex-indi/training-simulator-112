@@ -28,6 +28,14 @@ from app.modules.scenario_library.instance_models import (
 )
 from app.modules.scenario_library.router import get_template, readiness_errors, require_editor
 from app.modules.scenario_library.runtime import incident_snapshot
+from app.modules.scenario_library.variants import (
+    SCHOOL_FIRE_CODE,
+    SCHOOL_FIRE_MEDICAL_SOURCE,
+    SCHOOL_FIRE_OPTIONS,
+    card_seeds,
+    object_order,
+    variant_facts,
+)
 from app.modules.training.delivery import _editable, _invalidate_readiness, _new_item
 from app.modules.training.models import (
     QueueMode,
@@ -56,9 +64,28 @@ class GenerationInput(BaseModel):
     training_session_id: int | None = None
 
 
+class BatchGenerationInput(BaseModel):
+    count: int = Field(ge=1, le=50)
+    seed: int = Field(default=0, ge=0, le=2147483647)
+    training_session_id: int = Field(gt=0)
+    difficulty: int | None = Field(default=None, ge=1, le=5)
+    different_objects: bool = True
+
+
 class MaterializeInput(BaseModel):
     training_run_id: int | None = Field(default=None, gt=0)
     training_group_id: int | None = Field(default=None, gt=0)
+
+
+class BatchConfirmInput(MaterializeInput):
+    instance_ids: list[int] = Field(min_length=1, max_length=50)
+
+
+class SchoolFireFactsInput(BaseModel):
+    floor: int
+    room: str
+    observation: str
+    casualties: str
 
 
 @instance_router.post("/{instance_id}/materialize")
@@ -162,6 +189,7 @@ def _event_dict(row, services: list[dict] | None = None) -> dict:
             "target_service_id": row.target_service_id,
             "target_service_name": target["official_name"] if target else None,
             "target_service_source": target["source_reference"] if target else None,
+            "target_response_state": row.target_response_state,
         }
     result = {
         "sequence_number": row.sequence_number,
@@ -189,6 +217,7 @@ def _initial_request(content: dict) -> TextGenerationRequest:
             "incident_type": content["classifier_snapshot"]["final_incident_type"],
             "object_name": content["object_snapshot"]["name"],
             "address": content["object_snapshot"].get("address"),
+            "variant_facts": initial.get("variant_facts", {}),
         },
     )
 
@@ -263,7 +292,12 @@ async def _matching_objects(database: AsyncSession, template) -> list:
 
 
 async def _build(
-    database: AsyncSession, template_id: int, data: GenerationInput, user: User
+    database: AsyncSession,
+    template_id: int,
+    data: GenerationInput,
+    user: User,
+    *,
+    facts_override: dict | None = None,
 ) -> dict:
     template = await get_template(database, template_id)
     if template.status != "READY":
@@ -355,6 +389,12 @@ async def _build(
             for service in derived_services
         ],
     }
+    variation = (
+        facts_override
+        if facts_override is not None
+        else variant_facts(template.seed_code, data.seed)
+    )
+    medical_needed = variation.get("casualties") != "пострадавших нет"
     services = []
     for link in template.services:
         service = await database.get(DispatchService, link.service_id)
@@ -362,6 +402,12 @@ async def _build(
             link.source == "CLASSIFIER" and link.service_id not in classifier_services
         ):
             raise HTTPException(status_code=422, detail=f"Служба {link.service_id} не подтверждена")
+        if (
+            template.seed_code == SCHOOL_FIRE_CODE
+            and service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
+            and not medical_needed
+        ):
+            continue
         services.append(
             {
                 "service_id": service.id,
@@ -403,6 +449,26 @@ async def _build(
     )
     if data.training_session_id is not None:
         await _session(database, data.training_session_id, user)
+    initial_description = template.initial_description
+    if variation:
+        initial_description = (
+            f"{variation['observation']} на {variation['floor']} этаже, "
+            f"{variation['room']}; {variation['casualties']}."
+        )
+    selected_service_ids = {service["service_id"] for service in services}
+    events = [
+        _event_dict(event, services)
+        for event in template.events
+        if event.target_service_id is None or event.target_service_id in selected_service_ids
+    ]
+    if variation:
+        for event in events:
+            if event["event_type"] == "RESPONSE_MESSAGE":
+                description = event["description"]
+                for key, value in variation.items():
+                    description = description.replace("{" + key + "}", str(value))
+                event["description"] = description
+                event["payload_snapshot"]["description"] = event["description"]
     return {
         "scenario_template_id": template.id,
         "training_session_id": data.training_session_id,
@@ -428,10 +494,11 @@ async def _build(
         "service_snapshot": services,
         "initial_state_snapshot": {
             "title": template.initial_title,
-            "description": template.initial_description,
-            "caller_text": template.initial_caller_text,
+            "description": initial_description,
+            "caller_text": "" if variation else template.initial_caller_text,
+            "variant_facts": variation,
         },
-        "events": [_event_dict(event, services) for event in template.events],
+        "events": events,
         "expected_actions_snapshot": [
             {
                 "expected_action_type": a.expected_action_type,
@@ -457,6 +524,9 @@ async def _build(
             "version": template.version,
             "name": template.name,
             "description": template.description,
+            "variant_options": (
+                SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
+            ),
             "object_rule": {
                 "selection_mode": rule.selection_mode,
                 "object_type_id": rule.object_type_id,
@@ -521,13 +591,20 @@ async def generate(
     if content["object_snapshot"] is None:
         raise HTTPException(status_code=422, detail="Выберите подходящий объект")
     await _render_content(content, database)
-    row = ScenarioInstance(
+    row = _instance_from_content(template_id, content, user)
+    database.add(row)
+    await database.commit()
+    return await read_instance(row.id, user, database)
+
+
+def _instance_from_content(template_id: int, content: dict, user: User) -> ScenarioInstance:
+    return ScenarioInstance(
         scenario_template_id=template_id,
-        training_session_id=data.training_session_id,
+        training_session_id=content["training_session_id"],
         created_by_user_id=user.id,
         name=content["name"],
         difficulty=content["difficulty"],
-        generation_seed=data.seed,
+        generation_seed=content["generation_seed"],
         status="DRAFT",
         classifier_snapshot=content["classifier_snapshot"],
         object_snapshot=content["object_snapshot"],
@@ -538,9 +615,59 @@ async def generate(
         template_snapshot=content["template_snapshot"],
         events=[ScenarioInstanceEvent(**event) for event in content["events"]],
     )
-    database.add(row)
+
+
+@template_router.post("/{template_id}/batch", status_code=201)
+async def generate_batch(
+    template_id: int,
+    data: BatchGenerationInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> list[dict]:
+    """Prepare a set of distinct, reviewable drafts in one transaction."""
+    await _session(database, data.training_session_id, user)
+    template = await get_template(database, template_id)
+    objects = await _matching_objects(database, template)
+    if not objects:
+        raise HTTPException(status_code=422, detail="Нет подходящих объектов")
+    if template.seed_code != "DEMO_EDUCATION_FIRE_001" and len(objects) < data.count:
+        raise HTTPException(422, "Для этого сценария недостаточно разных объектов")
+    ordered_ids = object_order([item.id for item in objects], data.seed)
+    rows = []
+    seen = set()
+    seeds = card_seeds(data.seed, data.count * 10)
+    for index in range(data.count):
+        object_id = ordered_ids[index % len(ordered_ids)] if data.different_objects else None
+        for candidate in seeds[index * 10 : (index + 1) * 10]:
+            content = await _build(
+                database,
+                template_id,
+                GenerationInput(
+                    object_id=object_id,
+                    difficulty=data.difficulty,
+                    seed=candidate,
+                    variant_mode="RANDOM",
+                    training_session_id=data.training_session_id,
+                ),
+                user,
+            )
+            key = (
+                content["object_snapshot"]["id"],
+                tuple(sorted(content["initial_state_snapshot"]["variant_facts"].items())),
+            )
+            if key not in seen:
+                seen.add(key)
+                break
+        else:
+            raise HTTPException(422, "Не удалось сформировать достаточно разных карточек")
+        content["template_snapshot"]["batch_seed"] = data.seed
+        content["template_snapshot"]["batch_position"] = index + 1
+        await _render_content(content, database)
+        row = _instance_from_content(template_id, content, user)
+        database.add(row)
+        rows.append(row)
     await database.commit()
-    return await read_instance(row.id, user, database)
+    return [await read_instance(row.id, user, database) for row in rows]
 
 
 class ManualTextInput(BaseModel):
@@ -581,6 +708,114 @@ async def rerender_initial(
     row.initial_state_snapshot = snapshot
     await database.commit()
     return await read_instance(instance_id, user, database)
+
+
+@instance_router.post("/{instance_id}/regenerate-card")
+async def regenerate_card(
+    instance_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Replace draft facts and prepared texts, leaving confirmed snapshots untouched."""
+    row = await _editable_instance(instance_id, user, database)
+    original = (
+        row.object_snapshot["id"],
+        row.initial_state_snapshot.get("variant_facts", {}),
+    )
+    for attempt in range(1, 21):
+        seed = (row.generation_seed + attempt) % 2_147_483_648
+        content = await _build(
+            database,
+            row.scenario_template_id,
+            GenerationInput(
+                seed=seed,
+                variant_mode="RANDOM",
+                difficulty=row.difficulty,
+                training_session_id=row.training_session_id,
+            ),
+            user,
+        )
+        changed = (
+            content["object_snapshot"]["id"],
+            content["initial_state_snapshot"]["variant_facts"],
+        )
+        if changed != original:
+            break
+    else:
+        raise HTTPException(422, "Другой вариант этого сценария недоступен")
+    for key in ("batch_seed", "batch_position"):
+        if key in row.template_snapshot:
+            content["template_snapshot"][key] = row.template_snapshot[key]
+    await _render_content(content, database)
+    row.name = content["name"]
+    row.generation_seed = seed
+    row.object_snapshot = content["object_snapshot"]
+    row.classifier_snapshot = content["classifier_snapshot"]
+    row.service_snapshot = content["service_snapshot"]
+    row.initial_state_snapshot = content["initial_state_snapshot"]
+    row.expected_actions_snapshot = content["expected_actions_snapshot"]
+    row.assessment_criteria_snapshot = content["assessment_criteria_snapshot"]
+    row.template_snapshot = content["template_snapshot"]
+    row.events = [ScenarioInstanceEvent(**event) for event in content["events"]]
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.patch("/{instance_id}/variant-facts")
+async def edit_variant_facts(
+    instance_id: int,
+    data: SchoolFireFactsInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Change only allowed school-fire facts in a draft, then prepare all affected texts."""
+    row = await _editable_instance(instance_id, user, database)
+    template = await get_template(database, row.scenario_template_id)
+    if template.seed_code != SCHOOL_FIRE_CODE:
+        raise HTTPException(422, "Для этого сценария изменение условий недоступно")
+    if template.version != row.template_snapshot.get("version"):
+        raise HTTPException(409, "Шаблон изменился; пересоздайте карточку перед правкой условий")
+    facts = data.model_dump()
+    for key, choices in SCHOOL_FIRE_OPTIONS.items():
+        if facts[key] not in choices:
+            raise HTTPException(422, f"Недопустимое условие: {key}")
+    content = await _build(
+        database,
+        row.scenario_template_id,
+        GenerationInput(
+            object_id=row.object_snapshot["id"],
+            difficulty=row.difficulty,
+            seed=row.generation_seed,
+            training_session_id=row.training_session_id,
+        ),
+        user,
+        facts_override=facts,
+    )
+    for key in ("batch_seed", "batch_position"):
+        if key in row.template_snapshot:
+            content["template_snapshot"][key] = row.template_snapshot[key]
+    content["template_snapshot"]["variant_facts_edited"] = True
+    await _render_content(content, database)
+    row.name = content["name"]
+    row.service_snapshot = content["service_snapshot"]
+    row.initial_state_snapshot = content["initial_state_snapshot"]
+    row.template_snapshot = content["template_snapshot"]
+    row.events = [ScenarioInstanceEvent(**event) for event in content["events"]]
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.delete("/{instance_id}", status_code=204)
+async def exclude_instance(
+    instance_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> None:
+    row = await _editable_instance(instance_id, user, database)
+    if row.training_session_id is not None:
+        await _session(database, row.training_session_id, user)
+    await database.delete(row)
+    await database.commit()
 
 
 @instance_router.patch("/{instance_id}/initial-message")
@@ -660,6 +895,76 @@ async def confirm_instance(
     row.status = "CONFIRMED"
     await database.commit()
     return await read_instance(instance_id, user, database)
+
+
+@session_router.post("/{session_id}/scenario-instances/confirm-batch")
+async def confirm_batch(
+    session_id: int,
+    data: BatchConfirmInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Confirm and enqueue a reviewed set as one database transaction."""
+    session = await _load_session(database, session_id, for_update=True)
+    _editable(session, user)
+    ids = data.instance_ids
+    if len(ids) != len(set(ids)) or any(item <= 0 for item in ids):
+        raise HTTPException(422, "Укажите уникальные карточки набора")
+    if (data.training_run_id is None) == (data.training_group_id is None):
+        raise HTTPException(422, "Выберите общий пул или одно АРМ")
+    if data.training_run_id is not None and data.training_run_id not in {
+        run.id for run in session.runs if run.queue_mode == QueueMode.INDIVIDUAL_QUEUE
+    }:
+        raise HTTPException(422, "АРМ не принадлежит индивидуальной очереди занятия")
+    if data.training_group_id is not None and data.training_group_id not in {
+        group.id
+        for group in session.groups
+        if group.queue_mode == QueueMode.SHARED_QUEUE
+        and any(run.group_id == group.id for run in session.runs)
+    }:
+        raise HTTPException(422, "Группа не принадлежит общей очереди занятия")
+    rows = (
+        await database.scalars(
+            select(ScenarioInstance)
+            .where(ScenarioInstance.id.in_(ids))
+            .options(selectinload(ScenarioInstance.events))
+            .with_for_update()
+        )
+    ).all()
+    by_id = {row.id: row for row in rows}
+    if len(by_id) != len(ids) or any(row.training_session_id != session_id for row in rows):
+        raise HTTPException(404, "Карточка набора не найдена в занятии")
+    if len({row.scenario_template_id for row in rows}) != 1:
+        raise HTTPException(422, "Карточки набора должны относиться к одному сценарию")
+    queued = {item.scenario_instance_id for item in session.queue_items}
+    for row in rows:
+        if row.status != "DRAFT" or row.id in queued:
+            raise HTTPException(409, "Набор уже утверждён или добавлен в очередь")
+        if not row.initial_state_snapshot.get("render", {}).get("rendered_text") or any(
+            event.event_type == "RESPONSE_MESSAGE"
+            and not event.payload_snapshot.get("render", {}).get("rendered_text")
+            for event in row.events
+        ):
+            raise HTTPException(409, "Сначала подготовьте все тексты набора")
+    items = []
+    for instance_id in ids:
+        row = by_id[instance_id]
+        row.status = "CONFIRMED"
+        item = _new_item(
+            session,
+            data.training_run_id,
+            row.name[:200],
+            incident_snapshot(row),
+            group_id=data.training_group_id,
+        )
+        item.scenario_instance_id = row.id
+        item.approved = True
+        items.append(item)
+    _invalidate_readiness(session)
+    await database.flush()
+    result = {"count": len(items), "queue_item_ids": [item.id for item in items]}
+    await database.commit()
+    return result
 
 
 @instance_router.get("")

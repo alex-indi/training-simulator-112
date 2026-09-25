@@ -361,6 +361,71 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     )
                     == 1
                 )
+                template.seed_code = "DEMO_EDUCATION_FIRE_001"
+                db.commit()
+                batch_input = {
+                    "count": 5,
+                    "seed": 43,
+                    "training_session_id": session.id,
+                }
+                batch = await client.post(f"{path}/batch", json=batch_input)
+                assert batch.status_code == 201, batch.text
+                cards = batch.json()
+                assert len(cards) == 5
+                assert len({
+                    (card["object_snapshot"]["id"], tuple(sorted(
+                        card["initial_state_snapshot"]["variant_facts"].items()
+                    ))) for card in cards
+                }) == 5
+                assert cards[0]["object_snapshot"]["id"] != cards[1]["object_snapshot"]["id"]
+                assert all(card["training_session_id"] == session.id for card in cards)
+                assert [
+                    card["template_snapshot"]["batch_position"] for card in cards
+                ] == [1, 2, 3, 4, 5]
+                assert all(card["template_snapshot"]["batch_seed"] == 43 for card in cards)
+                first_card = f"/api/scenario-instances/{cards[0]['id']}"
+                rerendered = await client.post(f"{first_card}/rerender-initial-message")
+                assert rerendered.status_code == 200, rerendered.text
+                assert (
+                    rerendered.json()["initial_state_snapshot"]["variant_facts"]
+                    == cards[0]["initial_state_snapshot"]["variant_facts"]
+                )
+                new_facts = dict(cards[0]["initial_state_snapshot"]["variant_facts"])
+                new_facts["floor"] = 1 if new_facts["floor"] != 1 else 2
+                edited = await client.patch(f"{first_card}/variant-facts", json=new_facts)
+                assert edited.status_code == 200, edited.text
+                assert edited.json()["initial_state_snapshot"]["variant_facts"] == new_facts
+                assert edited.json()["object_snapshot"]["id"] == cards[0]["object_snapshot"]["id"]
+                assert edited.json()["template_snapshot"]["variant_facts_edited"] is True
+                assert (
+                    await client.patch(
+                        f"{first_card}/variant-facts", json={**new_facts, "floor": 99}
+                    )
+                ).status_code == 422
+                regenerated = await client.post(f"{first_card}/regenerate-card")
+                assert regenerated.status_code == 200, regenerated.text
+                assert (
+                    regenerated.json()["object_snapshot"]["id"],
+                    regenerated.json()["initial_state_snapshot"]["variant_facts"],
+                ) != (
+                    cards[0]["object_snapshot"]["id"],
+                    cards[0]["initial_state_snapshot"]["variant_facts"],
+                )
+                assert regenerated.json()["template_snapshot"]["batch_seed"] == 43
+                second_card = f"/api/scenario-instances/{cards[1]['id']}"
+                assert (await client.delete(second_card)).status_code == 204
+                assert (await client.get(second_card)).status_code == 404
+                repeated_batch = await client.post(f"{path}/batch", json=batch_input)
+                assert repeated_batch.status_code == 201, repeated_batch.text
+                assert [
+                    (card["generation_seed"], card["object_snapshot"]["id"],
+                     card["initial_state_snapshot"]["variant_facts"])
+                    for card in repeated_batch.json()
+                ] == [
+                    (card["generation_seed"], card["object_snapshot"]["id"],
+                     card["initial_state_snapshot"]["variant_facts"])
+                    for card in cards
+                ]
                 school.address = "Изменённый адрес"
                 rule.final_incident_type = "Изменённый тип"
                 template.initial_title = "Изменённая карточка"

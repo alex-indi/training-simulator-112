@@ -414,7 +414,7 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         item.delivered_at = now
         item.incident_id = incident.id
         incident_ids.append(incident.id)
-    released_ids, messages = await release_due_events(database, session, now)
+    released_ids, messages, response_state_ids = await release_due_events(database, session, now)
     if session.finish_mode == "GRACEFUL":
         states = (
             await database.execute(
@@ -442,6 +442,8 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
     await database.commit()
     for incident_id in released_ids:
         await publish_session_event("incident.updated", session.id, incident_id)
+    for incident_id in response_state_ids:
+        await publish_session_event("response.state_changed", session.id, incident_id)
     for message, trainee_id in messages:
         await notify_message_created(message, trainee_id, session.id)
     return incident_ids

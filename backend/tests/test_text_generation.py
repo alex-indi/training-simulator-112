@@ -52,7 +52,7 @@ def test_renderer_keeps_facts_and_uses_fallback_for_error_timeout_and_bad_output
         success = FakeProvider()
         rendered = await AITextRenderer(success).render(request)
         assert rendered["rendered_text"] == "Группа прибыла."
-        assert rendered["prompt_version"] == "response_message_v1"
+        assert rendered["prompt_version"] == "response_crew_message_v2"
         assert rendered["input_hash"] and not rendered["fallback_used"]
         assert success.calls == 1
         assert facts == {"description": "Бригада прибыла", "title": "Прибытие"}
@@ -86,8 +86,32 @@ def test_incident_report_keeps_source_facts_in_offline_mode():
         assert result["rendered_text"] == (
             "Очевидец сообщил о задымлении.\nСведения о пострадавших отсутствуют."
         )
-        assert result["prompt_version"] == "incident_report_v1"
+        assert result["prompt_version"] == "incident_operator_entry_v2"
         assert facts["incident_type"] == "Пожар"
+
+    asyncio.run(run())
+
+
+def test_school_fire_fallback_is_short_and_keeps_variant_facts():
+    variant = {
+        "floor": 2,
+        "room": "коридор",
+        "observation": "сильное задымление",
+        "casualties": "пострадавшие неизвестны",
+    }
+    request = TextGenerationRequest(
+        TextGenerationTask.INCIDENT_REPORT,
+        {"description": "Служебное описание", "caller_text": "", "variant_facts": variant},
+    )
+
+    async def run():
+        result = await AITextRenderer(FakeProvider(), enabled=False).render(request)
+        text = result["rendered_text"]
+        assert text == (
+            "сильное задымление на 2 этаже школы, коридор; пострадавшие неизвестны"
+        )
+        assert "Зафиксировано происшествие" not in text
+        assert "Служебное описание" not in text
 
     asyncio.run(run())
 
