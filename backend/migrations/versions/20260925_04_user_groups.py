@@ -1,7 +1,7 @@
 """Add named groups for trainee users.
 
-Revision ID: 20260924_18
-Revises: 20260924_17
+Revision ID: 20260925_04
+Revises: 20260925_03
 """
 
 from collections.abc import Sequence
@@ -9,8 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260924_18"
-down_revision: str | None = "20260924_17"
+revision: str = "20260925_04"
+down_revision: str | None = "20260925_03"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
