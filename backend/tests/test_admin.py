@@ -8,12 +8,14 @@ from fastapi import HTTPException
 
 from app.main import app
 from app.modules.admin.dependencies import require_admin
-from app.modules.admin.models import AdminAudit, UserGroup
+from app.modules.admin.models import AdminAudit, AIProviderConfig, UserGroup
 from app.modules.admin.router import (
+    ai_health,
     create_user,
     create_user_group,
     delete_user,
     delete_user_group,
+    get_ai,
     update_user,
     update_user_group,
 )
@@ -51,6 +53,34 @@ def test_admin_can_enter_admin_boundary() -> None:
     admin = make_user(1, UserRole.ADMIN)
 
     assert asyncio.run(require_admin(admin)) is admin
+
+
+def test_admin_ai_health_reports_disabled_without_contacting_provider() -> None:
+    session = AsyncMock()
+    session.get.return_value = AIProviderConfig(
+        id=1,
+        provider="OPENAI_COMPATIBLE",
+        model="local-test",
+        base_url="http://local.test/v1",
+        enabled=False,
+        timeout_seconds=7,
+    )
+    result = asyncio.run(ai_health(session))
+    assert result == {
+        "status": "DISABLED",
+        "available": False,
+        "provider": "openai_compatible",
+        "model": "local-test",
+    }
+
+
+def test_reading_ai_defaults_does_not_create_saved_override() -> None:
+    session = AsyncMock()
+    session.get.return_value = None
+    config = asyncio.run(get_ai(session))
+    assert config.provider == "OPENAI"
+    session.add.assert_not_called()
+    session.commit.assert_not_awaited()
 
 
 def test_last_active_admin_cannot_be_deactivated() -> None:

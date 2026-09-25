@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,6 +36,11 @@ from app.modules.training.models import (
     TrainingSessionState,
 )
 from app.modules.training.router import _ensure_session_owner, _load_session
+from app.services.text_generation.renderer import (
+    TextGenerationRequest,
+    TextGenerationTask,
+    renderer_for_database,
+)
 
 template_router = APIRouter(prefix="/api/scenario-templates", tags=["scenario-instances"])
 instance_router = APIRouter(prefix="/api/scenario-instances", tags=["scenario-instances"])
@@ -138,36 +143,102 @@ async def read_materialization(
     }
 
 
-def _event_dict(row, services: list[dict]) -> dict:
+def _event_dict(row, services: list[dict] | None = None) -> dict:
     if isinstance(row, ScenarioInstanceEvent):
-        return {
-            "sequence_number": row.sequence_number,
-            "offset_seconds": row.offset_seconds,
-            "event_type": row.event_type,
-            "title": row.title,
-            "description": row.description,
-            "source_type": row.source_type,
-            "payload_snapshot": row.payload_snapshot,
-        }
-    target = next(
-        (service for service in services if service["service_id"] == row.target_service_id), None
-    )
-    return {
-        "sequence_number": row.sequence_number,
-        "offset_seconds": row.offset_seconds,
-        "event_type": row.event_type,
-        "title": row.title,
-        "description": row.description,
-        "source_type": row.source_type,
-        "payload_snapshot": {
+        payload = row.payload_snapshot
+    else:
+        target = next(
+            (
+                service
+                for service in services or []
+                if service["service_id"] == row.target_service_id
+            ),
+            None,
+        )
+        payload = {
             "title": row.title,
             "description": row.description,
             "source_type": row.source_type,
             "target_service_id": row.target_service_id,
             "target_service_name": target["official_name"] if target else None,
             "target_service_source": target["source_reference"] if target else None,
-        },
+        }
+    result = {
+        "sequence_number": row.sequence_number,
+        "offset_seconds": row.offset_seconds,
+        "event_type": row.event_type,
+        "title": row.title,
+        "description": row.description,
+        "source_type": row.source_type,
+        "payload_snapshot": payload,
     }
+    if isinstance(row, ScenarioInstanceEvent):
+        result["payload_snapshot"] = row.payload_snapshot
+        result["render"] = row.payload_snapshot.get("render")
+    return result
+
+
+def _initial_request(content: dict) -> TextGenerationRequest:
+    initial = content["initial_state_snapshot"]
+    return TextGenerationRequest(
+        task=TextGenerationTask.INCIDENT_REPORT,
+        facts={
+            "description": initial["description"],
+            "caller_text": initial.get("caller_text"),
+            "title": initial["title"],
+            "incident_type": content["classifier_snapshot"]["final_incident_type"],
+            "object_name": content["object_snapshot"]["name"],
+            "address": content["object_snapshot"].get("address"),
+        },
+    )
+
+
+def _response_request(event: dict) -> TextGenerationRequest:
+    return TextGenerationRequest(
+        task=TextGenerationTask.RESPONSE_MESSAGE,
+        facts={
+            "title": event["title"],
+            "description": event["description"],
+            "source_type": event["source_type"],
+        },
+    )
+
+
+async def _render_content(content: dict, database: AsyncSession) -> None:
+    renderer = await renderer_for_database(database)
+    rendered = [await renderer.render(_initial_request(content))]
+    content["initial_state_snapshot"]["render"] = rendered[0]
+    for event in content["events"]:
+        if event["event_type"] == "RESPONSE_MESSAGE":
+            result = await renderer.render(_response_request(event))
+            event["payload_snapshot"]["render"] = result
+            rendered.append(result)
+    await _record_usage(database, rendered)
+
+
+async def _record_usage(database: AsyncSession, rendered: list[dict]) -> None:
+    """Count committed render operations for the existing admin usage view."""
+    from datetime import UTC, datetime
+
+    statement = text(
+        "INSERT INTO ai_usage_daily "
+        "(day, requests, input_tokens, output_tokens, fallbacks, errors) "
+        "VALUES (:day, :requests, :input_tokens, :output_tokens, :fallbacks, :errors) "
+        "ON CONFLICT (day) DO UPDATE SET "
+        "requests = ai_usage_daily.requests + excluded.requests, "
+        "input_tokens = ai_usage_daily.input_tokens + excluded.input_tokens, "
+        "output_tokens = ai_usage_daily.output_tokens + excluded.output_tokens, "
+        "fallbacks = ai_usage_daily.fallbacks + excluded.fallbacks, "
+        "errors = ai_usage_daily.errors + excluded.errors"
+    ).bindparams(
+        day=datetime.now(UTC).date(),
+        requests=len(rendered),
+        input_tokens=sum(item.get("input_tokens") or 0 for item in rendered),
+        output_tokens=sum(item.get("output_tokens") or 0 for item in rendered),
+        fallbacks=sum(bool(item.get("fallback_used")) for item in rendered),
+        errors=sum(bool(item.get("provider_error")) for item in rendered),
+    )
+    await database.execute(statement)
 
 
 async def _matching_objects(database: AsyncSession, template) -> list:
@@ -449,6 +520,7 @@ async def generate(
     content = await _build(database, template_id, data, user)
     if content["object_snapshot"] is None:
         raise HTTPException(status_code=422, detail="Выберите подходящий объект")
+    await _render_content(content, database)
     row = ScenarioInstance(
         scenario_template_id=template_id,
         training_session_id=data.training_session_id,
@@ -456,6 +528,7 @@ async def generate(
         name=content["name"],
         difficulty=content["difficulty"],
         generation_seed=data.seed,
+        status="DRAFT",
         classifier_snapshot=content["classifier_snapshot"],
         object_snapshot=content["object_snapshot"],
         service_snapshot=content["service_snapshot"],
@@ -468,6 +541,147 @@ async def generate(
     database.add(row)
     await database.commit()
     return await read_instance(row.id, user, database)
+
+
+class ManualTextInput(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+async def _editable_instance(instance_id: int, user: User, database: AsyncSession):
+    await read_instance(instance_id, user, database)
+    row = (
+        await database.scalars(
+            select(ScenarioInstance)
+            .where(ScenarioInstance.id == instance_id)
+            .options(selectinload(ScenarioInstance.events))
+        )
+    ).one()
+    if row.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="Подтверждённый экземпляр неизменяем")
+    return row
+
+
+@instance_router.post("/{instance_id}/rerender-initial-message")
+async def rerender_initial(
+    instance_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    row = await _editable_instance(instance_id, user, database)
+    content = {
+        "initial_state_snapshot": row.initial_state_snapshot,
+        "classifier_snapshot": row.classifier_snapshot,
+        "object_snapshot": row.object_snapshot,
+    }
+    snapshot = dict(row.initial_state_snapshot)
+    snapshot["render"] = await (await renderer_for_database(database)).render(
+        _initial_request(content)
+    )
+    await _record_usage(database, [snapshot["render"]])
+    row.initial_state_snapshot = snapshot
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.patch("/{instance_id}/initial-message")
+async def edit_initial(
+    instance_id: int,
+    data: ManualTextInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    row = await _editable_instance(instance_id, user, database)
+    snapshot = dict(row.initial_state_snapshot)
+    render = dict(snapshot.get("render") or {})
+    render.update(rendered_text=data.text.strip(), render_origin="MANUAL")
+    snapshot["render"] = render
+    row.initial_state_snapshot = snapshot
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+async def _event_for_edit(instance_id: int, event_id: int, user: User, database: AsyncSession):
+    row = await _editable_instance(instance_id, user, database)
+    event = next((item for item in row.events if item.id == event_id), None)
+    if event is None or event.event_type != "RESPONSE_MESSAGE":
+        raise HTTPException(status_code=404, detail="Сообщение службы не найдено")
+    return event
+
+
+@instance_router.post("/{instance_id}/events/{event_id}/rerender")
+async def rerender_event(
+    instance_id: int,
+    event_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    event = await _event_for_edit(instance_id, event_id, user, database)
+    snapshot = dict(event.payload_snapshot)
+    snapshot["render"] = await (await renderer_for_database(database)).render(
+        _response_request(_event_dict(event))
+    )
+    await _record_usage(database, [snapshot["render"]])
+    event.payload_snapshot = snapshot
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.patch("/{instance_id}/events/{event_id}/message")
+async def edit_event(
+    instance_id: int,
+    event_id: int,
+    data: ManualTextInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    event = await _event_for_edit(instance_id, event_id, user, database)
+    snapshot = dict(event.payload_snapshot)
+    render = dict(snapshot.get("render") or {})
+    render.update(rendered_text=data.text.strip(), render_origin="MANUAL")
+    snapshot["render"] = render
+    event.payload_snapshot = snapshot
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.post("/{instance_id}/confirm")
+async def confirm_instance(
+    instance_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    row = await _editable_instance(instance_id, user, database)
+    if not row.initial_state_snapshot.get("render", {}).get("rendered_text") or any(
+        event.event_type == "RESPONSE_MESSAGE"
+        and not event.payload_snapshot.get("render", {}).get("rendered_text")
+        for event in row.events
+    ):
+        raise HTTPException(status_code=409, detail="Сначала подготовьте все тексты")
+    row.status = "CONFIRMED"
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.get("")
+async def list_instances(
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> list[dict]:
+    query = (
+        select(ScenarioInstance)
+        .where(ScenarioInstance.status == "DRAFT")
+        .options(selectinload(ScenarioInstance.events))
+    )
+    if user.role != UserRole.ADMIN:
+        query = query.where(ScenarioInstance.created_by_user_id == user.id)
+    rows = (
+        await database.scalars(
+            query.order_by(ScenarioInstance.created_at.desc(), ScenarioInstance.id.desc()).limit(
+                100
+            )
+        )
+    ).all()
+    return [_serialize(row) for row in rows]
 
 
 @instance_router.get("/{instance_id}")
