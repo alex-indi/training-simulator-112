@@ -36,11 +36,12 @@ async def inspect_database(include_references: bool) -> dict[str, object]:
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
-            def current_revision(sync_connection):
+            def current_revisions(sync_connection):
                 context = MigrationContext.configure(sync_connection)
-                return context.get_current_revision()
+                return context.get_current_heads()
 
-            current = await connection.run_sync(current_revision)
+            current_heads = await connection.run_sync(current_revisions)
+            current = current_heads[0] if len(current_heads) == 1 else ", ".join(current_heads)
             result: dict[str, object] = {"current": current, "head": heads[0]}
             if include_references:
                 missing = []
