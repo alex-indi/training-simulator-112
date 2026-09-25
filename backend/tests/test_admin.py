@@ -11,24 +11,30 @@ from app.modules.admin.dependencies import require_admin
 from app.modules.admin.models import AdminAudit, AIProviderConfig, UserGroup
 from app.modules.admin.router import (
     ai_health,
+    ai_models,
     create_user,
     create_user_group,
     delete_user,
     delete_user_group,
     get_ai,
+    update_ai,
     update_user,
     update_user_group,
 )
 from app.modules.admin.schemas import (
     AIConfigRead,
+    AIConfigUpdate,
+    AIModelCatalogRequest,
     UserCreate,
     UserGroupCreate,
     UserGroupUpdate,
     UserUpdate,
 )
+from app.modules.admin.secrets import decrypt_api_key
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.passwords import verify_password
 from app.modules.object_registry.models import ObjectType
+from app.services.text_generation.providers import OpenAICompatibleProvider
 
 
 def make_user(user_id: int, role: UserRole, *, active: bool = True) -> User:
@@ -81,6 +87,65 @@ def test_reading_ai_defaults_does_not_create_saved_override() -> None:
     assert config.provider == "OPENAI"
     session.add.assert_not_called()
     session.commit.assert_not_awaited()
+
+
+def test_admin_can_load_models_from_compatible_provider(monkeypatch) -> None:
+    async def fake_list_models(provider: OpenAICompatibleProvider) -> list[str]:
+        assert provider.base_url == "http://local.test/v1"
+        return ["model-a", "model-b"]
+
+    monkeypatch.setattr(OpenAICompatibleProvider, "list_models", fake_list_models)
+    session = AsyncMock()
+    session.get.return_value = None
+    result = asyncio.run(
+        ai_models(
+            AIModelCatalogRequest(
+                provider="OPENAI_COMPATIBLE",
+                base_url="http://local.test/v1",
+            ),
+            session=session,
+        )
+    )
+
+    assert result.models == ["model-a", "model-b"]
+
+
+def test_admin_can_store_write_only_ai_key(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("app.modules.admin.secrets.KEY_PATH", tmp_path / "ai-provider.key")
+    admin = make_user(1, UserRole.ADMIN)
+    config = AIProviderConfig(
+        id=1,
+        provider="OPENAI_COMPATIBLE",
+        model="model-a",
+        base_url="http://local.test/v1",
+        enabled=True,
+        timeout_seconds=30,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = config
+
+    result = asyncio.run(
+        update_ai(
+            AIConfigUpdate(
+                provider="OPENAI_COMPATIBLE",
+                model="model-a",
+                base_url="http://local.test/v1",
+                enabled=True,
+                timeout_seconds=30,
+                api_key="provider-secret",
+            ),
+            session=session,
+            admin=admin,
+        )
+    )
+
+    assert result.api_key_configured is True
+    assert "api_key" not in result.model_dump()
+    assert decrypt_api_key(config.api_key_encrypted) == "provider-secret"
+    audit = session.add.call_args.args[0]
+    assert "api_key" not in audit.before
+    assert "api_key" not in audit.after
 
 
 def test_last_active_admin_cannot_be_deactivated() -> None:

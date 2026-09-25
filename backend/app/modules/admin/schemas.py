@@ -145,7 +145,7 @@ class DataQualityRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AIConfigUpdate(BaseModel):
+class AIConfigBase(BaseModel):
     provider: str = Field(min_length=2, max_length=80)
     model: str = Field(max_length=160)
     base_url: str = Field(min_length=8, max_length=500)
@@ -153,9 +153,23 @@ class AIConfigUpdate(BaseModel):
     timeout_seconds: int = Field(ge=1, le=300)
 
 
-class AIConfigRead(AIConfigUpdate):
+class AIConfigUpdate(AIConfigBase):
+    api_key: str | None = Field(default=None, min_length=1, max_length=1000, exclude=True)
+
+
+class AIConfigRead(AIConfigBase):
     api_key_configured: bool
     updated_at: datetime | None
+
+
+class AIModelCatalogRequest(BaseModel):
+    provider: str = Field(min_length=2, max_length=80)
+    base_url: str = Field(min_length=8, max_length=500)
+    api_key: str | None = Field(default=None, min_length=1, max_length=1000, exclude=True)
+
+
+class AIModelCatalogRead(BaseModel):
+    models: list[str]
 
 
 class AIUsageRead(BaseModel):

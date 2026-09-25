@@ -54,6 +54,12 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [quality, setQuality] = useState([])
   const [usage, setUsage] = useState([])
   const [aiHealth, setAiHealth] = useState(null)
+  const [aiDraft, setAiDraft] = useState({ provider: 'OPENAI', model: '', base_url: 'https://api.openai.com/v1', enabled: false, timeout_seconds: 30 })
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [aiModels, setAiModels] = useState([])
+  const [aiModelsLoading, setAiModelsLoading] = useState(false)
+  const [aiModelsError, setAiModelsError] = useState('')
+  const [aiModelsRefresh, setAiModelsRefresh] = useState(0)
   const [traineeGroups, setTraineeGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -69,6 +75,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [deleteModal, setDeleteModal] = useState(null)
   const [typeDraft, setTypeDraft] = useState({ code: '', name: '', description: '', parent_id: '' })
   const loadRequestId = useRef(0)
+  const aiModelsRequestId = useRef(0)
   const username = user.username
 
   const load = useCallback(async () => {
@@ -95,6 +102,13 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         setQuality(nextQuality)
       }
       if (section === 'ai') {
+        setAiDraft({
+          provider: payload.provider.toUpperCase(),
+          model: payload.model,
+          base_url: payload.base_url,
+          enabled: payload.enabled,
+          timeout_seconds: payload.timeout_seconds,
+        })
         const nextUsage = await requestJson('/api/admin/ai/usage', username)
         if (requestId !== loadRequestId.current) return
         setUsage(nextUsage)
@@ -109,6 +123,43 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   }, [filters, requestJson, search, section, username])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (section !== 'ai' || !data) return undefined
+    const requestId = ++aiModelsRequestId.current
+    if (aiDraft.provider === 'TEMPLATE') {
+      setAiModels([])
+      setAiModelsError('')
+      setAiModelsLoading(false)
+      return undefined
+    }
+    try { new URL(aiDraft.base_url) } catch {
+      setAiModels([])
+      setAiModelsError('Укажите корректный Base URL')
+      setAiModelsLoading(false)
+      return undefined
+    }
+    const timer = window.setTimeout(async () => {
+      setAiModelsLoading(true)
+      setAiModelsError('')
+      try {
+        const result = await requestJson('/api/admin/ai/models', username, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: aiDraft.provider, base_url: aiDraft.base_url, ...(aiApiKey ? { api_key: aiApiKey } : {}) }),
+        })
+        if (requestId === aiModelsRequestId.current) setAiModels(result.models)
+      } catch (cause) {
+        if (requestId === aiModelsRequestId.current) {
+          setAiModels([])
+          setAiModelsError(cause.message)
+        }
+      } finally {
+        if (requestId === aiModelsRequestId.current) setAiModelsLoading(false)
+      }
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [aiApiKey, aiDraft.base_url, aiDraft.provider, aiModelsRefresh, data, requestJson, section, username])
 
   const mutate = async (path, options, message) => {
     setLoading(true)
@@ -225,18 +276,15 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     setTypeDraft({ code: '', name: '', description: '', parent_id: '' })
   }
 
-  const updateAI = (event) => {
+  const updateAI = async (event) => {
     event.preventDefault()
     setAiHealth(null)
-    const form = new FormData(event.currentTarget)
-    return mutate('/api/admin/ai', {
+    const saved = await mutate('/api/admin/ai', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: form.get('provider'), model: form.get('model'), base_url: form.get('base_url'),
-        enabled: form.get('enabled') === 'on', timeout_seconds: Number(form.get('timeout_seconds')),
-      }),
-    }, 'Конфигурация AI сохранена; секрет не передавался через API.')
+      body: JSON.stringify({ ...aiDraft, timeout_seconds: Number(aiDraft.timeout_seconds), ...(aiApiKey ? { api_key: aiApiKey } : {}) }),
+    }, 'Конфигурация AI сохранена; значение ключа не возвращается через API.')
+    if (saved) setAiApiKey('')
   }
 
   const filteredRows = useMemo(() => Array.isArray(data) ? data : [], [data])
@@ -386,12 +434,16 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderAI = () => data && (
     <>
-      <form className={styles.settingsForm} onSubmit={updateAI} key={data.updated_at || 'initial'}>
-        <label>Provider<select name="provider" defaultValue={data.provider.toUpperCase()}><option value="OPENAI">OpenAI</option><option value="OPENAI_COMPATIBLE">OpenAI-compatible</option><option value="TEMPLATE">Шаблонный режим</option></select></label>
-        <label>Model<input name="model" defaultValue={data.model} /></label>
-        <label>Base URL<input name="base_url" type="url" defaultValue={data.base_url} /></label>
-        <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" defaultValue={data.timeout_seconds} /></label>
-        <label className={styles.checkbox}><input name="enabled" type="checkbox" defaultChecked={data.enabled} /> Renderer включён</label>
+      <form className={styles.settingsForm} onSubmit={updateAI}>
+        <label>Provider<select name="provider" value={aiDraft.provider} onChange={(event) => {
+          const provider = event.target.value
+          setAiDraft({ ...aiDraft, provider, model: '', base_url: provider === 'OPENAI' ? 'https://api.openai.com/v1' : aiDraft.base_url })
+        }}><option value="OPENAI">OpenAI</option><option value="OPENAI_COMPATIBLE">OpenAI-compatible</option><option value="TEMPLATE">Шаблонный режим</option></select></label>
+        <div className={styles.modelField}><span>Model</span><div className={styles.modelSelector}><select name="model" required={aiDraft.enabled && aiDraft.provider !== 'TEMPLATE'} disabled={aiDraft.provider === 'TEMPLATE'} value={aiDraft.model} onChange={(event) => setAiDraft({ ...aiDraft, model: event.target.value })}><option value="">{aiModelsLoading ? 'Загрузка моделей…' : aiDraft.provider === 'TEMPLATE' ? 'Не используется' : 'Выберите модель'}</option>{[...new Set([aiDraft.model, ...aiModels].filter(Boolean))].map((model) => <option key={model} value={model}>{model}</option>)}</select><button type="button" disabled={loading || aiModelsLoading || aiDraft.provider === 'TEMPLATE'} onClick={() => setAiModelsRefresh((value) => value + 1)}>Обновить список</button></div>{aiModelsError ? <small className={styles.fieldError}>{aiModelsError}</small> : !aiModelsLoading && aiDraft.provider !== 'TEMPLATE' && <small>Доступно моделей: {aiModels.length}</small>}</div>
+        <label>Base URL<input name="base_url" type="url" disabled={aiDraft.provider === 'OPENAI'} value={aiDraft.base_url} onChange={(event) => setAiDraft({ ...aiDraft, base_url: event.target.value })} /></label>
+        <label>API key<input name="api_key" type="password" autoComplete="new-password" placeholder={data.api_key_configured ? 'Ключ сохранён — введите новый для замены' : 'Введите ключ провайдера'} value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} /></label>
+        <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" value={aiDraft.timeout_seconds} onChange={(event) => setAiDraft({ ...aiDraft, timeout_seconds: event.target.value })} /></label>
+        <label className={styles.checkbox}><input name="enabled" type="checkbox" checked={aiDraft.enabled} onChange={(event) => setAiDraft({ ...aiDraft, enabled: event.target.checked })} /> Renderer включён</label>
         <div className={styles.secretState}>API key: <b>{data.api_key_configured ? '● configured' : '○ not configured'}</b>. Значение ключа никогда не возвращается.</div>
         <button disabled={loading}>Применить</button>
         <button disabled={loading} type="button" onClick={async () => {

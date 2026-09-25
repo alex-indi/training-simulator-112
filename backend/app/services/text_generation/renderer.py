@@ -231,6 +231,7 @@ def get_renderer(settings: Settings | None = None) -> AITextRenderer:
 async def renderer_for_database(database, settings: Settings | None = None) -> AITextRenderer:
     """A saved admin setting takes precedence over environment defaults."""
     from app.modules.admin.models import AIProviderConfig
+    from app.modules.admin.secrets import decrypt_api_key
 
     config = settings or get_settings()
     stored = await database.get(AIProviderConfig, 1)
@@ -242,6 +243,11 @@ async def renderer_for_database(database, settings: Settings | None = None) -> A
                 "ai_text_model": stored.model,
                 "ai_text_base_url": stored.base_url,
                 "ai_text_timeout_seconds": stored.timeout_seconds,
+                "ai_text_api_key": (
+                    decrypt_api_key(stored.api_key_encrypted)
+                    if stored.api_key_encrypted
+                    else config.ai_text_api_key
+                ),
             }
         )
     return get_renderer(config)

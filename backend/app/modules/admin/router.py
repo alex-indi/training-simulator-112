@@ -5,6 +5,7 @@ from os import getenv
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select, text
 from sqlalchemy import update as sql_update
@@ -27,6 +28,8 @@ from app.modules.admin.schemas import (
     AdminUserRead,
     AIConfigRead,
     AIConfigUpdate,
+    AIModelCatalogRead,
+    AIModelCatalogRequest,
     AIUsageRead,
     AuditRead,
     ClassifierRead,
@@ -44,6 +47,7 @@ from app.modules.admin.schemas import (
     UserGroupUpdate,
     UserUpdate,
 )
+from app.modules.admin.secrets import decrypt_api_key, encrypt_api_key
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.passwords import hash_password
 from app.modules.incident_classifier.models import (
@@ -54,6 +58,7 @@ from app.modules.incident_classifier.models import (
 )
 from app.modules.object_registry.models import CityObject, ObjectType
 from app.modules.training.models import TrainingScenario, TrainingSession, TrainingSessionState
+from app.services.text_generation.providers import OpenAICompatibleProvider, OpenAIProvider
 from app.services.text_generation.renderer import renderer_for_database
 
 router = APIRouter(
@@ -128,9 +133,7 @@ async def dashboard(session: Database) -> dict[str, Any]:
             "enabled": ai_config.enabled,
             "provider": ai_config.provider,
             "model": ai_config.model,
-            "api_key_configured": bool(
-                get_settings().ai_text_api_key or get_settings().openai_api_key
-            ),
+            "api_key_configured": _ai_api_key_configured(ai_config),
         },
         "last_import": ImportRunRead.model_validate(last_import) if last_import else None,
     }
@@ -591,9 +594,26 @@ def _ai_read(config: AIProviderConfig) -> AIConfigRead:
         base_url=config.base_url,
         enabled=config.enabled,
         timeout_seconds=config.timeout_seconds,
-        api_key_configured=bool(get_settings().ai_text_api_key or get_settings().openai_api_key),
+        api_key_configured=_ai_api_key_configured(config),
         updated_at=config.updated_at,
     )
+
+
+def _environment_ai_api_key() -> str:
+    settings = get_settings()
+    return settings.ai_text_api_key or settings.openai_api_key
+
+
+def _ai_api_key_configured(config: AIProviderConfig | None) -> bool:
+    return bool(config and config.api_key_encrypted) or bool(_environment_ai_api_key())
+
+
+def _effective_ai_api_key(config: AIProviderConfig | None, supplied: str | None = None) -> str:
+    if supplied:
+        return supplied
+    if config is not None and config.api_key_encrypted:
+        return decrypt_api_key(config.api_key_encrypted)
+    return _environment_ai_api_key()
 
 
 def _ai_configuration_present(config: AIProviderConfig) -> bool:
@@ -605,8 +625,20 @@ def _ai_configuration_present(config: AIProviderConfig) -> bool:
         config.provider.lower() == "openai"
         or config.base_url.rstrip("/") == "https://api.openai.com/v1"
     ):
-        return bool(get_settings().ai_text_api_key or get_settings().openai_api_key)
+        return _ai_api_key_configured(config)
     return bool(config.base_url)
+
+
+def _validate_ai_endpoint(provider: str, base_url: str) -> str:
+    normalized_provider = provider.lower()
+    if normalized_provider not in {"openai", "openai_compatible", "template"}:
+        raise HTTPException(status_code=422, detail="Неизвестный AI provider")
+    url = urlsplit(base_url)
+    if url.scheme not in {"http", "https"} or not url.netloc or url.username or url.password:
+        raise HTTPException(status_code=422, detail="Некорректный AI endpoint")
+    if normalized_provider == "openai" and base_url.rstrip("/") != "https://api.openai.com/v1":
+        raise HTTPException(status_code=422, detail="Для OpenAI используйте официальный endpoint")
+    return normalized_provider
 
 
 @router.get("/ai", response_model=AIConfigRead)
@@ -617,27 +649,44 @@ async def get_ai(session: Database) -> AIConfigRead:
 
 @router.put("/ai", response_model=AIConfigRead)
 async def update_ai(payload: AIConfigUpdate, session: Database, admin: Admin) -> AIConfigRead:
-    if payload.provider.lower() not in {"openai", "openai_compatible", "template"}:
-        raise HTTPException(status_code=422, detail="Неизвестный AI provider")
-    url = urlsplit(payload.base_url)
-    if url.scheme not in {"http", "https"} or not url.netloc or url.username or url.password:
-        raise HTTPException(status_code=422, detail="Некорректный AI endpoint")
-    if (
-        payload.provider.lower() == "openai"
-        and payload.base_url.rstrip("/") != "https://api.openai.com/v1"
-    ):
-        raise HTTPException(status_code=422, detail="Для OpenAI используйте официальный endpoint")
+    _validate_ai_endpoint(payload.provider, payload.base_url)
     if payload.enabled and payload.provider.lower() != "template" and not payload.model.strip():
         raise HTTPException(status_code=422, detail="Укажите модель AI")
     config = await _ai_config(session)
     before = _ai_read(config).model_dump(mode="json")
     for key, value in payload.model_dump().items():
         setattr(config, key, value)
+    if payload.api_key:
+        config.api_key_encrypted = encrypt_api_key(payload.api_key)
     config.updated_at = datetime.now(UTC)
     after = _ai_read(config).model_dump(mode="json")
     session.add(_audit(admin, "AI_CONFIG_UPDATED", "AI_PROVIDER", config.id, before, after))
     await session.commit()
     return _ai_read(config)
+
+
+@router.post("/ai/models", response_model=AIModelCatalogRead)
+async def ai_models(payload: AIModelCatalogRequest, session: Database) -> AIModelCatalogRead:
+    provider_name = _validate_ai_endpoint(payload.provider, payload.base_url)
+    if provider_name == "template":
+        return AIModelCatalogRead(models=[])
+    stored = await session.get(AIProviderConfig, 1)
+    api_key = _effective_ai_api_key(stored, payload.api_key)
+    if provider_name == "openai":
+        provider = OpenAIProvider(model="", api_key=api_key)
+    else:
+        provider = OpenAICompatibleProvider(
+            base_url=payload.base_url,
+            model="",
+            api_key=api_key,
+        )
+    try:
+        return AIModelCatalogRead(models=await provider.list_models())
+    except (httpx.HTTPError, ValueError) as cause:
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось получить список моделей от AI provider",
+        ) from cause
 
 
 @router.post("/ai/health")

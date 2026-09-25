@@ -92,6 +92,24 @@ class OpenAICompatibleProvider:
         except (httpx.HTTPError, ValueError):
             return ProviderHealth("UNAVAILABLE", self.name, self.model)
 
+    async def list_models(self) -> list[str]:
+        if not self.base_url or (self.name == "openai" and not self.api_key):
+            raise ValueError("AI provider is not configured")
+        async with httpx.AsyncClient(timeout=10, transport=self.transport) as client:
+            response = await client.get(f"{self.base_url}/models", headers=self._headers())
+            response.raise_for_status()
+        data = response.json().get("data")
+        if not isinstance(data, list):
+            raise ValueError("Invalid models response")
+        models = {
+            item["id"].strip()
+            for item in data
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and item["id"].strip()
+        }
+        return sorted(models, key=str.casefold)
+
 
 class OpenAIProvider(OpenAICompatibleProvider):
     name = "openai"
