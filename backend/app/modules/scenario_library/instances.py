@@ -28,7 +28,14 @@ from app.modules.scenario_library.instance_models import (
 )
 from app.modules.scenario_library.router import get_template, readiness_errors, require_editor
 from app.modules.scenario_library.runtime import incident_snapshot
-from app.modules.scenario_library.variants import card_seeds, object_order, variant_facts
+from app.modules.scenario_library.variants import (
+    SCHOOL_FIRE_CODE,
+    SCHOOL_FIRE_MEDICAL_SOURCE,
+    SCHOOL_FIRE_OPTIONS,
+    card_seeds,
+    object_order,
+    variant_facts,
+)
 from app.modules.training.delivery import _editable, _invalidate_readiness, _new_item
 from app.modules.training.models import (
     QueueMode,
@@ -72,6 +79,13 @@ class MaterializeInput(BaseModel):
 
 class BatchConfirmInput(MaterializeInput):
     instance_ids: list[int] = Field(min_length=1, max_length=50)
+
+
+class SchoolFireFactsInput(BaseModel):
+    floor: int
+    room: str
+    observation: str
+    casualties: str
 
 
 @instance_router.post("/{instance_id}/materialize")
@@ -277,7 +291,12 @@ async def _matching_objects(database: AsyncSession, template) -> list:
 
 
 async def _build(
-    database: AsyncSession, template_id: int, data: GenerationInput, user: User
+    database: AsyncSession,
+    template_id: int,
+    data: GenerationInput,
+    user: User,
+    *,
+    facts_override: dict | None = None,
 ) -> dict:
     template = await get_template(database, template_id)
     if template.status != "READY":
@@ -369,6 +388,12 @@ async def _build(
             for service in derived_services
         ],
     }
+    variation = (
+        facts_override
+        if facts_override is not None
+        else variant_facts(template.seed_code, data.seed)
+    )
+    medical_needed = variation.get("casualties") != "пострадавших нет"
     services = []
     for link in template.services:
         service = await database.get(DispatchService, link.service_id)
@@ -376,6 +401,12 @@ async def _build(
             link.source == "CLASSIFIER" and link.service_id not in classifier_services
         ):
             raise HTTPException(status_code=422, detail=f"Служба {link.service_id} не подтверждена")
+        if (
+            template.seed_code == SCHOOL_FIRE_CODE
+            and service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
+            and not medical_needed
+        ):
+            continue
         services.append(
             {
                 "service_id": service.id,
@@ -417,14 +448,18 @@ async def _build(
     )
     if data.training_session_id is not None:
         await _session(database, data.training_session_id, user)
-    variation = variant_facts(template.seed_code, data.seed)
     initial_description = template.initial_description
     if variation:
         initial_description = (
             f"{variation['observation']} на {variation['floor']} этаже, "
             f"{variation['room']}; {variation['casualties']}."
         )
-    events = [_event_dict(event, services) for event in template.events]
+    selected_service_ids = {service["service_id"] for service in services}
+    events = [
+        _event_dict(event, services)
+        for event in template.events
+        if event.target_service_id is None or event.target_service_id in selected_service_ids
+    ]
     if variation:
         for event in events:
             if event["event_type"] == "RESPONSE_MESSAGE":
@@ -488,6 +523,9 @@ async def _build(
             "version": template.version,
             "name": template.name,
             "description": template.description,
+            "variant_options": (
+                SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
+            ),
             "object_rule": {
                 "selection_mode": rule.selection_mode,
                 "object_type_id": rule.object_type_id,
@@ -716,6 +754,50 @@ async def regenerate_card(
     row.initial_state_snapshot = content["initial_state_snapshot"]
     row.expected_actions_snapshot = content["expected_actions_snapshot"]
     row.assessment_criteria_snapshot = content["assessment_criteria_snapshot"]
+    row.template_snapshot = content["template_snapshot"]
+    row.events = [ScenarioInstanceEvent(**event) for event in content["events"]]
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.patch("/{instance_id}/variant-facts")
+async def edit_variant_facts(
+    instance_id: int,
+    data: SchoolFireFactsInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Change only allowed school-fire facts in a draft, then prepare all affected texts."""
+    row = await _editable_instance(instance_id, user, database)
+    template = await get_template(database, row.scenario_template_id)
+    if template.seed_code != SCHOOL_FIRE_CODE:
+        raise HTTPException(422, "Для этого сценария изменение условий недоступно")
+    if template.version != row.template_snapshot.get("version"):
+        raise HTTPException(409, "Шаблон изменился; пересоздайте карточку перед правкой условий")
+    facts = data.model_dump()
+    for key, choices in SCHOOL_FIRE_OPTIONS.items():
+        if facts[key] not in choices:
+            raise HTTPException(422, f"Недопустимое условие: {key}")
+    content = await _build(
+        database,
+        row.scenario_template_id,
+        GenerationInput(
+            object_id=row.object_snapshot["id"],
+            difficulty=row.difficulty,
+            seed=row.generation_seed,
+            training_session_id=row.training_session_id,
+        ),
+        user,
+        facts_override=facts,
+    )
+    for key in ("batch_seed", "batch_position"):
+        if key in row.template_snapshot:
+            content["template_snapshot"][key] = row.template_snapshot[key]
+    content["template_snapshot"]["variant_facts_edited"] = True
+    await _render_content(content, database)
+    row.name = content["name"]
+    row.service_snapshot = content["service_snapshot"]
+    row.initial_state_snapshot = content["initial_state_snapshot"]
     row.template_snapshot = content["template_snapshot"]
     row.events = [ScenarioInstanceEvent(**event) for event in content["events"]]
     await database.commit()

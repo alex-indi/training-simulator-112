@@ -4,6 +4,7 @@ import styles from './ScenarioLibrary.module.css'
 import { difficultyLabels, renderOriginLabels } from './uiLabels.js'
 
 const options = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+const variantFactLabels = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
 
 function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
   const [text, setText] = useState(event.render?.rendered_text || '')
@@ -34,6 +35,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
   const [cards, setCards] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [editedText, setEditedText] = useState('')
+  const [variantDraft, setVariantDraft] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -78,6 +80,10 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
     setEditedText(selected?.initial_state_snapshot?.render?.rendered_text || '')
   }, [selectedId, selected?.initial_state_snapshot?.render?.rendered_text])
 
+  useEffect(() => {
+    setVariantDraft(selected?.initial_state_snapshot?.variant_facts || {})
+  }, [selectedId, selected?.initial_state_snapshot?.variant_facts])
+
   const perform = async (action) => {
     setBusy(true)
     setError('')
@@ -111,6 +117,14 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
     })
   }
   const changeCard = (path, init) => perform(async () => updateCard(await api(path, init)))
+  const saveVariantFacts = () => {
+    if ((selected.initial_state_snapshot.render?.render_origin === 'MANUAL'
+      || selected.events.some((event) => event.render?.render_origin === 'MANUAL'))
+      && !window.confirm('Изменение условий заменит вручную исправленные тексты этой карточки. Продолжить?')) return
+    changeCard(`/api/scenario-instances/${selected.id}/variant-facts`, options('PATCH', {
+      ...variantDraft, floor: Number(variantDraft.floor),
+    }))
+  }
   const rerenderAll = () => {
     if (!confirmOverwrite()) return
     perform(async () => {
@@ -168,6 +182,11 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
             {selected && <section className={styles.panel}><h3>Карточка {cards.findIndex((item) => item.id === selected.id) + 1} из {cards.length}</h3>
               <p><b>Объект:</b> {selected.object_snapshot.name}</p><p><b>Адрес:</b> {selected.object_snapshot.address}</p><p><b>Район:</b> {selected.object_snapshot.district || '—'}</p>
               {!!Object.keys(selected.initial_state_snapshot.variant_facts || {}).length && <p><b>Условия:</b> {Object.values(selected.initial_state_snapshot.variant_facts).join(' · ')}</p>}
+              {!!Object.keys(selected.template_snapshot.variant_options || {}).length && <details>
+                <summary>Изменить условия карточки</summary>
+                <div className={styles.batchForm}>{Object.entries(selected.template_snapshot.variant_options).map(([key, values]) => <label key={key}>{variantFactLabels[key] || key}<select aria-label={variantFactLabels[key] || key} value={variantDraft[key] ?? ''} onChange={(event) => setVariantDraft((current) => ({ ...current, [key]: key === 'floor' ? Number(event.target.value) : event.target.value }))}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>)}</div>
+                <button type="button" disabled={busy || Object.keys(selected.template_snapshot.variant_options).every((key) => variantDraft[key] === selected.initial_state_snapshot.variant_facts[key])} onClick={saveVariantFacts}>Сохранить условия</button>
+              </details>}
               <label>Карточка ДДС<textarea value={editedText} onChange={(event) => setEditedText(event.target.value)} /></label>
               <small>{renderOriginLabels[selected.initial_state_snapshot.render?.render_origin] || 'Текст подготовлен'}</small>
               <div className={styles.actions}><button type="button" disabled={busy || !editedText.trim() || editedText === selected.initial_state_snapshot.render?.rendered_text} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/initial-message`, options('PATCH', { text: editedText }))}>Сохранить текст</button>

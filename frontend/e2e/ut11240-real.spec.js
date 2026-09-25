@@ -60,10 +60,16 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
       .items.find((item) => item.name === 'Пожар в образовательном учреждении')
     expect(template).toBeTruthy()
     const cards = await json(await api.post(`/api/scenario-templates/${template.id}/batch`, {
-      data: { count: 2, seed: session.id, training_session_id: session.id, different_objects: true },
+      data: { count: 5, seed: 0, training_session_id: session.id, different_objects: true },
     }))
-    expect(cards).toHaveLength(2)
+    expect(cards).toHaveLength(5)
     expect(cards[0].object_snapshot.id).not.toBe(cards[1].object_snapshot.id)
+    const medicalCard = cards.find((card) => card.service_snapshot.some(
+      (service) => service.official_name.includes('103'),
+    ))
+    expect(medicalCard).toBeTruthy()
+    expect(cards.some((card) => card.initial_state_snapshot.variant_facts.casualties === 'пострадавших нет'
+      && card.service_snapshot.every((service) => !service.official_name.includes('103')))).toBeTruthy()
     await json(await api.post(`/api/training/sessions/${session.id}/scenario-instances/confirm-batch`, {
       data: { instance_ids: cards.map((card) => card.id), training_group_id: group.id },
     }))
@@ -76,7 +82,7 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
         data: { name: `Учебная группа ${code} ${session.id}`, dds_profile: 'ДДС района' },
       })))
     }
-    const number = `СЦ-${cards[0].id}`
+    const number = `СЦ-${medicalCard.id}`
     await expect(first.getByText(number).first()).toBeVisible()
     await expect(second.getByText(number).first()).toBeVisible()
     await first.getByText(number).first().click()
@@ -88,10 +94,11 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
     await first.getByRole('button', { name: /района .*Добавлена/ }).click()
     await first.getByLabel('Статус', { exact: true }).selectOption('ACCEPT')
     await first.getByRole('button', { name: 'Сохранить статус' }).click()
-    const incident = await json(await api.get(`/api/incidents/${(await json(await api.get(`/api/training/sessions/${session.id}/queue`)))[0].incident_id}`))
+    const queue = await json(await api.get(`/api/training/sessions/${session.id}/queue`))
+    const incident = await json(await api.get(`/api/incidents/${queue.find((item) => item.scenario_instance_id === medicalCard.id).incident_id}`))
     expect(incident.dds_status).toBe('ACCEPTED')
     await first.getByText('Виртуальная группа реагирования', { exact: true }).first().click()
-    const services = cards[0].service_snapshot
+    const services = medicalCard.service_snapshot
     for (const [index, code] of ['101', '103'].entries()) {
       const service = services.find((item) => item.official_name.includes(code))
       expect(service).toBeTruthy()

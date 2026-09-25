@@ -24,7 +24,8 @@ test('instructor reviews five variants and confirms the shared batch', async ({ 
   const makeCard = (index) => ({
     id: 40 + index, scenario_template_id: 7, training_session_id: 4,
     status: 'DRAFT', name: `Школа №${index}`, difficulty: 3,
-    template_snapshot: { batch_seed: 123, batch_position: index },
+    template_snapshot: { batch_seed: 123, batch_position: index,
+      variant_options: { floor: [1, 2, 3, 4] } },
     object_snapshot: { id: index, name: `Школа №${index}`, address: `Улица ${index}` },
     initial_state_snapshot: { variant_facts: { floor: index },
       render: { rendered_text: `дым на ${index} этаже`, render_origin: 'GENERATED' } },
@@ -68,6 +69,13 @@ test('instructor reviews five variants and confirms the shared batch', async ({ 
         render: { rendered_text: 'дым на 4 этаже', render_origin: 'GENERATED' },
       } }
       body = cards[0]
+    } else if (path === '/api/scenario-instances/41/variant-facts') {
+      const facts = route.request().postDataJSON()
+      cards[0] = { ...cards[0], initial_state_snapshot: {
+        ...cards[0].initial_state_snapshot, variant_facts: facts,
+        render: { rendered_text: `дым на ${facts.floor} этаже`, render_origin: 'GENERATED' },
+      } }
+      body = cards[0]
     } else if (path === '/api/scenario-instances/41/events/101/message') {
       cards[0] = { ...cards[0], events: [{ ...cards[0].events[0],
         render: { rendered_text: route.request().postDataJSON().text, render_origin: 'MANUAL' },
@@ -93,6 +101,11 @@ test('instructor reviews five variants and confirms the shared batch', async ({ 
   await page.getByRole('button', { name: 'Перегенерировать карточку' }).click()
   await expect(page.getByRole('textbox', { name: 'Карточка ДДС' })).toHaveValue('дым на 4 этаже')
   expect(cards[0].initial_state_snapshot.variant_facts.floor).toBe(4)
+  await page.getByText('Изменить условия карточки').click()
+  await page.getByLabel('Этаж', { exact: true }).selectOption('2')
+  await page.getByRole('button', { name: 'Сохранить условия' }).click()
+  await expect(page.getByRole('textbox', { name: 'Карточка ДДС' })).toHaveValue('дым на 2 этаже')
+  expect(cards[0].initial_state_snapshot.variant_facts.floor).toBe(2)
   await page.getByRole('textbox', { name: 'Пожарная охрана' }).fill('на месте, виден дым')
   await page.getByRole('button', { name: 'Сохранить сообщение' }).click()
   await expect(page.getByRole('textbox', { name: 'Пожарная охрана' })).toHaveValue('на месте, виден дым')

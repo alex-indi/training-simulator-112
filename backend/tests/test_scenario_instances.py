@@ -390,6 +390,18 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     rerendered.json()["initial_state_snapshot"]["variant_facts"]
                     == cards[0]["initial_state_snapshot"]["variant_facts"]
                 )
+                new_facts = dict(cards[0]["initial_state_snapshot"]["variant_facts"])
+                new_facts["floor"] = 1 if new_facts["floor"] != 1 else 2
+                edited = await client.patch(f"{first_card}/variant-facts", json=new_facts)
+                assert edited.status_code == 200, edited.text
+                assert edited.json()["initial_state_snapshot"]["variant_facts"] == new_facts
+                assert edited.json()["object_snapshot"]["id"] == cards[0]["object_snapshot"]["id"]
+                assert edited.json()["template_snapshot"]["variant_facts_edited"] is True
+                assert (
+                    await client.patch(
+                        f"{first_card}/variant-facts", json={**new_facts, "floor": 99}
+                    )
+                ).status_code == 422
                 regenerated = await client.post(f"{first_card}/regenerate-card")
                 assert regenerated.status_code == 200, regenerated.text
                 assert (

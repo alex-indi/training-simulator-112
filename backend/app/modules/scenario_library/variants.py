@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 
 SCHOOL_FIRE_CODE = "DEMO_EDUCATION_FIRE_001"
+SCHOOL_FIRE_MEDICAL_SOURCE = "СЛУЖБЫ 112.docx#word/media/image1.png/row-04"
 
 SCHOOL_FIRE_OPTIONS = {
     "floor": (1, 2, 3),
