@@ -57,6 +57,9 @@ class AsyncAdapter:
     async def commit(self):
         self.session.commit()
 
+    async def delete(self, item):
+        self.session.delete(item)
+
     def add(self, item):
         self.session.add(item)
 

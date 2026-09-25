@@ -6,6 +6,7 @@ import styles from './InstructorWorkspace.module.css'
 import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
 import ScenarioLibrary from './ScenarioLibrary.jsx'
+import { sessionStateLabels, trainingModeLabels } from './uiLabels.js'
 
 const emptySettings = {
   title: '', topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -14,8 +15,8 @@ const emptySettings = {
 const emptyGroup = { name: '', dds_profile: '', difficulty: 'Средняя', queue_mode: 'INDIVIDUAL_QUEUE' }
 const steps = ['Параметры', 'Учебный класс', 'Распределение', 'Задания', 'Готовность']
 const emptyScenario = { title: '', target: '', address: '', description: '', incident_type: '' }
-const stateLabels = { DRAFT: 'Черновик', READY: 'Готово к запуску', ACTIVE: 'Активное', COMPLETED: 'Завершённое', CANCELLED: 'Отменённое' }
-const modeLabels = { FLOW: 'Потоковая тренировка', FIXED_SET: 'Набор заданий', MANUAL: 'Управляемая тренировка' }
+const stateLabels = sessionStateLabels
+const modeLabels = trainingModeLabels
 
 function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   const [sessions, setSessions] = useState([])
@@ -254,7 +255,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
     reload()
   }
 
-  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} onBack={() => { setLibraryOpen(false); if (session?.id) reload(session.id).catch((cause) => setError(cause.message)) }} />
+  if (libraryOpen) return <ScenarioLibrary user={user} requestJson={requestJson} sessionId={session?.id} onBack={() => { setLibraryOpen(false); if (session?.id) reload(session.id).catch((cause) => setError(cause.message)) }} />
 
   if (session?.state === 'ACTIVE') return <main className={styles.shell}>
     <header className={styles.header}>
@@ -305,7 +306,19 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
         <div><div className={styles.selectbar}><button type="button" onClick={() => setSelected(session.runs.map((run) => run.id))}>Выбрать всех</button><button type="button" onClick={() => setSelected([])}>Снять выбор</button><span>Выбрано: {selected.length}</span></div><div className={styles.runList}>{session.runs.map((run) => <label key={run.id} className={styles.run}><input type="checkbox" checked={selected.includes(run.id)} onChange={() => toggleRun(run.id)} disabled={!editable} /><b>АРМ {String(run.workstation_number).padStart(2, '0')}</b><span>{run.trainee_name}</span><small>{run.dds_profile === 'ДДС' ? 'Профиль не назначен' : run.dds_profile} · {run.difficulty || 'Сложность не задана'}</small></label>)}</div></div>
         <aside className={styles.sidebar}><h4>Массовое назначение</h4><label>Профиль ДДС<input value={assignment.dds_profile} onChange={(event) => setAssignment((current) => ({ ...current, dds_profile: event.target.value }))} placeholder="Например, ДДС района" disabled={!editable || !!assignment.group_id} /></label><label>Сложность<select value={assignment.difficulty} onChange={(event) => setAssignment((current) => ({ ...current, difficulty: event.target.value }))} disabled={!editable || !!assignment.group_id}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select></label><label>Тип очереди<select value={assignment.queue_mode} onChange={(event) => setAssignment((current) => ({ ...current, queue_mode: event.target.value }))} disabled={!editable || !!assignment.group_id}><option value="INDIVIDUAL_QUEUE">Индивидуальная</option><option value="SHARED_QUEUE">Общая</option></select></label><label>Группа<select value={assignment.group_id} onChange={(event) => setAssignment((current) => ({ ...current, group_id: event.target.value }))} disabled={!editable}><option value="">Без группы</option>{session.groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button type="button" disabled={!editable || !selected.length || busy || (!assignment.group_id && !assignment.dds_profile.trim())} onClick={assignRuns}>Применить к выбранным</button></aside>
       </div><h4>Учебные группы</h4><div className={styles.cards}>{session.groups.map((group) => <div key={group.id} className={styles.card}><strong>{group.name}</strong><span>{group.dds_profile || 'Профиль не задан'} · {group.difficulty || 'Без сложности'}</span><small>{group.queue_mode === 'SHARED_QUEUE' ? 'Общая очередь' : 'Индивидуальная очередь'} · {group.run_ids.length} участников</small>{editable && <><button type="button" onClick={() => { setEditingGroupId(group.id); setGroupDraft({ name: group.name, dds_profile: group.dds_profile || '', difficulty: group.difficulty || 'Средняя', queue_mode: group.queue_mode }) }}>Изменить группу</button><button type="button" onClick={() => changeGroup(group, 'DELETE')}>Удалить группу</button></>}</div>)}</div>{editable && <div className={styles.groupForm}><input aria-label="Название группы" placeholder="Новая группа" value={groupDraft.name} onChange={(event) => setGroupDraft((current) => ({ ...current, name: event.target.value }))} /><input aria-label="Профиль ДДС группы" placeholder="Профиль ДДС" value={groupDraft.dds_profile} onChange={(event) => setGroupDraft((current) => ({ ...current, dds_profile: event.target.value }))} /><select aria-label="Сложность группы" value={groupDraft.difficulty} onChange={(event) => setGroupDraft((current) => ({ ...current, difficulty: event.target.value }))}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select><select aria-label="Тип очереди группы" value={groupDraft.queue_mode} onChange={(event) => setGroupDraft((current) => ({ ...current, queue_mode: event.target.value }))}><option value="INDIVIDUAL_QUEUE">Индивидуальная</option><option value="SHARED_QUEUE">Общая</option></select><button type="button" disabled={!groupDraft.name.trim() || busy} onClick={saveGroup}>{editingGroupId ? 'Сохранить группу' : 'Создать группу'}</button>{editingGroupId && <button type="button" onClick={() => { setEditingGroupId(null); setGroupDraft(emptyGroup) }}>Отмена</button>}</div>}<div className={styles.actions}><button type="button" onClick={() => setStep(3)}>К заданиям →</button></div></section>}
-      {step === 3 && <section className={styles.section}>
+      {step === 3 && user.role !== 'ADMIN' && <section className={styles.section}>
+        <h3>Карточки занятия</h3>
+        <p>Выберите готовый сценарий в библиотеке, укажите количество карточек и просмотрите набор до утверждения.</p>
+        {editable && <button type="button" onClick={() => setLibraryOpen(true)}>Выбрать сценарий и сформировать карточки</button>}
+        <div className={styles.cards}>{queue.map((item) => <article className={styles.card} key={item.id}>
+          <strong>{item.title}</strong>
+          <span>{item.snapshot.address}</span>
+          <small>{item.training_group_id ? `Общий пул · ${session.groups.find((group) => group.id === item.training_group_id)?.name || 'Группа'}` : `АРМ ${session.runs.find((run) => run.id === item.training_run_id)?.workstation_number || '—'}`} · {item.approved ? 'Утверждена' : 'Ожидает утверждения'}</small>
+        </article>)}</div>
+        {!queue.length && <p>Карточки пока не добавлены.</p>}
+        <div className={styles.actions}><button type="button" onClick={() => setStep(4)}>К готовности →</button></div>
+      </section>}
+      {step === 3 && user.role === 'ADMIN' && <section className={styles.section}>
         <h3>Подготовленные задания</h3>
         <h4>Экземпляры из библиотеки</h4>
         <p>Выберите очередь для подтверждённого экземпляра. Исходная карточка будет выдана обычным механизмом занятия, а события появятся по учебному времени.</p>
