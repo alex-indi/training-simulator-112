@@ -13,6 +13,15 @@ class Settings(BaseSettings):
 
     database_url: str
     frontend_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    ai_text_enabled: bool = False
+    ai_text_provider: str = "openai"
+    ai_text_base_url: str = ""
+    ai_text_api_key: str = ""
+    openai_api_key: str = ""
+    ai_text_model: str = ""
+    ai_text_timeout_seconds: float = 15
+    ai_text_max_output_tokens: int = 300
+    ai_text_fallback_enabled: bool = True
 
     @property
     def allowed_frontend_origins(self) -> list[str]:

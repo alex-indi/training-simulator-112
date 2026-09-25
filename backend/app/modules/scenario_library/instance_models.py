@@ -37,7 +37,7 @@ class ScenarioInstance(Base):
     name: Mapped[str] = mapped_column(String(500))
     difficulty: Mapped[int] = mapped_column(Integer)
     generation_seed: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(20), default="CONFIRMED", server_default="CONFIRMED")
+    status: Mapped[str] = mapped_column(String(20), default="DRAFT", server_default="DRAFT")
     classifier_snapshot: Mapped[dict] = mapped_column(JSON)
     object_snapshot: Mapped[dict] = mapped_column(JSON)
     service_snapshot: Mapped[list] = mapped_column(JSON)

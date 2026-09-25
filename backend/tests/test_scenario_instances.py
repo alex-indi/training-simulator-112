@@ -11,6 +11,7 @@ from test_scenario_library import AsyncAdapter
 
 from app.db.base import Base
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import AIProviderConfig, UserGroup
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incident_classifier.models import (
@@ -49,6 +50,8 @@ def test_generation_snapshot_permissions_and_session_attachment():
     )
     tables = [
         User,
+        UserGroup,
+        AIProviderConfig,
         IncidentClassifierRule,
         IncidentFeature,
         IncidentRuleFeature,
@@ -155,7 +158,15 @@ def test_generation_snapshot_permissions_and_session_attachment():
                     title="Заявитель",
                     description="Сообщил о дыме",
                     source_type="CALLER",
-                )
+                ),
+                ScenarioEventTemplate(
+                    sequence_number=1,
+                    offset_seconds=60,
+                    event_type="RESPONSE_MESSAGE",
+                    title="Прибытие",
+                    description="Бригада прибыла",
+                    source_type="RESPONSE_UNIT",
+                ),
             ],
             services=[ScenarioTemplateService(service_id=service.id, source="CLASSIFIER")],
             expected_actions=[
@@ -217,11 +228,44 @@ def test_generation_snapshot_permissions_and_session_attachment():
                 generated = await client.post(f"{path}/instances", json=payload)
                 assert generated.status_code == 201, generated.text
                 instance = generated.json()
+                assert [
+                    item["id"] for item in (await client.get("/api/scenario-instances")).json()
+                ] == [instance["id"]]
                 assert instance["object_snapshot"]["address"] == "Пехотная, 1"
                 assert instance["classifier_snapshot"]["features"][0]["name"] == "Дым"
                 assert instance["service_snapshot"][0]["official_name"] == "Пожарная охрана"
                 assert instance["assessment_criteria_snapshot"][0]["weight"] == 3
                 assert instance["events"][0]["description"] == "Сообщил о дыме"
+                assert instance["status"] == "DRAFT"
+                assert instance["initial_state_snapshot"]["render"]["fallback_used"]
+                assert instance["events"][1]["render"]["rendered_text"] == "Бригада прибыла"
+                base = f"/api/scenario-instances/{instance['id']}"
+                edited = await client.patch(
+                    f"{base}/initial-message", json={"text": "Сообщение преподавателя"}
+                )
+                assert edited.status_code == 200, edited.text
+                assert (
+                    edited.json()["initial_state_snapshot"]["render"]["render_origin"] == "MANUAL"
+                )
+                assert (
+                    edited.json()["initial_state_snapshot"]["description"] == "Из здания идёт дым"
+                )
+                event_id = instance["events"][1]["id"]
+                changed = await client.patch(
+                    f"{base}/events/{event_id}/message", json={"text": "Прибыли к месту"}
+                )
+                assert changed.status_code == 200, changed.text
+                assert changed.json()["events"][1]["render"]["render_origin"] == "MANUAL"
+                assert (await client.get(base)).json()["events"][1]["render"][
+                    "rendered_text"
+                ] == "Прибыли к месту"
+                confirmed = await client.post(f"{base}/confirm")
+                assert confirmed.status_code == 200, confirmed.text
+                assert confirmed.json()["status"] == "CONFIRMED"
+                assert (
+                    await client.patch(f"{base}/initial-message", json={"text": "Поздно"})
+                ).status_code == 409
+                assert (await client.post(f"{base}/events/{event_id}/rerender")).status_code == 409
                 repeated = await client.post(f"{path}/instances", json=payload)
                 assert repeated.json()["object_snapshot"] == instance["object_snapshot"]
                 assert (
@@ -261,6 +305,7 @@ def test_generation_snapshot_permissions_and_session_attachment():
                 assert (
                     await client.get(f"/api/training/sessions/{session.id}/scenario-instances")
                 ).status_code == 403
+                assert (await client.get("/api/scenario-instances")).status_code == 403
 
         asyncio.run(run())
     engine.dispose()
