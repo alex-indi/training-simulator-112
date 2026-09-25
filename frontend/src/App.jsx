@@ -609,7 +609,7 @@ function App() {
   }
 
   if (currentUser?.role === 'INSTRUCTOR') {
-    return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} />
+    return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} onLogout={logout} />
   }
 
   if (currentUser?.role === 'ADMIN') {

@@ -81,7 +81,9 @@
   color: #253036;
   font: 12px/1.45 var(--app-font-family);
 }
-.header { min-height: 72px; box-sizing: border-box; padding: 12px 18px; border-bottom: 5px solid var(--dds-divider); background: var(--dds-panel); color: #253036; }
+.header { min-height: 96px; box-sizing: border-box; padding: 0 0 0 18px; border-bottom: 5px solid var(--dds-divider); background: var(--dds-panel); color: #253036; }
+.header > :last-child { flex: 0 0 370px; align-self: stretch; }
+.header > :last-child button { min-height: 0; border: 0; padding: 0; background: transparent; }
 .header h1 { margin-top: 2px; font-size: 23px; font-weight: 500; }
 .header small { color: var(--dds-muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
 .header label { color: var(--dds-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }

@@ -6,6 +6,7 @@ import styles from './InstructorWorkspace.module.css'
 import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
 import ScenarioLibrary from './ScenarioLibrary.jsx'
+import WorkspaceClock from './WorkspaceClock.jsx'
 import { sessionStateLabels, trainingModeLabels } from './uiLabels.js'
 
 const emptySettings = {
@@ -18,7 +19,7 @@ const emptyScenario = { title: '', target: '', address: '', description: '', inc
 const stateLabels = sessionStateLabels
 const modeLabels = trainingModeLabels
 
-function InstructorWorkspace({ user, users, selectUser, requestJson }) {
+function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout }) {
   const [sessions, setSessions] = useState([])
   const [templates, setTemplates] = useState([])
   const [session, setSession] = useState(null)
@@ -260,7 +261,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   if (session?.state === 'ACTIVE') return <main className={styles.shell}>
     <header className={styles.header}>
       <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Live-монитор</h1></div>
-      <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
+      <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
     </header>
     <div className={styles.content}>
       <button className={styles.back} type="button" onClick={closeSession}>← Все занятия</button>
@@ -273,7 +274,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson }) {
   return <main className={styles.shell}>
     <header className={styles.header}>
       <div><small>Учебный тренажёр 112 · кабинет преподавателя</small><h1>Занятия</h1><button type="button" onClick={() => setLibraryOpen(true)}>Библиотека сценариев</button></div>
-      <label>Пользователь <select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select></label>
+      <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
     </header>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
