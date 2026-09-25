@@ -37,6 +37,67 @@ const aiHealthLabels = {
   UNAVAILABLE: 'провайдер недоступен',
   MISCONFIGURED: 'настройки неполные',
 }
+const objectAttributeLabels = {
+  administrative_areas: 'Административные округа',
+  category: 'Категория',
+  close_flag: 'Состояние',
+  department: 'Ведомство',
+  districts: 'Районы',
+  entrance_count: 'Количество входов',
+  full_name: 'Полное название',
+  has_underground_area: 'Есть подземная зона',
+  institution_subtype: 'Подтип учреждения',
+  institution_type: 'Тип учреждения',
+  lines: 'Линии метро',
+  needs_review: 'Требует проверки',
+  source_address_id: 'ID адреса в источнике',
+  source_entrance_ids: 'ID входов в источнике',
+  source_row_id: 'ID записи в источнике',
+  station_name: 'Станция',
+  working_hours: 'Режим работы',
+}
+const weekdayOrder = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
+const auditActionLabels = {
+  AI_CONFIG_UPDATED: 'Настройки AI изменены',
+  OBJECT_TYPE_CREATED: 'Тип объекта создан',
+  OBJECT_TYPE_UPDATED: 'Тип объекта изменён',
+  SCENARIO_ARCHIVED: 'Сценарий отправлен в архив',
+  SCENARIO_RESTORED: 'Сценарий восстановлен',
+  USER_ACTIVATION_CHANGED: 'Статус пользователя изменён',
+  USER_CREATED: 'Пользователь создан',
+  USER_CREDENTIALS_CHANGED: 'Учётные данные пользователя изменены',
+  USER_DELETED: 'Пользователь удалён',
+  USER_GROUP_CREATED: 'Учебная группа создана',
+  USER_GROUP_DELETED: 'Учебная группа удалена',
+  USER_GROUP_UPDATED: 'Учебная группа изменена',
+  USER_ROLE_CHANGED: 'Роль пользователя изменена',
+  USER_UPDATED: 'Пользователь изменён',
+}
+const auditEntityLabels = {
+  AI_PROVIDER: 'Настройки AI',
+  OBJECT_TYPE: 'Тип объекта',
+  TRAINING_SCENARIO: 'Учебный сценарий',
+  USER: 'Пользователь',
+  USER_GROUP: 'Учебная группа',
+}
+const auditFieldLabels = {
+  api_key_configured: 'API key настроен',
+  archived: 'В архиве',
+  base_url: 'Адрес API',
+  code: 'Код',
+  description: 'Описание',
+  enabled: 'Модель активирована',
+  full_name: 'ФИО',
+  group_id: 'Учебная группа',
+  is_active: 'Активен',
+  model: 'Модель',
+  name: 'Название',
+  parent_id: 'Родительский тип',
+  provider: 'Провайдер',
+  role: 'Роль',
+  timeout_seconds: 'Таймаут, сек.',
+  username: 'Логин',
+}
 const userGroups = [
   ['ADMIN', 'Администраторы'],
   ['INSTRUCTOR', 'Преподаватели'],
@@ -45,6 +106,43 @@ const userGroups = [
 
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value)) : '—'
+}
+
+function renderObjectAttributeValue(code, value) {
+  if (code === 'working_hours' && Array.isArray(value)) {
+    const rows = value
+      .filter((item) => item && !item.is_deleted)
+      .sort((left, right) => weekdayOrder.indexOf(left.DayWeek) - weekdayOrder.indexOf(right.DayWeek))
+    return rows.length ? <ul className={styles.workingHours}>{rows.map((item) => <li key={`${item.DayWeek}:${item.global_id || item.WorkHours}`}><span>{item.DayWeek}</span><b>{item.WorkHours || '—'}</b></li>)}</ul> : '—'
+  }
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '—'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${String(item)}`).join('; ')
+  return value === null || value === undefined || value === '' ? '—' : String(value)
+}
+
+function formatAuditValue(field, value) {
+  if (value === null || value === undefined || value === '') return 'Не задано'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  if (field === 'role') return roleLabels[value] || value
+  if (field === 'provider') return value === 'OPENAI_COMPATIBLE' ? 'OpenAI-compatible' : value
+  if (Array.isArray(value)) return value.join(', ') || 'Не задано'
+  return String(value)
+}
+
+function auditChanges(item) {
+  const before = item.before || {}
+  const after = item.after || {}
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((key) => key !== 'updated_at')
+  return keys
+    .filter((key) => !item.before || !item.after || JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    .map((key) => ({
+      key,
+      label: auditFieldLabels[key] || key.replaceAll('_', ' '),
+      before: item.before ? formatAuditValue(key, before[key]) : null,
+      after: item.after ? formatAuditValue(key, after[key]) : null,
+    }))
 }
 
 function Empty({ children = 'Данных пока нет' }) {
@@ -334,7 +432,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <article className={data.data_quality_open ? styles.warningCard : ''}><span>Требуют проверки</span><strong>{data.data_quality_open}</strong></article>
       </div>
       <div className={styles.statusGrid}>
-        <article><h3>AI Renderer</h3><b>{data.ai.enabled ? '● включён' : '○ выключен'}</b><p>{data.ai.provider} · {data.ai.model || 'модель не выбрана'}</p><small>API key: {data.ai.api_key_configured ? 'configured' : 'not configured'}</small></article>
+        <article><h3>AI-модель</h3><b>{data.ai.enabled ? '● активирована' : '○ не активирована'}</b><p>{data.ai.provider} · {data.ai.model || 'модель не выбрана'}</p><small>API key: {data.ai.api_key_configured ? 'настроен' : 'не настроен'}</small></article>
         <article><h3>Последний импорт</h3>{data.last_import ? <><b>{data.last_import.source} · {data.last_import.status}</b><p>{formatDateTime(data.last_import.finished_at || data.last_import.started_at)}</p></> : <p>Импорты ещё не запускались</p>}</article>
       </div>
     </>
@@ -405,12 +503,12 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span></div>)}</div>
 
-  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Источник</span><span>Статус</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><code>{item.source}</code><span>{item.data_status}</span></div>)}</div>
+  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={`${styles.table} ${styles.serviceTable}`}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Статус</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><span>{item.data_status}</span></div>)}</div>
 
   const renderObjects = () => (
     <div className={styles.split}>
       {!filteredRows.length ? <Empty>Object Registry ещё не импортирован</Empty> : <div className={styles.objectList}>{filteredRows.map((item) => <button key={item.id} onClick={() => setSelectedObject(item)}><strong>{item.official_name}</strong><span>{item.address}</span><small>{item.district || 'район не указан'} · {item.dataset_id}</small></button>)}</div>}
-      <aside className={styles.details}>{selectedObject ? <><h3>{selectedObject.official_name}</h3><dl><dt>Адрес</dt><dd>{selectedObject.address}</dd><dt>Район / округ</dt><dd>{selectedObject.district || '—'} / {selectedObject.administrative_area || '—'}</dd><dt>Координаты</dt><dd>{selectedObject.latitude ?? '—'}, {selectedObject.longitude ?? '—'}</dd><dt>Источник</dt><dd>{selectedObject.source}</dd><dt>Dataset / external ID</dt><dd>{selectedObject.dataset_id} / {selectedObject.external_id}</dd><dt>Теги</dt><dd>{selectedObject.tags.join(', ') || '—'}</dd><dt>Атрибуты</dt><dd><pre>{JSON.stringify(selectedObject.attributes, null, 2)}</pre></dd></dl></> : <p>Выберите объект для просмотра полной карточки.</p>}</aside>
+      <aside className={styles.details}>{selectedObject ? <><h3>{selectedObject.official_name}</h3><dl><dt>Адрес</dt><dd>{selectedObject.address}</dd><dt>Район / округ</dt><dd>{selectedObject.district || '—'} / {selectedObject.administrative_area || '—'}</dd><dt>Координаты</dt><dd>{selectedObject.latitude ?? '—'}, {selectedObject.longitude ?? '—'}</dd><dt>Источник</dt><dd>{selectedObject.source}</dd><dt>Dataset / external ID</dt><dd>{selectedObject.dataset_id} / {selectedObject.external_id}</dd><dt>Теги</dt><dd>{selectedObject.tags.join(', ') || '—'}</dd></dl><section className={styles.attributes}><h4>Дополнительные сведения</h4><dl>{Object.entries(selectedObject.attributes).map(([code, value]) => <div key={code}><dt>{objectAttributeLabels[code] || code.replaceAll('_', ' ')}</dt><dd>{renderObjectAttributeValue(code, value)}</dd></div>)}</dl></section></> : <p>Выберите объект для просмотра полной карточки.</p>}</aside>
     </div>
   )
 
@@ -465,7 +563,10 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderScenarios = () => !filteredRows.length ? <Empty>Сценарии отсутствуют</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.author}</span><span>{item.status}</span><small>{item.incident_type || 'тип не указан'} · {item.difficulty || 'сложность не указана'} · {formatDateTime(item.updated_at)}</small><button onClick={() => mutate(`/api/admin/scenarios/${item.id}/${item.archived ? 'restore' : 'archive'}`, { method: 'POST' }, 'Состояние сценария изменено.')}>{item.archived ? 'Восстановить' : 'Архивировать'}</button></article>)}</div>
 
-  const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><time>{formatDateTime(item.created_at)}</time><b>{item.action}</b><span>admin #{item.admin_id} · {item.entity_type} {item.entity_id || ''}</span><details><summary>Изменения</summary><pre>{JSON.stringify({ before: item.before, after: item.after }, null, 2)}</pre></details></article>)}</div>
+  const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.auditList}>{filteredRows.map((item) => {
+    const changes = auditChanges(item)
+    return <article className={styles.auditItem} key={item.id}><header><time>{formatDateTime(item.created_at)}</time><div><b>{auditActionLabels[item.action] || item.action}</b><span>{auditEntityLabels[item.entity_type] || item.entity_type} №{item.entity_id || '—'} · администратор №{item.admin_id}</span></div></header><details><summary>Подробнее</summary>{changes.length ? <dl className={styles.auditChanges}>{changes.map((change) => <div key={change.key}><dt>{change.label}</dt><dd>{change.before !== null && <span><small>Было</small>{change.before}</span>}{change.before !== null && change.after !== null && <i aria-hidden="true">→</i>}{change.after !== null && <span><small>{change.before !== null ? 'Стало' : 'Значение'}</small>{change.after}</span>}</dd></div>)}</dl> : <p className={styles.muted}>Параметры сохранены без изменения отображаемых значений.</p>}</details></article>
+  })}</div>
 
   const renderSystem = () => data && <div className={styles.systemGrid}><article><h3>Состояние</h3>{Object.entries(data.services).map(([name, value]) => <p key={name}><span>{name}</span><b className={value === 'OK' ? styles.ok : styles.muted}>● {value}</b></p>)}</article><article><h3>Версия приложения</h3><dl><dt>Version</dt><dd>{data.version}</dd><dt>Git commit</dt><dd>{data.git_commit}</dd><dt>DB revision</dt><dd>{data.db_revision}</dd><dt>Environment</dt><dd>{data.environment}</dd><dt>Server time</dt><dd>{formatDateTime(data.server_time)}</dd></dl></article></div>
 

@@ -10,6 +10,7 @@ from app.main import app
 from app.modules.admin.dependencies import require_admin
 from app.modules.admin.models import AdminAudit, AIProviderConfig, UserGroup
 from app.modules.admin.router import (
+    _deserialize_object_attribute,
     ai_health,
     ai_models,
     create_user,
@@ -46,6 +47,27 @@ def make_user(user_id: int, role: UserRole, *, active: bool = True) -> User:
         role=role,
         is_active=active,
     )
+
+
+@pytest.mark.parametrize(
+    ("value_type", "value", "expected"),
+    [
+        (
+            "json",
+            '[{"DayWeek": "понедельник", "WorkHours": "круглосуточно"}]',
+            [{"DayWeek": "понедельник", "WorkHours": "круглосуточно"}],
+        ),
+        ("boolean", "true", True),
+        ("integer", "3", 3),
+        ("text", "Больница", "Больница"),
+    ],
+)
+def test_object_attribute_values_are_deserialized_by_declared_type(
+    value_type: str, value: str, expected: object
+) -> None:
+    attribute = MagicMock(value_type=value_type, value=value)
+
+    assert _deserialize_object_attribute(attribute) == expected
 
 
 @pytest.mark.parametrize("role", [UserRole.INSTRUCTOR, UserRole.TRAINEE])

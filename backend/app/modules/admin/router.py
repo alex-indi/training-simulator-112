@@ -1,5 +1,6 @@
 """Administrative REST API isolated from instructor and trainee operations."""
 
+import json
 from datetime import UTC, datetime
 from os import getenv
 from typing import Annotated, Any
@@ -56,7 +57,7 @@ from app.modules.incident_classifier.models import (
     IncidentRuleFeature,
     IncidentRuleService,
 )
-from app.modules.object_registry.models import CityObject, ObjectType
+from app.modules.object_registry.models import CityObject, ObjectAttribute, ObjectType
 from app.modules.training.models import TrainingScenario, TrainingSession, TrainingSessionState
 from app.services.text_generation.providers import OpenAICompatibleProvider, OpenAIProvider
 from app.services.text_generation.renderer import TemplateTextGenerationProvider
@@ -418,6 +419,18 @@ async def services(
     ]
 
 
+def _deserialize_object_attribute(attribute: ObjectAttribute) -> Any:
+    """Restore the typed value recorded by the object-registry importer."""
+    try:
+        if attribute.value_type in {"json", "boolean"}:
+            return json.loads(attribute.value)
+        if attribute.value_type == "integer":
+            return int(attribute.value)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+    return attribute.value
+
+
 @router.get("/object-registry", response_model=list[RegistryObjectRead])
 async def object_registry(
     session: Database,
@@ -460,7 +473,10 @@ async def object_registry(
             latitude=float(row.latitude) if row.latitude is not None else None,
             longitude=float(row.longitude) if row.longitude is not None else None,
             tags=[item.tag for item in row.tags],
-            attributes={item.attribute_code: item.value for item in row.attributes},
+            attributes={
+                item.attribute_code: _deserialize_object_attribute(item)
+                for item in row.attributes
+            },
             source=row.source,
             dataset_id=row.source_dataset_id or "",
             external_id=row.external_id,
