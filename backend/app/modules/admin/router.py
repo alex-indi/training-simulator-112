@@ -3,7 +3,7 @@
 import json
 from datetime import UTC, datetime
 from os import getenv
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from urllib.parse import urlsplit
 
 import httpx
@@ -16,6 +16,12 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.db.dependencies import get_database_session
+from app.modules.admin.data_exchange import (
+    DatasetKey,
+    ImportEnvelope,
+    export_dataset,
+    import_dataset,
+)
 from app.modules.admin.dependencies import require_admin
 from app.modules.admin.models import (
     AdminAudit,
@@ -81,6 +87,21 @@ router = APIRouter(
 Database = Annotated[AsyncSession, Depends(get_database_session)]
 Admin = Annotated[User, Depends(require_admin)]
 
+IMPORT_DATASETS: dict[str, dict[str, str]] = {
+    "classifier": {
+        "name": "Классификатор происшествий",
+        "description": "Правила SRC-006, признаки и связи со службами реагирования.",
+    },
+    "services": {
+        "name": "Службы 112",
+        "description": "Диспетчерские службы, организации и уровень обслуживания.",
+    },
+    "objects": {
+        "name": "Объекты Москвы",
+        "description": "Типы, объекты, характеристики и поисковые теги реестра.",
+    },
+}
+
 
 def _audit(
     admin: User,
@@ -115,6 +136,12 @@ async def _one_or_404(session: AsyncSession, model: type, entity_id: int):
     if entity is None:
         raise HTTPException(status_code=404, detail="Запись не найдена")
     return entity
+
+
+def _dataset_or_404(source: str) -> DatasetKey:
+    if source not in IMPORT_DATASETS:
+        raise HTTPException(status_code=404, detail="Набор данных не найден")
+    return cast(DatasetKey, source)
 
 
 @router.get("/dashboard")
@@ -782,12 +809,111 @@ async def imports(session: Database) -> list[ImportRun]:
     )
 
 
-@router.post("/imports/{source}/run")
-async def run_import(source: str) -> None:
-    raise HTTPException(
-        status_code=503,
-        detail=f"Импортер {source} ещё не подключён; запуск без source adapter запрещён",
+@router.get("/imports/catalog")
+async def import_catalog(session: Database) -> list[dict[str, Any]]:
+    counts = {
+        "classifier": int(
+            (await session.scalar(select(func.count()).select_from(IncidentClassifierRule))) or 0
+        ),
+        "services": int(
+            (await session.scalar(select(func.count()).select_from(DispatchService))) or 0
+        ),
+        "objects": int((await session.scalar(select(func.count()).select_from(CityObject))) or 0),
+    }
+    runs = list(
+        (await session.scalars(select(ImportRun).order_by(ImportRun.started_at.desc()))).all()
     )
+    latest: dict[str, ImportRun] = {}
+    for run in runs:
+        latest.setdefault(run.source, run)
+    return [
+        {
+            "key": key,
+            **metadata,
+            "record_count": counts[key],
+            "last_import": (
+                ImportRunRead.model_validate(latest[key]).model_dump(mode="json")
+                if key in latest
+                else None
+            ),
+        }
+        for key, metadata in IMPORT_DATASETS.items()
+    ]
+
+
+@router.get("/imports/{source}/export")
+async def export_import_dataset(source: str, session: Database) -> dict[str, Any]:
+    dataset = _dataset_or_404(source)
+    return await export_dataset(session, dataset)
+
+
+@router.post("/imports/{source}/run", response_model=ImportRunRead)
+async def run_import(
+    source: str,
+    payload: ImportEnvelope,
+    session: Database,
+    admin: Admin,
+) -> ImportRun:
+    dataset = _dataset_or_404(source)
+    if payload.dataset != dataset:
+        raise HTTPException(
+            status_code=422,
+            detail="Выбранный раздел не совпадает с набором данных в файле",
+        )
+    dataset_id = payload.dataset_id or payload.file_name
+    run = ImportRun(
+        source=dataset,
+        dataset_id=dataset_id,
+        status="RUNNING",
+        details={"file_name": payload.file_name},
+    )
+    session.add(run)
+    try:
+        stats = await import_dataset(session, dataset, payload.records)
+        run.status = "SUCCESS"
+        run.received = stats["received"]
+        run.created = stats["created"]
+        run.updated = stats["updated"]
+        run.skipped = stats["skipped"]
+        run.details = {
+            "file_name": payload.file_name,
+            "format": payload.format,
+            "version": payload.version,
+            **stats.get("details", {}),
+        }
+        run.finished_at = datetime.now(UTC)
+        await session.flush()
+        session.add(
+            _audit(
+                admin,
+                "DATA_IMPORTED",
+                "REFERENCE_DATA",
+                dataset,
+                after={
+                    "dataset_id": dataset_id,
+                    "received": run.received,
+                    "created": run.created,
+                    "updated": run.updated,
+                    "skipped": run.skipped,
+                },
+            )
+        )
+        await session.commit()
+        await session.refresh(run)
+        return run
+    except (ValueError, IntegrityError) as exc:
+        await session.rollback()
+        failed = ImportRun(
+            source=dataset,
+            dataset_id=dataset_id,
+            status="FAILED",
+            errors=1,
+            details={"file_name": payload.file_name, "error": str(exc)},
+            finished_at=datetime.now(UTC),
+        )
+        session.add(failed)
+        await session.commit()
+        raise HTTPException(status_code=422, detail=f"Файл не импортирован: {exc}") from exc
 
 
 @router.get("/data-quality", response_model=list[DataQualityRead])

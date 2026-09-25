@@ -38,6 +38,7 @@ const aiHealthLabels = {
   UNAVAILABLE: 'провайдер недоступен',
   MISCONFIGURED: 'настройки неполные',
 }
+const importStatusLabels = { SUCCESS: 'Успешно', FAILED: 'Ошибка', RUNNING: 'Выполняется' }
 const objectAttributeLabels = {
   administrative_areas: 'Административные округа',
   category: 'Категория',
@@ -76,6 +77,7 @@ const auditActionLabels = {
   CLASSIFIER_RULE_UPDATED: 'Правило классификатора изменено',
   REGISTRY_OBJECT_UPDATED: 'Объект Москвы изменён',
   SERVICE_UPDATED: 'Служба 112 изменена',
+  DATA_IMPORTED: 'Данные импортированы',
 }
 const auditEntityLabels = {
   AI_PROVIDER: 'Настройки AI',
@@ -87,6 +89,7 @@ const auditEntityLabels = {
   CITY_OBJECT: 'Объект Москвы',
   CLASSIFIER_RULE: 'Правило классификатора',
   DISPATCH_SERVICE: 'Служба 112',
+  REFERENCE_DATA: 'Справочные данные',
 }
 const auditFieldLabels = {
   api_key_configured: 'API key настроен',
@@ -213,6 +216,8 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [section, setSection] = useState('overview')
   const [data, setData] = useState(null)
   const [quality, setQuality] = useState([])
+  const [importCatalog, setImportCatalog] = useState([])
+  const [importModal, setImportModal] = useState(null)
   const [usage, setUsage] = useState([])
   const [aiHealth, setAiHealth] = useState(null)
   const [aiDraft, setAiDraft] = useState({ provider: 'OPENAI', model: '', base_url: 'https://api.openai.com/v1', enabled: false, timeout_seconds: 30 })
@@ -263,9 +268,13 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         setTraineeGroups(nextGroups)
       }
       if (section === 'imports') {
-        const nextQuality = await requestJson('/api/admin/data-quality', username)
+        const [nextQuality, nextCatalog] = await Promise.all([
+          requestJson('/api/admin/data-quality', username),
+          requestJson('/api/admin/imports/catalog', username),
+        ])
         if (requestId !== loadRequestId.current) return
         setQuality(nextQuality)
+        setImportCatalog(nextCatalog)
       }
       if (section === 'ai') {
         setAiDraft({
@@ -538,6 +547,74 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     if (saved) setAiApiKey('')
   }
 
+  const exportDataset = async (source) => {
+    setLoading(true)
+    setError('')
+    try {
+      const payload = await requestJson(`/api/admin/imports/${source}/export`, username)
+      const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `ut112-${source}-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setNotice('Экспорт подготовлен и загружен в JSON-файл.')
+    } catch (cause) {
+      setError(cause.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectImportFile = async (source, event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setError('')
+    if (file.size > 25 * 1024 * 1024) {
+      setError('Размер JSON-файла не должен превышать 25 МБ.')
+      return
+    }
+    try {
+      const payload = JSON.parse(await file.text())
+      if (payload.format !== 'ut112-admin-data' || payload.version !== 1) {
+        throw new Error('Неподдерживаемый формат файла. Используйте JSON, экспортированный из тренажёра.')
+      }
+      if (payload.dataset !== source) {
+        throw new Error('Файл относится к другому разделу данных.')
+      }
+      const recordCount = Array.isArray(payload.records)
+        ? payload.records.length
+        : payload.records?.objects?.length
+      if (!Number.isInteger(recordCount)) throw new Error('В файле отсутствует список записей.')
+      setImportModal({ source, fileName: file.name, payload, recordCount })
+    } catch (cause) {
+      setError(cause instanceof SyntaxError ? 'Не удалось прочитать JSON-файл.' : cause.message)
+    }
+  }
+
+  const confirmImport = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await requestJson(`/api/admin/imports/${importModal.source}/run`, username, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...importModal.payload, file_name: importModal.fileName }),
+      })
+      setImportModal(null)
+      await load()
+      setNotice(`Импорт завершён: создано ${result.created}, обновлено ${result.updated}, без изменений ${result.skipped}.`)
+    } catch (cause) {
+      setError(cause.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const filteredRows = useMemo(() => Array.isArray(data) ? data : [], [data])
   const groupedUsers = useMemo(
     () => userGroups.map(([role, label]) => ({
@@ -718,13 +795,33 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderImports = () => (
     <>
-      <div className={styles.importSources}>{['src-006', 'services-112', 'object-registry'].map((source) => <article key={source}><strong>{source}</strong><p>Идемпотентный source adapter</p><button disabled={loading} onClick={() => mutate(`/api/admin/imports/${source}/run`, { method: 'POST' }, 'Импорт запущен.')}>Обновить данные</button></article>)}</div>
+      <section className={styles.exchangeIntro}>
+        <div><h2>Обмен справочными данными</h2><p>Выгрузите актуальный набор в JSON, отредактируйте его при необходимости и загрузите обратно. Перед записью файл будет проверен.</p></div>
+        <span>Версия формата: 1</span>
+      </section>
+      <div className={styles.importSources}>{importCatalog.map((item) => <article className={styles.importSourceCard} key={item.key}>
+        <header><div><small>{item.key}</small><h3>{item.name}</h3></div><strong>{item.record_count}</strong></header>
+        <p>{item.description}</p>
+        <div className={styles.importLastRun}>{item.last_import ? <><span className={item.last_import.status === 'FAILED' ? styles.failedStatus : styles.successStatus}>{importStatusLabels[item.last_import.status] || item.last_import.status}</span><time>{formatDateTime(item.last_import.finished_at || item.last_import.started_at)}</time></> : <span>Импортов ещё не было</span>}</div>
+        <footer><button type="button" disabled={loading} onClick={() => exportDataset(item.key)}>Экспортировать JSON</button><label className={styles.fileButton}>Импортировать JSON<input type="file" accept="application/json,.json" disabled={loading} onChange={(event) => selectImportFile(item.key, event)} /></label></footer>
+      </article>)}</div>
       <h3>История импорта</h3>
-      {!filteredRows.length ? <Empty>История импорта пуста</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{item.source}</b><span>{item.status}</span><span>{formatDateTime(item.started_at)}</span><small>получено {item.received} · создано {item.created} · обновлено {item.updated} · review {item.review} · ошибок {item.errors}</small></article>)}</div>}
+      {!filteredRows.length ? <Empty>История импорта пуста</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{importCatalog.find((entry) => entry.key === item.source)?.name || item.source}</b><span className={item.status === 'FAILED' ? styles.failedStatus : styles.successStatus}>{importStatusLabels[item.status] || item.status}</span><span>{formatDateTime(item.finished_at || item.started_at)}</span><small>получено {item.received} · создано {item.created} · обновлено {item.updated} · без изменений {item.skipped} · ошибок {item.errors}{item.details?.file_name ? ` · файл ${item.details.file_name}` : ''}</small>{item.details?.error && <p className={styles.importError}>{item.details.error}</p>}</article>)}</div>}
       <h3>Требуют проверки</h3>
       {!quality.length ? <Empty>Открытых замечаний к данным нет</Empty> : <div className={styles.compactList}>{quality.map((item) => <article key={item.id}><b>{item.kind}</b><span>{item.entity_type} {item.entity_id || ''}</span><p>{item.reason}</p></article>)}</div>}
     </>
   )
+
+  const renderImportModal = () => importModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={styles.confirmModal} role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <header className={styles.modalHeader}><div><small>Проверка перед загрузкой</small><h2 id="import-title">Импортировать данные?</h2></div><button type="button" aria-label="Закрыть" onClick={() => setImportModal(null)}>×</button></header>
+      <div className={styles.confirmContent}>
+        <dl className={styles.importSummary}><div><dt>Раздел</dt><dd>{importCatalog.find((item) => item.key === importModal.source)?.name || importModal.source}</dd></div><div><dt>Файл</dt><dd>{importModal.fileName}</dd></div><div><dt>Записей</dt><dd>{importModal.recordCount}</dd></div></dl>
+        <p>Существующие записи с теми же идентификаторами будут обновлены, новые — добавлены. Записи, которых нет в файле, удаляться не будут.</p>
+        <div className={styles.modalActions}><button type="button" disabled={loading} onClick={() => setImportModal(null)}>Отмена</button><button type="button" className={styles.primaryButton} disabled={loading} onClick={confirmImport}>{loading ? 'Импорт…' : 'Импортировать'}</button></div>
+      </div>
+    </section>
+  </div>
 
   const renderAI = () => data && (
     <>
@@ -768,7 +865,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     <main className={styles.shell}>
       <aside className={styles.sidebar}>
         <header><span>112</span><div><small>Учебный тренажёр</small><strong>Администрирование</strong></div></header>
-        <nav>{sections.map(([key, label]) => <button className={section === key ? styles.active : ''} key={key} onClick={() => { loadRequestId.current += 1; setData(null); setQuality([]); setUsage([]); setSection(key); setSearch(''); setFilters({}); setSelectedObject(null) }}>{label}</button>)}</nav>
+        <nav>{sections.map(([key, label]) => <button className={section === key ? styles.active : ''} key={key} onClick={() => { loadRequestId.current += 1; setData(null); setQuality([]); setImportCatalog([]); setImportModal(null); setUsage([]); setSection(key); setSearch(''); setFilters({}); setSelectedObject(null) }}>{label}</button>)}</nav>
         <footer><select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select><small>{roleLabels[user.role]}</small><button type="button" onClick={onLogout}>Выйти</button></footer>
       </aside>
       <section className={styles.workspace}>
@@ -781,6 +878,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
       {renderGroupModal()}
       {renderDeleteModal()}
       {renderCatalogModal()}
+      {renderImportModal()}
     </main>
   )
 }
