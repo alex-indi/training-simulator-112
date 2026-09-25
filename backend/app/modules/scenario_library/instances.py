@@ -70,6 +70,10 @@ class MaterializeInput(BaseModel):
     training_group_id: int | None = Field(default=None, gt=0)
 
 
+class BatchConfirmInput(MaterializeInput):
+    instance_ids: list[int] = Field(min_length=1, max_length=50)
+
+
 @instance_router.post("/{instance_id}/materialize")
 async def materialize(
     instance_id: int,
@@ -420,6 +424,15 @@ async def _build(
             f"{variation['observation']} на {variation['floor']} этаже, "
             f"{variation['room']}; {variation['casualties']}."
         )
+    events = [_event_dict(event, services) for event in template.events]
+    if variation:
+        for event in events:
+            if event["event_type"] == "RESPONSE_MESSAGE":
+                description = event["description"]
+                for key, value in variation.items():
+                    description = description.replace("{" + key + "}", str(value))
+                event["description"] = description
+                event["payload_snapshot"]["description"] = event["description"]
     return {
         "scenario_template_id": template.id,
         "training_session_id": data.training_session_id,
@@ -446,10 +459,10 @@ async def _build(
         "initial_state_snapshot": {
             "title": template.initial_title,
             "description": initial_description,
-            "caller_text": template.initial_caller_text,
+            "caller_text": "" if variation else template.initial_caller_text,
             "variant_facts": variation,
         },
-        "events": [_event_dict(event, services) for event in template.events],
+        "events": events,
         "expected_actions_snapshot": [
             {
                 "expected_action_type": a.expected_action_type,
@@ -608,6 +621,8 @@ async def generate_batch(
                 break
         else:
             raise HTTPException(422, "Не удалось сформировать достаточно разных карточек")
+        content["template_snapshot"]["batch_seed"] = data.seed
+        content["template_snapshot"]["batch_position"] = index + 1
         await _render_content(content, database)
         row = _instance_from_content(template_id, content, user)
         database.add(row)
@@ -689,6 +704,9 @@ async def regenerate_card(
             break
     else:
         raise HTTPException(422, "Другой вариант этого сценария недоступен")
+    for key in ("batch_seed", "batch_position"):
+        if key in row.template_snapshot:
+            content["template_snapshot"][key] = row.template_snapshot[key]
     await _render_content(content, database)
     row.name = content["name"]
     row.generation_seed = seed
@@ -794,6 +812,76 @@ async def confirm_instance(
     row.status = "CONFIRMED"
     await database.commit()
     return await read_instance(instance_id, user, database)
+
+
+@session_router.post("/{session_id}/scenario-instances/confirm-batch")
+async def confirm_batch(
+    session_id: int,
+    data: BatchConfirmInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Confirm and enqueue a reviewed set as one database transaction."""
+    session = await _load_session(database, session_id, for_update=True)
+    _editable(session, user)
+    ids = data.instance_ids
+    if len(ids) != len(set(ids)) or any(item <= 0 for item in ids):
+        raise HTTPException(422, "Укажите уникальные карточки набора")
+    if (data.training_run_id is None) == (data.training_group_id is None):
+        raise HTTPException(422, "Выберите общий пул или одно АРМ")
+    if data.training_run_id is not None and data.training_run_id not in {
+        run.id for run in session.runs if run.queue_mode == QueueMode.INDIVIDUAL_QUEUE
+    }:
+        raise HTTPException(422, "АРМ не принадлежит индивидуальной очереди занятия")
+    if data.training_group_id is not None and data.training_group_id not in {
+        group.id
+        for group in session.groups
+        if group.queue_mode == QueueMode.SHARED_QUEUE
+        and any(run.group_id == group.id for run in session.runs)
+    }:
+        raise HTTPException(422, "Группа не принадлежит общей очереди занятия")
+    rows = (
+        await database.scalars(
+            select(ScenarioInstance)
+            .where(ScenarioInstance.id.in_(ids))
+            .options(selectinload(ScenarioInstance.events))
+            .with_for_update()
+        )
+    ).all()
+    by_id = {row.id: row for row in rows}
+    if len(by_id) != len(ids) or any(row.training_session_id != session_id for row in rows):
+        raise HTTPException(404, "Карточка набора не найдена в занятии")
+    if len({row.scenario_template_id for row in rows}) != 1:
+        raise HTTPException(422, "Карточки набора должны относиться к одному сценарию")
+    queued = {item.scenario_instance_id for item in session.queue_items}
+    for row in rows:
+        if row.status != "DRAFT" or row.id in queued:
+            raise HTTPException(409, "Набор уже утверждён или добавлен в очередь")
+        if not row.initial_state_snapshot.get("render", {}).get("rendered_text") or any(
+            event.event_type == "RESPONSE_MESSAGE"
+            and not event.payload_snapshot.get("render", {}).get("rendered_text")
+            for event in row.events
+        ):
+            raise HTTPException(409, "Сначала подготовьте все тексты набора")
+    items = []
+    for instance_id in ids:
+        row = by_id[instance_id]
+        row.status = "CONFIRMED"
+        item = _new_item(
+            session,
+            data.training_run_id,
+            row.name[:200],
+            incident_snapshot(row),
+            group_id=data.training_group_id,
+        )
+        item.scenario_instance_id = row.id
+        item.approved = True
+        items.append(item)
+    _invalidate_readiness(session)
+    await database.flush()
+    result = {"count": len(items), "queue_item_ids": [item.id for item in items]}
+    await database.commit()
+    return result
 
 
 @instance_router.get("")

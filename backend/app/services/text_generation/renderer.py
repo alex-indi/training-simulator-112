@@ -23,8 +23,8 @@ class TextGenerationTask(StrEnum):
 
 
 PROMPT_VERSIONS = {
-    TextGenerationTask.INCIDENT_REPORT: "incident_report_v1",
-    TextGenerationTask.RESPONSE_MESSAGE: "response_message_v1",
+    TextGenerationTask.INCIDENT_REPORT: "incident_operator_entry_v2",
+    TextGenerationTask.RESPONSE_MESSAGE: "response_crew_message_v2",
 }
 
 
@@ -95,7 +95,14 @@ class TemplateTextGenerationProvider:
     async def generate(self, request: TextGenerationRequest, prompt: str) -> TextGenerationResult:
         facts = request.facts
         if request.task == TextGenerationTask.INCIDENT_REPORT:
-            parts = [facts.get("description"), facts.get("caller_text")]
+            variant = facts.get("variant_facts") or {}
+            if variant:
+                parts = [
+                    f"{variant['observation']} на {variant['floor']} этаже школы, "
+                    f"{variant['room']}; {variant['casualties']}"
+                ]
+            else:
+                parts = [facts.get("description"), facts.get("caller_text")]
         else:
             parts = [facts.get("description") or facts.get("title")]
         text = "\n".join(str(value).strip() for value in parts if value and str(value).strip())
@@ -109,13 +116,13 @@ class TemplateTextGenerationProvider:
 
 def prompt_for(task: TextGenerationTask) -> str:
     return (
-        "Оформи только переданные факты естественным русским языком для оперативного обмена. "
-        "Не добавляй обстоятельств, людей, адресов, служб или состояний. "
-        "Верни только текст сообщения."
+        "Напиши короткое сообщение бригады для оперативного чата, как рабочую запись. "
+        "Сохрани все переданные факты и числа. Не добавляй людей, адресов, служб, "
+        "состояний или действий. Без канцелярита и пояснений. Верни только сообщение."
         if task == TextGenerationTask.RESPONSE_MESSAGE
-        else "Оформи только переданные факты как русскоязычное сообщение о происшествии. "
-        "Не добавляй обстоятельств, людей, адресов, служб или состояний. "
-        "Верни только текст карточки."
+        else "Напиши короткую оперативную запись для карточки диспетчера ДДС. "
+        "Сохрани все переданные факты и числа. Не добавляй обстоятельств, людей, "
+        "адресов, служб или состояний. Без пресс-релиза и пояснений. Верни только запись."
     )
 
 

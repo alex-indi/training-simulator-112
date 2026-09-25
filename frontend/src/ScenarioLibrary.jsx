@@ -5,6 +5,22 @@ import { difficultyLabels, renderOriginLabels } from './uiLabels.js'
 
 const options = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
+function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
+  const [text, setText] = useState(event.render?.rendered_text || '')
+  useEffect(() => setText(event.render?.rendered_text || ''), [event.render?.rendered_text])
+  const path = `/api/scenario-instances/${instanceId}/events/${event.id}`
+  return <div>
+    <label>{event.payload_snapshot.target_service_name || 'Служба'}
+      <textarea value={text} onChange={(change) => setText(change.target.value)} />
+    </label>
+    <small>{renderOriginLabels[event.render?.render_origin] || 'Текст подготовлен'}</small>
+    <div className={styles.actions}>
+      <button type="button" disabled={busy || !text.trim() || text === event.render?.rendered_text} onClick={() => onChange(`${path}/message`, options('PATCH', { text }))}>Сохранить сообщение</button>
+      <button type="button" disabled={busy} onClick={() => onChange(`${path}/rerender`, { method: 'POST' })}>Перегенерировать сообщение</button>
+    </div>
+  </div>
+}
+
 export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
@@ -41,8 +57,10 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
       .then((instances) => {
         if (!active) return
         const drafts = instances.filter((item) => item.scenario_template_id === chosen.id && item.status === 'DRAFT')
-        setCards(drafts)
-        setSelectedId(drafts[0]?.id || null)
+        const latestBatch = drafts.at(-1)?.template_snapshot?.batch_seed
+        const currentBatch = drafts.filter((item) => item.template_snapshot?.batch_seed === latestBatch)
+        setCards(currentBatch)
+        setSelectedId(currentBatch[0]?.id || null)
       }).catch((cause) => { if (active) setError(cause.message) })
     return () => { active = false }
   }, [api, chosen?.id, selectedSessionId])
@@ -67,7 +85,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
     try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false) }
   }
   const updateCard = (updated) => setCards((current) => current.map((item) => item.id === updated.id ? updated : item))
-  const hasManualEdits = cards.some((card) => card.initial_state_snapshot.render?.render_origin === 'MANUAL')
+  const hasManualEdits = cards.some((card) => card.initial_state_snapshot.render?.render_origin === 'MANUAL'
+    || card.events.some((event) => event.render?.render_origin === 'MANUAL'))
   const confirmOverwrite = () => !hasManualEdits || window.confirm('В наборе есть правки преподавателя. Заменить эти тексты?')
 
   const createBatch = () => perform(async () => {
@@ -96,10 +115,13 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
     if (!confirmOverwrite()) return
     perform(async () => {
       for (const card of cards) {
-        const updated = await api(`/api/scenario-instances/${card.id}/rerender-initial-message`, { method: 'POST' })
+        let updated = await api(`/api/scenario-instances/${card.id}/rerender-initial-message`, { method: 'POST' })
+        for (const event of card.events.filter((item) => item.event_type === 'RESPONSE_MESSAGE')) {
+          updated = await api(`/api/scenario-instances/${card.id}/events/${event.id}/rerender`, { method: 'POST' })
+        }
         updateCard(updated)
       }
-      setNotice('Тексты карточек обновлены; факты сохранены.')
+      setNotice('Тексты карточек и сообщений служб обновлены; факты сохранены.')
     })
   }
   const exclude = () => perform(async () => {
@@ -109,13 +131,10 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
   })
   const approve = () => perform(async () => {
     const [kind, id] = target.split(':')
-    for (const card of cards) {
-      await api(`/api/scenario-instances/${card.id}/confirm`, { method: 'POST' })
-      await api(`/api/scenario-instances/${card.id}/materialize`, options('POST', {
-        [kind === 'group' ? 'training_group_id' : 'training_run_id']: Number(id),
-      }))
-    }
-    await api(`/api/training/sessions/${selectedSessionId}/queue/approve`, { method: 'POST' })
+    await api(`/api/training/sessions/${selectedSessionId}/scenario-instances/confirm-batch`, options('POST', {
+      instance_ids: cards.map((card) => card.id),
+      [kind === 'group' ? 'training_group_id' : 'training_run_id']: Number(id),
+    }))
     setCards([])
     setChosen(null)
     setNotice('Набор утверждён и добавлен в занятие.')
@@ -155,7 +174,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
                 <button type="button" disabled={busy} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/rerender-initial-message`, { method: 'POST' })}>Перегенерировать текст</button>
                 <button type="button" disabled={busy} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/regenerate-card`, { method: 'POST' })}>Перегенерировать карточку</button>
                 <button type="button" disabled={busy} onClick={exclude}>Исключить из набора</button></div>
-              <h4>Работа служб</h4>{selected.events.filter((event) => event.event_type === 'RESPONSE_MESSAGE').map((event) => <p key={event.id}>{event.payload_snapshot.target_service_name || 'Служба'}: {event.render?.rendered_text}</p>)}
+              <h4>Работа служб</h4>{selected.events.filter((event) => event.event_type === 'RESPONSE_MESSAGE').map((event) => <ResponseMessageEditor key={event.id} event={event} instanceId={selected.id} busy={busy} onChange={changeCard} />)}
             </section>}</div>
           <section className={styles.panel}><h3>Утверждение набора</h3><label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <div className={styles.actions}><button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button><button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button><button type="button" disabled={busy || !target} onClick={approve}>Утвердить набор и добавить в занятие</button></div>

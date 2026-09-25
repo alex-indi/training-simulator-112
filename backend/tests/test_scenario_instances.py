@@ -379,6 +379,10 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 }) == 5
                 assert cards[0]["object_snapshot"]["id"] != cards[1]["object_snapshot"]["id"]
                 assert all(card["training_session_id"] == session.id for card in cards)
+                assert [
+                    card["template_snapshot"]["batch_position"] for card in cards
+                ] == [1, 2, 3, 4, 5]
+                assert all(card["template_snapshot"]["batch_seed"] == 43 for card in cards)
                 first_card = f"/api/scenario-instances/{cards[0]['id']}"
                 rerendered = await client.post(f"{first_card}/rerender-initial-message")
                 assert rerendered.status_code == 200, rerendered.text
@@ -395,6 +399,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     cards[0]["object_snapshot"]["id"],
                     cards[0]["initial_state_snapshot"]["variant_facts"],
                 )
+                assert regenerated.json()["template_snapshot"]["batch_seed"] == 43
                 second_card = f"/api/scenario-instances/{cards[1]['id']}"
                 assert (await client.delete(second_card)).status_code == 204
                 assert (await client.get(second_card)).status_code == 404
