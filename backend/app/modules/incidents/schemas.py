@@ -111,6 +111,7 @@ class IncidentRead(BaseModel):
 
     id: int
     training_session_id: int
+    scenario_instance_id: int | None = None
     training_run_id: int | None
     training_group_id: int | None = None
     claimed_by_training_run_id: int | None = None

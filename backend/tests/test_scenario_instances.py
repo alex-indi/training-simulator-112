@@ -11,6 +11,7 @@ from test_scenario_library import AsyncAdapter
 
 from app.db.base import Base
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import UserGroup  # noqa: F401
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incident_classifier.models import (
@@ -155,7 +156,16 @@ def test_generation_snapshot_permissions_and_session_attachment():
                     title="Заявитель",
                     description="Сообщил о дыме",
                     source_type="CALLER",
-                )
+                ),
+                ScenarioEventTemplate(
+                    sequence_number=1,
+                    offset_seconds=60,
+                    event_type="RESPONSE_MESSAGE",
+                    title="Доклад группы",
+                    description="Прибыли",
+                    source_type="RESPONSE_UNIT",
+                    target_service_id=service.id,
+                ),
             ],
             services=[ScenarioTemplateService(service_id=service.id, source="CLASSIFIER")],
             expected_actions=[
@@ -222,6 +232,11 @@ def test_generation_snapshot_permissions_and_session_attachment():
                 assert instance["service_snapshot"][0]["official_name"] == "Пожарная охрана"
                 assert instance["assessment_criteria_snapshot"][0]["weight"] == 3
                 assert instance["events"][0]["description"] == "Сообщил о дыме"
+                assert instance["events"][1]["payload_snapshot"]["target_service_id"] == service.id
+                assert (
+                    instance["events"][1]["payload_snapshot"]["target_service_name"]
+                    == "Пожарная охрана"
+                )
                 repeated = await client.post(f"{path}/instances", json=payload)
                 assert repeated.json()["object_snapshot"] == instance["object_snapshot"]
                 assert (

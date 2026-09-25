@@ -47,6 +47,14 @@ def incident_snapshot(instance: ScenarioInstance) -> dict:
         key: classifier.get(key)
         for key in ("source_code", "source_reference", "incident_group", "final_incident_type")
     }
+    snapshot["scenario_services"] = [
+        {
+            "service_id": service["service_id"],
+            "name": service["official_name"],
+        }
+        for service in instance.service_snapshot
+        if "service_id" in service
+    ]
     return snapshot
 
 
@@ -116,13 +124,19 @@ async def release_due_events(
         )
         assignment = None
         if row.event_type == "RESPONSE_MESSAGE":
+            target_service_id = row.payload_snapshot.get("target_service_id")
+            if target_service_id is None:
+                continue
             assignment = await database.scalar(
                 select(ResponseAssignment)
-                .where(ResponseAssignment.incident_id == incident.id)
-                .order_by(ResponseAssignment.id)
-                .limit(1)
+                .where(
+                    ResponseAssignment.incident_id == incident.id,
+                    ResponseAssignment.dispatch_service_id == target_service_id,
+                )
             )
-        if row.event_type != "SYSTEM_EVENT" and assignment is None:
+            if assignment is None:
+                continue
+        if row.event_type not in {"SYSTEM_EVENT", "RESPONSE_MESSAGE"}:
             database.add(
                 ScenarioEvent(
                     incident_id=incident.id,

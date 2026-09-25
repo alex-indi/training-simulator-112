@@ -60,6 +60,7 @@ def _assignment_read(assignment: ResponseAssignment) -> ResponseAssignmentRead:
         id=assignment.id,
         incident_id=assignment.incident_id,
         response_unit=_unit_read(assignment.response_unit),
+        dispatch_service_id=assignment.dispatch_service_id,
         training_run_id=assignment.training_run_id,
         state=assignment.state,
         assigned_at=assignment.assigned_at,
@@ -353,12 +354,32 @@ async def assign_response_unit(
     if existing is not None:
         raise HTTPException(status_code=409, detail="Группа уже назначена на эту карточку")
 
+    if incident.scenario_instance_id is not None:
+        available_services = {
+            service.get("service_id")
+            for service in incident.source_snapshot.get("scenario_services", [])
+        }
+        if payload.dispatch_service_id not in available_services:
+            raise HTTPException(status_code=422, detail="Выберите службу из сценария")
+    elif payload.dispatch_service_id is not None:
+        raise HTTPException(status_code=422, detail="Служба доступна только для сценарной карточки")
+    if payload.dispatch_service_id is not None:
+        service_assignment = await database.scalar(
+            select(ResponseAssignment.id).where(
+                ResponseAssignment.incident_id == incident.id,
+                ResponseAssignment.dispatch_service_id == payload.dispatch_service_id,
+            )
+        )
+        if service_assignment is not None:
+            raise HTTPException(status_code=409, detail="Службе уже назначена группа")
+
     assignment = create_assignment(
         incident_id=incident.id,
         training_run_id=incident.training_run_id,
         response_unit=unit,
         actor_user_id=current_user.id,
     )
+    assignment.dispatch_service_id = payload.dispatch_service_id
     database.add(assignment)
     try:
         await database.commit()

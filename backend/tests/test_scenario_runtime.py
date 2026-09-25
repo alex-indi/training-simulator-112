@@ -12,6 +12,7 @@ from test_scenario_library import AsyncAdapter
 
 from app.db.base import Base
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import UserGroup  # noqa: F401
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentAction

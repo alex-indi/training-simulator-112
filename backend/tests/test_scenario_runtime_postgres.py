@@ -12,9 +12,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import UserGroup  # noqa: F401
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
-from app.modules.incident_classifier.models import IncidentClassifierRule
+from app.modules.incident_classifier.models import DispatchService, IncidentClassifierRule
 from app.modules.incidents.models import DDSResponseStatus, Incident, IncidentAction
 from app.modules.response.models import ResponseAssignment, ResponseMessage, ResponseUnit
 from app.modules.scenario_library.instance_models import (
@@ -62,7 +63,10 @@ def test_postgres_materialization_concurrency_delivery_and_event_clock():
                 final_incident_type="Пожар в школе",
                 source_reference=f"TEST:{unique}",
             )
-            database.add_all([instructor, trainee, rule])
+            service = DispatchService(
+                official_name="Пожарная охрана", source_reference=f"TEST:{unique}"
+            )
+            database.add_all([instructor, trainee, rule, service])
             await database.flush()
             template = ScenarioTemplate(
                 name="Пожар в школе",
@@ -98,7 +102,9 @@ def test_postgres_materialization_concurrency_delivery_and_event_clock():
                 status="CONFIRMED",
                 classifier_snapshot={"final_incident_type": "Пожар в школе", "features": []},
                 object_snapshot={"name": "Школа №1", "address": "Исходный адрес"},
-                service_snapshot=[],
+                service_snapshot=[
+                    {"service_id": service.id, "official_name": service.official_name}
+                ],
                 initial_state_snapshot={"title": "Дым", "description": "Первый звонок"},
                 expected_actions_snapshot=[{"action": "ACCEPT"}],
                 assessment_criteria_snapshot=[],
@@ -129,7 +135,10 @@ def test_postgres_materialization_concurrency_delivery_and_event_clock():
                         title="Группа",
                         description="Прибыли к месту",
                         source_type="RESPONSE_UNIT",
-                        payload_snapshot={"description": "Прибыли к месту"},
+                        payload_snapshot={
+                            "description": "Прибыли к месту",
+                            "target_service_id": service.id,
+                        },
                     ),
                 ],
             )
@@ -199,6 +208,7 @@ def test_postgres_materialization_concurrency_delivery_and_event_clock():
                         incident_id=incident.id,
                         response_unit_id=unit.id,
                         training_run_id=run_id,
+                        dispatch_service_id=service.id,
                     )
                 )
                 await database.commit()

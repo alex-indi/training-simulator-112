@@ -107,6 +107,9 @@ class ScenarioEventTemplate(Base):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
     source_type: Mapped[str] = mapped_column(String(40), default="SYSTEM", server_default="SYSTEM")
+    target_service_id: Mapped[int | None] = mapped_column(
+        ForeignKey("dispatch_services.id", ondelete="RESTRICT"), index=True
+    )
     template: Mapped[ScenarioTemplate] = relationship(back_populates="events")
 
 

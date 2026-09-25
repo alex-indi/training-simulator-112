@@ -36,6 +36,7 @@ class ResponseUnitRead(BaseModel):
 
 class ResponseAssignmentCreate(BaseModel):
     response_unit_id: int = Field(gt=0)
+    dispatch_service_id: int | None = Field(default=None, gt=0)
 
 
 class ResponseScenarioEventCreate(BaseModel):
@@ -64,6 +65,7 @@ class ResponseAssignmentRead(BaseModel):
     id: int
     incident_id: int
     response_unit: ResponseUnitRead
+    dispatch_service_id: int | None
     training_run_id: int
     state: ResponseAssignmentState
     assigned_at: datetime

@@ -59,6 +59,7 @@ class EventInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str = ""
     source_type: str = "SYSTEM"
+    target_service_id: int | None = Field(default=None, gt=0)
 
 
 class ServiceInput(BaseModel):
@@ -173,6 +174,7 @@ def serialize(row: ScenarioTemplate) -> dict:
                 "title": event.title,
                 "description": event.description,
                 "source_type": event.source_type,
+                "target_service_id": event.target_service_id,
             }
             for event in row.events
         ],
@@ -275,6 +277,10 @@ async def validate_references(database: AsyncSession, data: TemplateInput) -> No
         action.expected_service_id
         for action in data.expected_actions
         if action.expected_service_id is not None
+    } | {
+        event.target_service_id
+        for event in data.events
+        if event.target_service_id is not None
     }:
         if await database.get(DispatchService, service_id) is None:
             raise HTTPException(status_code=422, detail=f"Неизвестная служба {service_id}")
@@ -300,6 +306,12 @@ async def validate_references(database: AsyncSession, data: TemplateInput) -> No
                 )
     if any(event.event_type not in EVENT_TYPES for event in data.events):
         raise HTTPException(status_code=422, detail="Неизвестный тип события")
+    service_ids = {service.service_id for service in data.services}
+    if any(
+        event.target_service_id is not None and event.target_service_id not in service_ids
+        for event in data.events
+    ):
+        raise HTTPException(status_code=422, detail="Служба сообщения должна входить в сценарий")
     if len(data.events) > 100:
         raise HTTPException(status_code=422, detail="Слишком много событий")
 
@@ -371,6 +383,13 @@ async def readiness_errors(database: AsyncSession, row: ScenarioTemplate) -> lis
         errors.append("Временная шкала событий должна идти по порядку")
     if row.events and row.events[0].event_type != "INITIAL_REPORT":
         errors.append("Первым должно идти начальное событие")
+    service_ids = {service.service_id for service in row.services}
+    for event in row.events:
+        if event.event_type == "RESPONSE_MESSAGE":
+            if event.target_service_id is None:
+                errors.append("Выберите службу для сообщения группы")
+            elif event.target_service_id not in service_ids:
+                errors.append("Служба сообщения должна входить в сценарий")
     return errors
 
 
