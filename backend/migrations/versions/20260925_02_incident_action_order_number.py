@@ -1,7 +1,7 @@
 """Store manually entered order numbers on incident status actions.
 
-Revision ID: 20260924_16
-Revises: 20260924_15
+Revision ID: 20260925_02
+Revises: 20260925_01
 """
 
 from collections.abc import Sequence
@@ -9,8 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260924_16"
-down_revision: str | None = "20260924_15"
+revision: str = "20260925_02"
+down_revision: str | None = "20260925_01"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

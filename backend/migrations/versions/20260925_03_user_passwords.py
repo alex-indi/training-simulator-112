@@ -1,7 +1,7 @@
 """Add password hashes for administrator-managed users.
 
-Revision ID: 20260924_17
-Revises: 20260924_16
+Revision ID: 20260925_03
+Revises: 20260925_02
 """
 
 from collections.abc import Sequence
@@ -9,8 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260924_17"
-down_revision: str | None = "20260924_16"
+revision: str = "20260925_03"
+down_revision: str | None = "20260925_02"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
