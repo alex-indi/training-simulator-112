@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 
 import styles from './AdminWorkspace.module.css'
+import ScenarioLibrary from './ScenarioLibrary.jsx'
 
 const sections = [
   ['overview', 'Обзор'],
@@ -32,6 +33,104 @@ const endpoints = {
 }
 
 const roleLabels = { ADMIN: 'Администратор', INSTRUCTOR: 'Преподаватель', TRAINEE: 'Диспетчер ДДС' }
+const aiHealthLabels = {
+  AVAILABLE: 'подключение установлено',
+  UNAVAILABLE: 'провайдер недоступен',
+  MISCONFIGURED: 'настройки неполные',
+}
+const importStatusLabels = { SUCCESS: 'Успешно', FAILED: 'Ошибка', RUNNING: 'Выполняется' }
+const objectAttributeLabels = {
+  administrative_areas: 'Административные округа',
+  category: 'Категория',
+  close_flag: 'Состояние',
+  department: 'Ведомство',
+  districts: 'Районы',
+  entrance_count: 'Количество входов',
+  full_name: 'Полное название',
+  has_underground_area: 'Есть подземная зона',
+  institution_subtype: 'Подтип учреждения',
+  institution_type: 'Тип учреждения',
+  lines: 'Линии метро',
+  needs_review: 'Требует проверки',
+  source_address_id: 'ID адреса в источнике',
+  source_entrance_ids: 'ID входов в источнике',
+  source_row_id: 'ID записи в источнике',
+  station_name: 'Станция',
+  working_hours: 'Режим работы',
+}
+const weekdayOrder = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
+const auditActionLabels = {
+  AI_CONFIG_UPDATED: 'Настройки AI изменены',
+  OBJECT_TYPE_CREATED: 'Тип объекта создан',
+  OBJECT_TYPE_UPDATED: 'Тип объекта изменён',
+  SCENARIO_ARCHIVED: 'Сценарий отправлен в архив',
+  SCENARIO_RESTORED: 'Сценарий восстановлен',
+  USER_ACTIVATION_CHANGED: 'Статус пользователя изменён',
+  USER_CREATED: 'Пользователь создан',
+  USER_CREDENTIALS_CHANGED: 'Учётные данные пользователя изменены',
+  USER_DELETED: 'Пользователь удалён',
+  USER_GROUP_CREATED: 'Учебная группа создана',
+  USER_GROUP_DELETED: 'Учебная группа удалена',
+  USER_GROUP_UPDATED: 'Учебная группа изменена',
+  USER_ROLE_CHANGED: 'Роль пользователя изменена',
+  USER_UPDATED: 'Пользователь изменён',
+  CLASSIFIER_RULE_UPDATED: 'Правило классификатора изменено',
+  REGISTRY_OBJECT_UPDATED: 'Объект Москвы изменён',
+  SERVICE_UPDATED: 'Служба 112 изменена',
+  DATA_IMPORTED: 'Данные импортированы',
+}
+const auditEntityLabels = {
+  AI_PROVIDER: 'Настройки AI',
+  OBJECT_TYPE: 'Тип объекта',
+  TRAINING_SCENARIO: 'Учебный сценарий',
+  SCENARIO_TEMPLATE: 'Шаблон сценария',
+  USER: 'Пользователь',
+  USER_GROUP: 'Учебная группа',
+  CITY_OBJECT: 'Объект Москвы',
+  CLASSIFIER_RULE: 'Правило классификатора',
+  DISPATCH_SERVICE: 'Служба 112',
+  REFERENCE_DATA: 'Справочные данные',
+}
+const auditFieldLabels = {
+  api_key_configured: 'API key настроен',
+  archived: 'В архиве',
+  base_url: 'Адрес API',
+  code: 'Код',
+  description: 'Описание',
+  enabled: 'Модель активирована',
+  full_name: 'ФИО',
+  group_id: 'Учебная группа',
+  is_active: 'Активен',
+  model: 'Модель',
+  name: 'Название',
+  parent_id: 'Родительский тип',
+  provider: 'Провайдер',
+  role: 'Роль',
+  timeout_seconds: 'Таймаут, сек.',
+  username: 'Логин',
+  address: 'Адрес',
+  administrative_area: 'Округ',
+  attributes: 'Дополнительные сведения',
+  dataset_id: 'Набор данных',
+  district: 'Район',
+  external_id: 'External ID',
+  feature_1: 'Признак 1',
+  feature_2: 'Признак 2',
+  feature_3: 'Признак 3',
+  incident_group: 'Группа происшествий',
+  incident_type: 'Тип происшествия',
+  latitude: 'Широта',
+  level: 'Уровень',
+  longitude: 'Долгота',
+  object_type_id: 'Тип объекта',
+  official_name: 'Официальное название',
+  organization: 'Организация',
+  related_service_ids: 'Связанные службы',
+  related_services: 'Связанные службы',
+  source: 'Источник',
+  source_code: 'Код классификатора',
+  tags: 'Теги',
+}
 const userGroups = [
   ['ADMIN', 'Администраторы'],
   ['INSTRUCTOR', 'Преподаватели'],
@@ -40,6 +139,71 @@ const userGroups = [
 
 function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value)) : '—'
+}
+
+function renderObjectAttributeValue(code, value) {
+  if (code === 'working_hours' && Array.isArray(value)) {
+    const rows = value
+      .filter((item) => item && !item.is_deleted)
+      .sort((left, right) => weekdayOrder.indexOf(left.DayWeek) - weekdayOrder.indexOf(right.DayWeek))
+    return rows.length ? <ul className={styles.workingHours}>{rows.map((item) => <li key={`${item.DayWeek}:${item.global_id || item.WorkHours}`}><span>{item.DayWeek}</span><b>{item.WorkHours || '—'}</b></li>)}</ul> : '—'
+  }
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '—'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${String(item)}`).join('; ')
+  return value === null || value === undefined || value === '' ? '—' : String(value)
+}
+
+function formatAuditValue(field, value) {
+  if (value === null || value === undefined || value === '') return 'Не задано'
+  if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
+  if (field === 'role') return roleLabels[value] || value
+  if (field === 'provider') return value === 'OPENAI_COMPATIBLE' ? 'OpenAI-compatible' : value
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => formatAuditValue(field, item)).join('; ') : 'Не задано'
+  }
+  if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${objectAttributeLabels[key] || key}: ${formatAuditValue(key, item)}`).join('; ')
+  return String(value)
+}
+
+function auditChanges(item) {
+  const before = item.before || {}
+  const after = item.after || {}
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((key) => key !== 'updated_at')
+  return keys
+    .filter((key) => !item.before || !item.after || JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+    .map((key) => ({
+      key,
+      label: auditFieldLabels[key] || key.replaceAll('_', ' '),
+      before: item.before ? formatAuditValue(key, before[key]) : null,
+      after: item.after ? formatAuditValue(key, after[key]) : null,
+    }))
+}
+
+function objectAttributeToInput(code, value) {
+  if (code === 'working_hours' && Array.isArray(value)) {
+    return value.filter((item) => item && !item.is_deleted)
+      .sort((left, right) => weekdayOrder.indexOf(left.DayWeek) - weekdayOrder.indexOf(right.DayWeek))
+      .map((item) => `${item.DayWeek}: ${item.WorkHours || ''}`).join('\n')
+  }
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${item}`).join('\n')
+  return value === null || value === undefined ? '' : String(value)
+}
+
+function parseObjectAttributeInput(code, value, original) {
+  if (code === 'working_hours') {
+    return value.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
+      const [day, ...hours] = line.split(':')
+      return { DayWeek: day.trim(), WorkHours: hours.join(':').trim(), is_deleted: 0 }
+    })
+  }
+  if (Array.isArray(original)) return value.split(',').map((item) => item.trim()).filter(Boolean)
+  if (typeof original === 'boolean') return value === 'true'
+  if (typeof original === 'number') return Number(value)
+  return value
 }
 
 function Empty({ children = 'Данных пока нет' }) {
@@ -52,8 +216,16 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [section, setSection] = useState('overview')
   const [data, setData] = useState(null)
   const [quality, setQuality] = useState([])
+  const [importCatalog, setImportCatalog] = useState([])
+  const [importModal, setImportModal] = useState(null)
   const [usage, setUsage] = useState([])
   const [aiHealth, setAiHealth] = useState(null)
+  const [aiDraft, setAiDraft] = useState({ provider: 'OPENAI', model: '', base_url: 'https://api.openai.com/v1', enabled: false, timeout_seconds: 30 })
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [aiModels, setAiModels] = useState([])
+  const [aiModelsLoading, setAiModelsLoading] = useState(false)
+  const [aiModelsError, setAiModelsError] = useState('')
+  const [aiModelsRefresh, setAiModelsRefresh] = useState(0)
   const [traineeGroups, setTraineeGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -67,8 +239,14 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [groupDraft, setGroupDraft] = useState({ name: '', description: '' })
   const [groupModal, setGroupModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
+  const [catalogModal, setCatalogModal] = useState(null)
+  const [catalogDraft, setCatalogDraft] = useState({})
+  const [catalogServiceSearch, setCatalogServiceSearch] = useState('')
+  const [serviceOptions, setServiceOptions] = useState([])
+  const [objectTypeOptions, setObjectTypeOptions] = useState([])
   const [typeDraft, setTypeDraft] = useState({ code: '', name: '', description: '', parent_id: '' })
   const loadRequestId = useRef(0)
+  const aiModelsRequestId = useRef(0)
   const username = user.username
 
   const load = useCallback(async () => {
@@ -90,11 +268,22 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         setTraineeGroups(nextGroups)
       }
       if (section === 'imports') {
-        const nextQuality = await requestJson('/api/admin/data-quality', username)
+        const [nextQuality, nextCatalog] = await Promise.all([
+          requestJson('/api/admin/data-quality', username),
+          requestJson('/api/admin/imports/catalog', username),
+        ])
         if (requestId !== loadRequestId.current) return
         setQuality(nextQuality)
+        setImportCatalog(nextCatalog)
       }
       if (section === 'ai') {
+        setAiDraft({
+          provider: payload.provider.toUpperCase(),
+          model: payload.model,
+          base_url: payload.base_url,
+          enabled: payload.enabled,
+          timeout_seconds: payload.timeout_seconds,
+        })
         const nextUsage = await requestJson('/api/admin/ai/usage', username)
         if (requestId !== loadRequestId.current) return
         setUsage(nextUsage)
@@ -110,6 +299,43 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (section !== 'ai' || !data) return undefined
+    const requestId = ++aiModelsRequestId.current
+    if (aiDraft.provider === 'TEMPLATE') {
+      setAiModels([])
+      setAiModelsError('')
+      setAiModelsLoading(false)
+      return undefined
+    }
+    try { new URL(aiDraft.base_url) } catch {
+      setAiModels([])
+      setAiModelsError('Укажите корректный Base URL')
+      setAiModelsLoading(false)
+      return undefined
+    }
+    const timer = window.setTimeout(async () => {
+      setAiModelsLoading(true)
+      setAiModelsError('')
+      try {
+        const result = await requestJson('/api/admin/ai/models', username, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: aiDraft.provider, base_url: aiDraft.base_url, ...(aiApiKey ? { api_key: aiApiKey } : {}) }),
+        })
+        if (requestId === aiModelsRequestId.current) setAiModels(result.models)
+      } catch (cause) {
+        if (requestId === aiModelsRequestId.current) {
+          setAiModels([])
+          setAiModelsError(cause.message)
+        }
+      } finally {
+        if (requestId === aiModelsRequestId.current) setAiModelsLoading(false)
+      }
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [aiApiKey, aiDraft.base_url, aiDraft.provider, aiModelsRefresh, data, requestJson, section, username])
+
   const mutate = async (path, options, message) => {
     setLoading(true)
     setError('')
@@ -121,6 +347,91 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     } catch (cause) {
       setError(cause.message)
       return false
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openCatalogEditor = async (kind, item) => {
+    setError('')
+    setCatalogServiceSearch('')
+    if (kind === 'classifier' && !serviceOptions.length) {
+      try { setServiceOptions(await requestJson('/api/admin/services?limit=500', username)) }
+      catch (cause) { setError(cause.message); return }
+    }
+    if ((kind === 'object' || kind === 'type') && !objectTypeOptions.length) {
+      try { setObjectTypeOptions(await requestJson('/api/admin/object-types', username)) }
+      catch (cause) { setError(cause.message); return }
+    }
+    if (kind === 'classifier') setCatalogDraft({
+      source_code: item.source_code || '',
+      incident_group: item.incident_group,
+      incident_type: item.incident_type,
+      feature_names: [item.feature_1 || '', item.feature_2 || '', item.feature_3 || ''],
+      related_service_ids: item.related_service_ids || [],
+    })
+    if (kind === 'service') setCatalogDraft({
+      official_name: item.official_name,
+      level: item.level || '',
+      organization: item.organization || '',
+      external_id: item.external_id,
+    })
+    if (kind === 'object') setCatalogDraft({
+      official_name: item.official_name,
+      object_type_id: item.object_type_id,
+      address: item.address || '',
+      district: item.district || '',
+      administrative_area: item.administrative_area || '',
+      latitude: item.latitude ?? '',
+      longitude: item.longitude ?? '',
+      tags: item.tags.join(', '),
+      attributes: Object.fromEntries(Object.entries(item.attributes).map(([code, value]) => [code, objectAttributeToInput(code, value)])),
+      source: item.source,
+      dataset_id: item.dataset_id,
+      external_id: item.external_id,
+    })
+    if (kind === 'type') setCatalogDraft({
+      code: item.code,
+      name: item.name,
+      description: item.description || '',
+      parent_id: item.parent_id ?? '',
+      is_active: item.is_active,
+    })
+    setCatalogModal({ kind, item })
+  }
+
+  const submitCatalog = async (event) => {
+    event.preventDefault()
+    const { kind, item } = catalogModal
+    const paths = {
+      classifier: `/api/admin/classifier/${item.id}`,
+      service: `/api/admin/services/${item.id}`,
+      object: `/api/admin/object-registry/${item.id}`,
+      type: `/api/admin/object-types/${item.id}`,
+    }
+    let payload = { ...catalogDraft }
+    if (kind === 'classifier') payload.feature_names = payload.feature_names.map((value) => value.trim()).filter(Boolean)
+    if (kind === 'object') payload = {
+      ...payload,
+      object_type_id: Number(payload.object_type_id),
+      latitude: payload.latitude === '' ? null : Number(payload.latitude),
+      longitude: payload.longitude === '' ? null : Number(payload.longitude),
+      tags: payload.tags.split(',').map((value) => value.trim()).filter(Boolean),
+      attributes: Object.fromEntries(Object.entries(payload.attributes).map(([code, value]) => [code, parseObjectAttributeInput(code, value, item.attributes[code])])),
+    }
+    if (kind === 'type') payload.parent_id = payload.parent_id === '' ? null : Number(payload.parent_id)
+    setLoading(true)
+    setError('')
+    try {
+      const updated = await requestJson(paths[kind], username, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      if (kind === 'object') setSelectedObject(updated)
+      setCatalogModal(null)
+      await load()
+      setNotice('Изменения сохранены и записаны в аудит.')
+    } catch (cause) {
+      setError(cause.message)
     } finally {
       setLoading(false)
     }
@@ -225,18 +536,83 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     setTypeDraft({ code: '', name: '', description: '', parent_id: '' })
   }
 
-  const updateAI = (event) => {
+  const updateAI = async (event) => {
     event.preventDefault()
     setAiHealth(null)
-    const form = new FormData(event.currentTarget)
-    return mutate('/api/admin/ai', {
+    const saved = await mutate('/api/admin/ai', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: form.get('provider'), model: form.get('model'), base_url: form.get('base_url'),
-        enabled: form.get('enabled') === 'on', timeout_seconds: Number(form.get('timeout_seconds')),
-      }),
-    }, 'Конфигурация AI сохранена; секрет не передавался через API.')
+      body: JSON.stringify({ ...aiDraft, timeout_seconds: Number(aiDraft.timeout_seconds), ...(aiApiKey ? { api_key: aiApiKey } : {}) }),
+    }, 'Конфигурация AI сохранена; значение ключа не возвращается через API.')
+    if (saved) setAiApiKey('')
+  }
+
+  const exportDataset = async (source) => {
+    setLoading(true)
+    setError('')
+    try {
+      const payload = await requestJson(`/api/admin/imports/${source}/export`, username)
+      const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `ut112-${source}-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setNotice('Экспорт подготовлен и загружен в JSON-файл.')
+    } catch (cause) {
+      setError(cause.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectImportFile = async (source, event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setError('')
+    if (file.size > 25 * 1024 * 1024) {
+      setError('Размер JSON-файла не должен превышать 25 МБ.')
+      return
+    }
+    try {
+      const payload = JSON.parse(await file.text())
+      if (payload.format !== 'ut112-admin-data' || payload.version !== 1) {
+        throw new Error('Неподдерживаемый формат файла. Используйте JSON, экспортированный из тренажёра.')
+      }
+      if (payload.dataset !== source) {
+        throw new Error('Файл относится к другому разделу данных.')
+      }
+      const recordCount = Array.isArray(payload.records)
+        ? payload.records.length
+        : payload.records?.objects?.length
+      if (!Number.isInteger(recordCount)) throw new Error('В файле отсутствует список записей.')
+      setImportModal({ source, fileName: file.name, payload, recordCount })
+    } catch (cause) {
+      setError(cause instanceof SyntaxError ? 'Не удалось прочитать JSON-файл.' : cause.message)
+    }
+  }
+
+  const confirmImport = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const result = await requestJson(`/api/admin/imports/${importModal.source}/run`, username, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...importModal.payload, file_name: importModal.fileName }),
+      })
+      setImportModal(null)
+      await load()
+      setNotice(`Импорт завершён: создано ${result.created}, обновлено ${result.updated}, без изменений ${result.skipped}.`)
+    } catch (cause) {
+      setError(cause.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const filteredRows = useMemo(() => Array.isArray(data) ? data : [], [data])
@@ -281,7 +657,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <article className={data.data_quality_open ? styles.warningCard : ''}><span>Требуют проверки</span><strong>{data.data_quality_open}</strong></article>
       </div>
       <div className={styles.statusGrid}>
-        <article><h3>AI Renderer</h3><b>{data.ai.enabled ? '● включён' : '○ выключен'}</b><p>{data.ai.provider} · {data.ai.model || 'модель не выбрана'}</p><small>API key: {data.ai.api_key_configured ? 'configured' : 'not configured'}</small></article>
+        <article><h3>AI-модель</h3><b>{data.ai.enabled ? '● активирована' : '○ не активирована'}</b><p>{data.ai.provider} · {data.ai.model || 'модель не выбрана'}</p><small>API key: {data.ai.api_key_configured ? 'настроен' : 'не настроен'}</small></article>
         <article><h3>Последний импорт</h3>{data.last_import ? <><b>{data.last_import.source} · {data.last_import.status}</b><p>{formatDateTime(data.last_import.finished_at || data.last_import.started_at)}</p></> : <p>Импорты ещё не запускались</p>}</article>
       </div>
     </>
@@ -350,14 +726,57 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </section>
   </div>
 
-  const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span></div>)}</div>
+  const renderCatalogModal = () => catalogModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={`${styles.modal} ${styles.catalogModal}`} role="dialog" aria-modal="true" aria-labelledby="catalog-modal-title">
+      <header className={styles.modalHeader}><div><small>Редактирование справочника</small><h2 id="catalog-modal-title">{{ classifier: 'Правило классификатора', service: 'Служба 112', object: 'Объект Москвы', type: 'Тип объекта' }[catalogModal.kind]}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setCatalogModal(null)}>×</button></header>
+      <form className={`${styles.modalForm} ${styles.catalogForm}`} onSubmit={submitCatalog}>
+        {catalogModal.kind === 'classifier' && <>
+          <label><span>Группа происшествий</span><input required value={catalogDraft.incident_group} onChange={(event) => setCatalogDraft({ ...catalogDraft, incident_group: event.target.value })} /></label>
+          <label><span>Тип происшествия</span><input required value={catalogDraft.incident_type} onChange={(event) => setCatalogDraft({ ...catalogDraft, incident_type: event.target.value })} /></label>
+          <label><span>Код</span><input value={catalogDraft.source_code} onChange={(event) => setCatalogDraft({ ...catalogDraft, source_code: event.target.value })} /></label>
+          {catalogDraft.feature_names.map((value, index) => <label key={index}><span>Признак {index + 1}</span><input value={value} onChange={(event) => setCatalogDraft({ ...catalogDraft, feature_names: catalogDraft.feature_names.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /></label>)}
+          <fieldset className={`${styles.servicePicker} ${styles.fullField}`}><legend>Связанные службы</legend><input aria-label="Поиск службы для правила" placeholder="Найти службу…" value={catalogServiceSearch} onChange={(event) => setCatalogServiceSearch(event.target.value)} /><div>{serviceOptions.filter((service) => service.official_name.toLowerCase().includes(catalogServiceSearch.trim().toLowerCase())).map((service) => <label key={service.id}><input type="checkbox" checked={catalogDraft.related_service_ids.includes(service.id)} onChange={(event) => setCatalogDraft({ ...catalogDraft, related_service_ids: event.target.checked ? [...catalogDraft.related_service_ids, service.id] : catalogDraft.related_service_ids.filter((id) => id !== service.id) })} /><span>{service.official_name}</span></label>)}</div><small>Выбрано служб: {catalogDraft.related_service_ids.length}</small></fieldset>
+        </>}
+        {catalogModal.kind === 'service' && <>
+          <label className={styles.fullField}><span>Официальное название</span><textarea required rows="3" value={catalogDraft.official_name} onChange={(event) => setCatalogDraft({ ...catalogDraft, official_name: event.target.value })} /></label>
+          <label><span>Уровень</span><input value={catalogDraft.level} onChange={(event) => setCatalogDraft({ ...catalogDraft, level: event.target.value })} /></label>
+          <label><span>External ID</span><input required value={catalogDraft.external_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, external_id: event.target.value })} /></label>
+          <label className={styles.fullField}><span>Организация</span><textarea rows="3" value={catalogDraft.organization} onChange={(event) => setCatalogDraft({ ...catalogDraft, organization: event.target.value })} /></label>
+        </>}
+        {catalogModal.kind === 'object' && <>
+          <label className={styles.fullField}><span>Название</span><textarea required rows="2" value={catalogDraft.official_name} onChange={(event) => setCatalogDraft({ ...catalogDraft, official_name: event.target.value })} /></label>
+          <label><span>Тип объекта</span><select required value={catalogDraft.object_type_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, object_type_id: event.target.value })}>{objectTypeOptions.map((type) => <option key={type.id} value={type.id}>{type.name} ({type.code})</option>)}</select></label>
+          <label><span>Район</span><input value={catalogDraft.district} onChange={(event) => setCatalogDraft({ ...catalogDraft, district: event.target.value })} /></label>
+          <label className={styles.fullField}><span>Адрес</span><textarea rows="3" value={catalogDraft.address} onChange={(event) => setCatalogDraft({ ...catalogDraft, address: event.target.value })} /></label>
+          <label><span>Округ</span><input value={catalogDraft.administrative_area} onChange={(event) => setCatalogDraft({ ...catalogDraft, administrative_area: event.target.value })} /></label>
+          <label><span>Теги через запятую</span><input value={catalogDraft.tags} onChange={(event) => setCatalogDraft({ ...catalogDraft, tags: event.target.value })} /></label>
+          <label><span>Широта</span><input type="number" step="any" value={catalogDraft.latitude} onChange={(event) => setCatalogDraft({ ...catalogDraft, latitude: event.target.value })} /></label>
+          <label><span>Долгота</span><input type="number" step="any" value={catalogDraft.longitude} onChange={(event) => setCatalogDraft({ ...catalogDraft, longitude: event.target.value })} /></label>
+          <label><span>Источник</span><input required value={catalogDraft.source} onChange={(event) => setCatalogDraft({ ...catalogDraft, source: event.target.value })} /></label>
+          <label><span>Набор данных</span><input value={catalogDraft.dataset_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, dataset_id: event.target.value })} /></label>
+          <label className={styles.fullField}><span>External ID</span><input required value={catalogDraft.external_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, external_id: event.target.value })} /></label>
+          <fieldset className={`${styles.attributeEditor} ${styles.fullField}`}><legend>Дополнительные сведения</legend>{Object.entries(catalogDraft.attributes).map(([code, value]) => <label key={code}><span>{objectAttributeLabels[code] || code.replaceAll('_', ' ')}</span>{typeof catalogModal.item.attributes[code] === 'boolean' ? <select value={value} onChange={(event) => setCatalogDraft({ ...catalogDraft, attributes: { ...catalogDraft.attributes, [code]: event.target.value } })}><option value="true">Да</option><option value="false">Нет</option></select> : <textarea rows={code === 'working_hours' ? 7 : 2} value={value} onChange={(event) => setCatalogDraft({ ...catalogDraft, attributes: { ...catalogDraft.attributes, [code]: event.target.value } })} />}</label>)}</fieldset>
+        </>}
+        {catalogModal.kind === 'type' && <>
+          <label><span>Код</span><input required pattern="[A-Z0-9_]+" value={catalogDraft.code} onChange={(event) => setCatalogDraft({ ...catalogDraft, code: event.target.value.toUpperCase() })} /></label>
+          <label><span>Название</span><input required value={catalogDraft.name} onChange={(event) => setCatalogDraft({ ...catalogDraft, name: event.target.value })} /></label>
+          <label className={styles.fullField}><span>Описание</span><textarea rows="4" value={catalogDraft.description} onChange={(event) => setCatalogDraft({ ...catalogDraft, description: event.target.value })} /></label>
+          <label><span>Родительский тип</span><select value={catalogDraft.parent_id} onChange={(event) => setCatalogDraft({ ...catalogDraft, parent_id: event.target.value })}><option value="">Без родителя</option>{objectTypeOptions.filter((type) => type.id !== catalogModal.item.id).map((type) => <option key={type.id} value={type.id}>{type.name} ({type.code})</option>)}</select></label>
+          <label className={styles.checkbox}><input type="checkbox" checked={catalogDraft.is_active} onChange={(event) => setCatalogDraft({ ...catalogDraft, is_active: event.target.checked })} /> Активен</label>
+        </>}
+        <footer className={`${styles.modalActions} ${styles.fullField}`}><button type="button" onClick={() => setCatalogModal(null)}>Отмена</button><button className={styles.primaryButton} disabled={loading}>Сохранить изменения</button></footer>
+      </form>
+    </section>
+  </div>
 
-  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Источник</span><span>Статус</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><code>{item.source}</code><span>{item.data_status}</span></div>)}</div>
+  const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span><button onClick={() => openCatalogEditor('classifier', item)}>Изменить</button></div>)}</div>
+
+  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={`${styles.table} ${styles.serviceTable}`}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Статус</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><span>{item.data_status}</span><button onClick={() => openCatalogEditor('service', item)}>Изменить</button></div>)}</div>
 
   const renderObjects = () => (
     <div className={styles.split}>
       {!filteredRows.length ? <Empty>Object Registry ещё не импортирован</Empty> : <div className={styles.objectList}>{filteredRows.map((item) => <button key={item.id} onClick={() => setSelectedObject(item)}><strong>{item.official_name}</strong><span>{item.address}</span><small>{item.district || 'район не указан'} · {item.dataset_id}</small></button>)}</div>}
-      <aside className={styles.details}>{selectedObject ? <><h3>{selectedObject.official_name}</h3><dl><dt>Адрес</dt><dd>{selectedObject.address}</dd><dt>Район / округ</dt><dd>{selectedObject.district || '—'} / {selectedObject.administrative_area || '—'}</dd><dt>Координаты</dt><dd>{selectedObject.latitude ?? '—'}, {selectedObject.longitude ?? '—'}</dd><dt>Источник</dt><dd>{selectedObject.source}</dd><dt>Dataset / external ID</dt><dd>{selectedObject.dataset_id} / {selectedObject.external_id}</dd><dt>Теги</dt><dd>{selectedObject.tags.join(', ') || '—'}</dd><dt>Атрибуты</dt><dd><pre>{JSON.stringify(selectedObject.attributes, null, 2)}</pre></dd></dl></> : <p>Выберите объект для просмотра полной карточки.</p>}</aside>
+      <aside className={styles.details}>{selectedObject ? <><div className={styles.detailsHeader}><h3>{selectedObject.official_name}</h3><button onClick={() => openCatalogEditor('object', selectedObject)}>Изменить</button></div><dl><dt>Адрес</dt><dd>{selectedObject.address}</dd><dt>Район / округ</dt><dd>{selectedObject.district || '—'} / {selectedObject.administrative_area || '—'}</dd><dt>Координаты</dt><dd>{selectedObject.latitude ?? '—'}, {selectedObject.longitude ?? '—'}</dd><dt>Источник</dt><dd>{selectedObject.source}</dd><dt>Dataset / external ID</dt><dd>{selectedObject.dataset_id} / {selectedObject.external_id}</dd><dt>Теги</dt><dd>{selectedObject.tags.join(', ') || '—'}</dd></dl><section className={styles.attributes}><h4>Дополнительные сведения</h4><dl>{Object.entries(selectedObject.attributes).map(([code, value]) => <div key={code}><dt>{objectAttributeLabels[code] || code.replaceAll('_', ' ')}</dt><dd>{renderObjectAttributeValue(code, value)}</dd></div>)}</dl></section></> : <p>Выберите объект для просмотра полной карточки.</p>}</aside>
     </div>
   )
 
@@ -370,28 +789,52 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <select value={typeDraft.parent_id} onChange={(event) => setTypeDraft({ ...typeDraft, parent_id: event.target.value })}><option value="">Без родителя</option>{filteredRows.filter((item) => item.is_active).map((item) => <option key={item.id} value={item.id}>{item.code}</option>)}</select>
         <button disabled={loading}>Создать тип</button>
       </form>
-      {!filteredRows.length ? <Empty>Типы объектов ещё не настроены</Empty> : <div className={styles.typeTree}>{filteredRows.map((item) => <article key={item.id} className={!item.is_active ? styles.inactive : ''}><code>{item.code}</code><strong>{item.name}</strong><span>{item.parent_id ? `parent #${item.parent_id}` : 'корневой тип'}</span><p>{item.description || 'Без описания'}</p><button onClick={() => mutate(`/api/admin/object-types/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !item.is_active }) }, 'Тип объекта обновлён.')}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></article>)}</div>}
+      {!filteredRows.length ? <Empty>Типы объектов ещё не настроены</Empty> : <div className={styles.typeTree}>{filteredRows.map((item) => <article key={item.id} className={!item.is_active ? styles.inactive : ''}><code>{item.code}</code><strong>{item.name}</strong><span>{item.parent_id ? `parent #${item.parent_id}` : 'корневой тип'}</span><p>{item.description || 'Без описания'}</p><div className={styles.rowActions}><button onClick={() => openCatalogEditor('type', item)}>Изменить</button><button onClick={() => mutate(`/api/admin/object-types/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !item.is_active }) }, 'Тип объекта обновлён.')}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button></div></article>)}</div>}
     </>
   )
 
   const renderImports = () => (
     <>
-      <div className={styles.importSources}>{['src-006', 'services-112', 'object-registry'].map((source) => <article key={source}><strong>{source}</strong><p>Идемпотентный source adapter</p><button disabled={loading} onClick={() => mutate(`/api/admin/imports/${source}/run`, { method: 'POST' }, 'Импорт запущен.')}>Обновить данные</button></article>)}</div>
+      <section className={styles.exchangeIntro}>
+        <div><h2>Обмен справочными данными</h2><p>Выгрузите актуальный набор в JSON, отредактируйте его при необходимости и загрузите обратно. Перед записью файл будет проверен.</p></div>
+        <span>Версия формата: 1</span>
+      </section>
+      <div className={styles.importSources}>{importCatalog.map((item) => <article className={styles.importSourceCard} key={item.key}>
+        <header><div><small>{item.key}</small><h3>{item.name}</h3></div><strong>{item.record_count}</strong></header>
+        <p>{item.description}</p>
+        <div className={styles.importLastRun}>{item.last_import ? <><span className={item.last_import.status === 'FAILED' ? styles.failedStatus : styles.successStatus}>{importStatusLabels[item.last_import.status] || item.last_import.status}</span><time>{formatDateTime(item.last_import.finished_at || item.last_import.started_at)}</time></> : <span>Импортов ещё не было</span>}</div>
+        <footer><button type="button" disabled={loading} onClick={() => exportDataset(item.key)}>Экспортировать JSON</button><label className={styles.fileButton}>Импортировать JSON<input type="file" accept="application/json,.json" disabled={loading} onChange={(event) => selectImportFile(item.key, event)} /></label></footer>
+      </article>)}</div>
       <h3>История импорта</h3>
-      {!filteredRows.length ? <Empty>История импорта пуста</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{item.source}</b><span>{item.status}</span><span>{formatDateTime(item.started_at)}</span><small>получено {item.received} · создано {item.created} · обновлено {item.updated} · review {item.review} · ошибок {item.errors}</small></article>)}</div>}
+      {!filteredRows.length ? <Empty>История импорта пуста</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{importCatalog.find((entry) => entry.key === item.source)?.name || item.source}</b><span className={item.status === 'FAILED' ? styles.failedStatus : styles.successStatus}>{importStatusLabels[item.status] || item.status}</span><span>{formatDateTime(item.finished_at || item.started_at)}</span><small>получено {item.received} · создано {item.created} · обновлено {item.updated} · без изменений {item.skipped} · ошибок {item.errors}{item.details?.file_name ? ` · файл ${item.details.file_name}` : ''}</small>{item.details?.error && <p className={styles.importError}>{item.details.error}</p>}</article>)}</div>}
       <h3>Требуют проверки</h3>
       {!quality.length ? <Empty>Открытых замечаний к данным нет</Empty> : <div className={styles.compactList}>{quality.map((item) => <article key={item.id}><b>{item.kind}</b><span>{item.entity_type} {item.entity_id || ''}</span><p>{item.reason}</p></article>)}</div>}
     </>
   )
 
+  const renderImportModal = () => importModal && <div className={styles.modalBackdrop} role="presentation">
+    <section className={styles.confirmModal} role="dialog" aria-modal="true" aria-labelledby="import-title">
+      <header className={styles.modalHeader}><div><small>Проверка перед загрузкой</small><h2 id="import-title">Импортировать данные?</h2></div><button type="button" aria-label="Закрыть" onClick={() => setImportModal(null)}>×</button></header>
+      <div className={styles.confirmContent}>
+        <dl className={styles.importSummary}><div><dt>Раздел</dt><dd>{importCatalog.find((item) => item.key === importModal.source)?.name || importModal.source}</dd></div><div><dt>Файл</dt><dd>{importModal.fileName}</dd></div><div><dt>Записей</dt><dd>{importModal.recordCount}</dd></div></dl>
+        <p>Существующие записи с теми же идентификаторами будут обновлены, новые — добавлены. Записи, которых нет в файле, удаляться не будут.</p>
+        <div className={styles.modalActions}><button type="button" disabled={loading} onClick={() => setImportModal(null)}>Отмена</button><button type="button" className={styles.primaryButton} disabled={loading} onClick={confirmImport}>{loading ? 'Импорт…' : 'Импортировать'}</button></div>
+      </div>
+    </section>
+  </div>
+
   const renderAI = () => data && (
     <>
-      <form className={styles.settingsForm} onSubmit={updateAI} key={data.updated_at || 'initial'}>
-        <label>Provider<select name="provider" defaultValue={data.provider.toUpperCase()}><option value="OPENAI">OpenAI</option><option value="OPENAI_COMPATIBLE">OpenAI-compatible</option><option value="TEMPLATE">Шаблонный режим</option></select></label>
-        <label>Model<input name="model" defaultValue={data.model} /></label>
-        <label>Base URL<input name="base_url" type="url" defaultValue={data.base_url} /></label>
-        <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" defaultValue={data.timeout_seconds} /></label>
-        <label className={styles.checkbox}><input name="enabled" type="checkbox" defaultChecked={data.enabled} /> Renderer включён</label>
+      <form className={styles.settingsForm} onSubmit={updateAI}>
+        <label>Provider<select name="provider" value={aiDraft.provider} onChange={(event) => {
+          const provider = event.target.value
+          setAiDraft({ ...aiDraft, provider, model: '', base_url: provider === 'OPENAI' ? 'https://api.openai.com/v1' : aiDraft.base_url })
+        }}><option value="OPENAI">OpenAI</option><option value="OPENAI_COMPATIBLE">OpenAI-compatible</option><option value="TEMPLATE">Шаблонный режим</option></select></label>
+        <div className={styles.modelField}><span>Model</span><div className={styles.modelSelector}><select name="model" required={aiDraft.enabled && aiDraft.provider !== 'TEMPLATE'} disabled={aiDraft.provider === 'TEMPLATE'} value={aiDraft.model} onChange={(event) => setAiDraft({ ...aiDraft, model: event.target.value })}><option value="">{aiModelsLoading ? 'Загрузка моделей…' : aiDraft.provider === 'TEMPLATE' ? 'Не используется' : 'Выберите модель'}</option>{[...new Set([aiDraft.model, ...aiModels].filter(Boolean))].map((model) => <option key={model} value={model}>{model}</option>)}</select><button type="button" disabled={loading || aiModelsLoading || aiDraft.provider === 'TEMPLATE'} onClick={() => setAiModelsRefresh((value) => value + 1)}>Обновить список</button></div>{aiModelsError ? <small className={styles.fieldError}>{aiModelsError}</small> : !aiModelsLoading && aiDraft.provider !== 'TEMPLATE' && <small>Доступно моделей: {aiModels.length}</small>}</div>
+        <label>Base URL<input name="base_url" type="url" disabled={aiDraft.provider === 'OPENAI'} value={aiDraft.base_url} onChange={(event) => setAiDraft({ ...aiDraft, base_url: event.target.value })} /></label>
+        <label>API key<input name="api_key" type="password" autoComplete="new-password" placeholder={data.api_key_configured ? 'Ключ сохранён — введите новый для замены' : 'Введите ключ провайдера'} value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} /></label>
+        <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" value={aiDraft.timeout_seconds} onChange={(event) => setAiDraft({ ...aiDraft, timeout_seconds: event.target.value })} /></label>
+        <label className={styles.checkbox}><input name="enabled" type="checkbox" checked={aiDraft.enabled} onChange={(event) => setAiDraft({ ...aiDraft, enabled: event.target.checked })} /> Активировать модель</label>
         <div className={styles.secretState}>API key: <b>{data.api_key_configured ? '● configured' : '○ not configured'}</b>. Значение ключа никогда не возвращается.</div>
         <button disabled={loading}>Применить</button>
         <button disabled={loading} type="button" onClick={async () => {
@@ -401,14 +844,17 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
           finally { setLoading(false) }
         }}>Проверить подключение</button>
       </form>
-      {aiHealth && <p role="status">Провайдер: {aiHealth.provider} · модель: {aiHealth.model || '—'} · состояние: {aiHealth.status}</p>}
+      {aiHealth && <p role="status">Провайдер: {aiHealth.provider} · модель: {aiHealth.model || '—'} · состояние: {aiHealthLabels[aiHealth.status] || aiHealth.status}{aiHealth.available && !aiHealth.renderer_enabled ? ' · Модель не активирована' : ''}</p>}
       <h3>Usage за 31 день</h3>{!usage.length ? <Empty>Статистика usage не поступала</Empty> : <div className={styles.compactList}>{usage.map((item) => <article key={item.day}><b>{item.day}</b><span>запросов {item.requests}</span><small>input {item.input_tokens} · output {item.output_tokens} · fallback {item.fallbacks} · ошибок {item.errors}</small></article>)}</div>}
     </>
   )
 
-  const renderScenarios = () => !filteredRows.length ? <Empty>Сценарии отсутствуют</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><b>{item.title}</b><span>{item.author}</span><span>{item.status}</span><small>{item.incident_type || 'тип не указан'} · {item.difficulty || 'сложность не указана'} · {formatDateTime(item.updated_at)}</small><button onClick={() => mutate(`/api/admin/scenarios/${item.id}/${item.archived ? 'restore' : 'archive'}`, { method: 'POST' }, 'Состояние сценария изменено.')}>{item.archived ? 'Восстановить' : 'Архивировать'}</button></article>)}</div>
+  const renderScenarios = () => <ScenarioLibrary user={user} requestJson={requestJson} embedded />
 
-  const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.compactList}>{filteredRows.map((item) => <article key={item.id}><time>{formatDateTime(item.created_at)}</time><b>{item.action}</b><span>admin #{item.admin_id} · {item.entity_type} {item.entity_id || ''}</span><details><summary>Изменения</summary><pre>{JSON.stringify({ before: item.before, after: item.after }, null, 2)}</pre></details></article>)}</div>
+  const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.auditList}>{filteredRows.map((item) => {
+    const changes = auditChanges(item)
+    return <article className={styles.auditItem} key={item.id}><header><time>{formatDateTime(item.created_at)}</time><div><b>{auditActionLabels[item.action] || item.action}</b><span>{auditEntityLabels[item.entity_type] || item.entity_type} №{item.entity_id || '—'} · администратор №{item.admin_id}</span></div></header><details><summary>Подробнее</summary>{changes.length ? <dl className={styles.auditChanges}>{changes.map((change) => <div key={change.key}><dt>{change.label}</dt><dd>{change.before !== null && <span><small>Было</small>{change.before}</span>}{change.before !== null && change.after !== null && <i aria-hidden="true">→</i>}{change.after !== null && <span><small>{change.before !== null ? 'Стало' : 'Значение'}</small>{change.after}</span>}</dd></div>)}</dl> : <p className={styles.muted}>Параметры сохранены без изменения отображаемых значений.</p>}</details></article>
+  })}</div>
 
   const renderSystem = () => data && <div className={styles.systemGrid}><article><h3>Состояние</h3>{Object.entries(data.services).map(([name, value]) => <p key={name}><span>{name}</span><b className={value === 'OK' ? styles.ok : styles.muted}>● {value}</b></p>)}</article><article><h3>Версия приложения</h3><dl><dt>Version</dt><dd>{data.version}</dd><dt>Git commit</dt><dd>{data.git_commit}</dd><dt>DB revision</dt><dd>{data.db_revision}</dd><dt>Environment</dt><dd>{data.environment}</dd><dt>Server time</dt><dd>{formatDateTime(data.server_time)}</dd></dl></article></div>
 
@@ -419,11 +865,11 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     <main className={styles.shell}>
       <aside className={styles.sidebar}>
         <header><span>112</span><div><small>Учебный тренажёр</small><strong>Администрирование</strong></div></header>
-        <nav>{sections.map(([key, label]) => <button className={section === key ? styles.active : ''} key={key} onClick={() => { loadRequestId.current += 1; setData(null); setQuality([]); setUsage([]); setSection(key); setSearch(''); setFilters({}); setSelectedObject(null) }}>{label}</button>)}</nav>
+        <nav>{sections.map(([key, label]) => <button className={section === key ? styles.active : ''} key={key} onClick={() => { loadRequestId.current += 1; setData(null); setQuality([]); setImportCatalog([]); setImportModal(null); setUsage([]); setSection(key); setSearch(''); setFilters({}); setSelectedObject(null) }}>{label}</button>)}</nav>
         <footer><select value={user.username} onChange={selectUser}>{users.map((item) => <option key={item.id} value={item.username}>{item.full_name}</option>)}</select><small>{roleLabels[user.role]}</small><button type="button" onClick={onLogout}>Выйти</button></footer>
       </aside>
       <section className={styles.workspace}>
-        <header className={styles.topbar}><div><small>Системное управление</small><h1>{title}</h1></div>{['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}<button onClick={load}>Обновить</button></header>
+        <header className={styles.topbar}><div><small>Системное управление</small><h1>{title}</h1></div>{['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}{section !== 'scenarios' && <button onClick={load}>Обновить</button>}</header>
         {error && <div className={styles.error} role="alert">{error}</div>}
         {notice && <div className={styles.notice}>{notice}</div>}
         <div className={styles.content} aria-busy={loading}>{loading && data === null ? <div className={styles.loading}>Загрузка…</div> : content()}</div>
@@ -431,6 +877,8 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
       {renderUserModal()}
       {renderGroupModal()}
       {renderDeleteModal()}
+      {renderCatalogModal()}
+      {renderImportModal()}
     </main>
   )
 }

@@ -10,25 +10,35 @@ from app.main import app
 from app.modules.admin.dependencies import require_admin
 from app.modules.admin.models import AdminAudit, AIProviderConfig, UserGroup
 from app.modules.admin.router import (
+    _deserialize_object_attribute,
+    _serialize_object_attribute,
     ai_health,
+    ai_models,
     create_user,
     create_user_group,
     delete_user,
     delete_user_group,
     get_ai,
+    update_ai,
     update_user,
     update_user_group,
 )
 from app.modules.admin.schemas import (
     AIConfigRead,
+    AIConfigUpdate,
+    AIModelCatalogRequest,
+    ObjectTypeRead,
     UserCreate,
     UserGroupCreate,
     UserGroupUpdate,
     UserUpdate,
 )
+from app.modules.admin.secrets import decrypt_api_key
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.passwords import verify_password
 from app.modules.object_registry.models import ObjectType
+from app.services.text_generation.providers import OpenAICompatibleProvider
+from app.services.text_generation.renderer import ProviderHealth
 
 
 def make_user(user_id: int, role: UserRole, *, active: bool = True) -> User:
@@ -39,6 +49,42 @@ def make_user(user_id: int, role: UserRole, *, active: bool = True) -> User:
         role=role,
         is_active=active,
     )
+
+
+@pytest.mark.parametrize(
+    ("value_type", "value", "expected"),
+    [
+        (
+            "json",
+            '[{"DayWeek": "понедельник", "WorkHours": "круглосуточно"}]',
+            [{"DayWeek": "понедельник", "WorkHours": "круглосуточно"}],
+        ),
+        ("boolean", "true", True),
+        ("integer", "3", 3),
+        ("text", "Больница", "Больница"),
+    ],
+)
+def test_object_attribute_values_are_deserialized_by_declared_type(
+    value_type: str, value: str, expected: object
+) -> None:
+    attribute = MagicMock(value_type=value_type, value=value)
+
+    assert _deserialize_object_attribute(attribute) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (True, ("true", "boolean")),
+        (3, ("3", "integer")),
+        (["Сокольническая", "Кольцевая"], ('["Сокольническая", "Кольцевая"]', "json")),
+        ("Больница", ("Больница", "text")),
+    ],
+)
+def test_object_attribute_values_are_serialized_with_type(
+    value: object, expected: tuple[str, str]
+) -> None:
+    assert _serialize_object_attribute(value) == expected
 
 
 @pytest.mark.parametrize("role", [UserRole.INSTRUCTOR, UserRole.TRAINEE])
@@ -55,7 +101,13 @@ def test_admin_can_enter_admin_boundary() -> None:
     assert asyncio.run(require_admin(admin)) is admin
 
 
-def test_admin_ai_health_reports_disabled_without_contacting_provider() -> None:
+def test_admin_ai_health_checks_provider_when_renderer_is_disabled(monkeypatch) -> None:
+    async def available(provider) -> ProviderHealth:
+        assert provider.base_url == "http://local.test/v1"
+        assert provider.model == "local-test"
+        return ProviderHealth("AVAILABLE", provider.name, provider.model)
+
+    monkeypatch.setattr(OpenAICompatibleProvider, "healthcheck", available)
     session = AsyncMock()
     session.get.return_value = AIProviderConfig(
         id=1,
@@ -67,10 +119,11 @@ def test_admin_ai_health_reports_disabled_without_contacting_provider() -> None:
     )
     result = asyncio.run(ai_health(session))
     assert result == {
-        "status": "DISABLED",
-        "available": False,
+        "status": "AVAILABLE",
+        "available": True,
         "provider": "openai_compatible",
         "model": "local-test",
+        "renderer_enabled": False,
     }
 
 
@@ -81,6 +134,65 @@ def test_reading_ai_defaults_does_not_create_saved_override() -> None:
     assert config.provider == "OPENAI"
     session.add.assert_not_called()
     session.commit.assert_not_awaited()
+
+
+def test_admin_can_load_models_from_compatible_provider(monkeypatch) -> None:
+    async def fake_list_models(provider: OpenAICompatibleProvider) -> list[str]:
+        assert provider.base_url == "http://local.test/v1"
+        return ["model-a", "model-b"]
+
+    monkeypatch.setattr(OpenAICompatibleProvider, "list_models", fake_list_models)
+    session = AsyncMock()
+    session.get.return_value = None
+    result = asyncio.run(
+        ai_models(
+            AIModelCatalogRequest(
+                provider="OPENAI_COMPATIBLE",
+                base_url="http://local.test/v1",
+            ),
+            session=session,
+        )
+    )
+
+    assert result.models == ["model-a", "model-b"]
+
+
+def test_admin_can_store_write_only_ai_key(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("app.modules.admin.secrets.KEY_PATH", tmp_path / "ai-provider.key")
+    admin = make_user(1, UserRole.ADMIN)
+    config = AIProviderConfig(
+        id=1,
+        provider="OPENAI_COMPATIBLE",
+        model="model-a",
+        base_url="http://local.test/v1",
+        enabled=True,
+        timeout_seconds=30,
+    )
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = config
+
+    result = asyncio.run(
+        update_ai(
+            AIConfigUpdate(
+                provider="OPENAI_COMPATIBLE",
+                model="model-a",
+                base_url="http://local.test/v1",
+                enabled=True,
+                timeout_seconds=30,
+                api_key="provider-secret",
+            ),
+            session=session,
+            admin=admin,
+        )
+    )
+
+    assert result.api_key_configured is True
+    assert "api_key" not in result.model_dump()
+    assert decrypt_api_key(config.api_key_encrypted) == "provider-secret"
+    audit = session.add.call_args.args[0]
+    assert "api_key" not in audit.before
+    assert "api_key" not in audit.after
 
 
 def test_last_active_admin_cannot_be_deactivated() -> None:
@@ -352,4 +464,22 @@ def test_source_driven_catalogues_have_no_create_endpoint() -> None:
     assert set(methods_by_path["/api/admin/classifier"]) == {"get"}
     assert set(methods_by_path["/api/admin/services"]) == {"get"}
     assert set(methods_by_path["/api/admin/object-registry"]) == {"get"}
+    assert set(methods_by_path["/api/admin/classifier/{rule_id}"]) == {"patch"}
+    assert set(methods_by_path["/api/admin/services/{service_id}"]) == {"patch"}
+    assert set(methods_by_path["/api/admin/object-registry/{object_id}"]) == {"patch"}
     assert "object_types" in ObjectType.__tablename__
+
+
+def test_object_type_read_accepts_legacy_null_description() -> None:
+    payload = ObjectTypeRead.model_validate(
+        {
+            "id": 1,
+            "code": "LEGACY_TYPE",
+            "name": "Тип без описания",
+            "description": None,
+            "parent_id": None,
+            "is_active": True,
+        }
+    )
+
+    assert payload.description is None

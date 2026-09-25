@@ -130,7 +130,10 @@ def test_config_factory_and_compatible_http_contract_without_network():
     def respond(request: httpx.Request):
         requests.append(request)
         if request.method == "GET":
-            return httpx.Response(200, json={"data": []})
+            return httpx.Response(
+                200,
+                json={"data": [{"id": "z-model"}, {"id": "A-model"}, {"id": "z-model"}]},
+            )
         return httpx.Response(
             200,
             json={
@@ -154,11 +157,13 @@ def test_config_factory_and_compatible_http_contract_without_network():
         assert result["input_tokens"] == 12 and result["output_tokens"] == 5
         assert result["model"] == "local-test"
         assert (await provider.healthcheck()).status == "AVAILABLE"
+        assert await provider.list_models() == ["A-model", "z-model"]
         assert requests[0].url.path == "/v1/chat/completions"
         sent = json.loads(requests[0].content)
         assert sent["model"] == "local-test" and sent["max_tokens"] == 300
         assert requests[0].headers["authorization"] == "Bearer local-secret"
         assert requests[1].url.path == "/v1/models"
+        assert requests[2].url.path == "/v1/models"
         assert "local-secret" not in json.dumps(result)
 
     asyncio.run(run())
