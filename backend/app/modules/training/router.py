@@ -17,15 +17,18 @@ from app.modules.identity.models import User, UserRole
 from app.modules.scenario_library.instance_models import ScenarioInstance
 from app.modules.training.models import (
     QueueMode,
+    ScenarioQueueItem,
     TrainingGroup,
     TrainingMode,
     TrainingRun,
     TrainingSession,
     TrainingSessionState,
+    TrainingSubgroupMember,
     TrainingTemplate,
 )
 from app.modules.training.schemas import (
     BulkAssignment,
+    GroupMemberRead,
     GroupRead,
     GroupWrite,
     JoinRequest,
@@ -33,6 +36,7 @@ from app.modules.training.schemas import (
     ReadinessRead,
     RunRead,
     SessionSettings,
+    SubgroupWrite,
     TemplateCreate,
     TemplateRead,
     TrainingSessionCreate,
@@ -80,7 +84,8 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         required = (
             math.ceil(item.duration_minutes * 60 / item.delivery_interval_seconds)
             if item.mode == TrainingMode.FLOW
-            and item.duration_minutes and item.delivery_interval_seconds
+            and item.duration_minutes
+            and item.delivery_interval_seconds
             else 1
         )
         if not runs:
@@ -92,25 +97,28 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         for group in item.groups:
             cards = [row for row in masters if row.training_group_id == group.id]
             if len(cards) < required:
-                warnings.append(
-                    f"Группа «{group.name}»: нужно не менее {required} карточек"
-                )
+                warnings.append(f"Группа «{group.name}»: нужно не менее {required} карточек")
             elif any(row.status != "CONFIRMED" for row in cards):
                 warnings.append(f"Группа «{group.name}»: набор не утверждён")
         prepared = len(masters)
         approved = sum(row.status == "CONFIRMED" for row in masters)
         return ReadinessRead(
-            participant_count=len(runs), workstation_count=item.workstation_count,
-            group_count=len(item.groups), profiles_assigned=len(assigned_runs),
-            online_count=online, offline_count=len(runs) - online,
+            participant_count=len(runs),
+            workstation_count=item.workstation_count,
+            group_count=len(item.groups),
+            profiles_assigned=len(assigned_runs),
+            online_count=online,
+            offline_count=len(runs) - online,
             warnings=warnings,
-            can_start=bool(assigned_runs) and bool(item.groups)
+            can_start=bool(assigned_runs)
+            and bool(item.groups)
             and all(
                 sum(row.training_group_id == group.id for row in masters) >= required
                 for group in item.groups
             )
             and prepared == approved,
-            prepared_count=prepared, approved_count=approved,
+            prepared_count=prepared,
+            approved_count=approved,
         )
     if not runs:
         warnings.append("Нет подключённых участников")
@@ -200,6 +208,12 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
 
 def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
     now = datetime.now(UTC)
+    subgroup_user_ids = {
+        membership.user_id
+        for group in item.groups
+        if group.is_subgroup
+        for membership in group.subgroup_memberships
+    }
     return TrainingSessionRead(
         id=item.id,
         title=item.title,
@@ -244,6 +258,36 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
                 difficulty=group.difficulty,
                 queue_mode=group.queue_mode,
                 run_ids=[run.id for run in item.runs if run.group_id == group.id],
+                is_subgroup=bool(group.is_subgroup),
+                members=[
+                    GroupMemberRead(id=user.id, full_name=user.full_name)
+                    for user in (
+                        sorted(
+                            (membership.user for membership in group.subgroup_memberships),
+                            key=lambda user: (user.full_name, user.id),
+                        )
+                        if group.is_subgroup
+                        else sorted(
+                            (
+                                user
+                                for user in (
+                                    group.source_group.members if group.source_group else []
+                                )
+                                if user.role == UserRole.TRAINEE
+                                and user.id not in subgroup_user_ids
+                            ),
+                            key=lambda user: (user.full_name, user.id),
+                        )
+                    )
+                ],
+                member_count=(
+                    len(group.subgroup_memberships)
+                    if group.is_subgroup
+                    else sum(
+                        user.role == UserRole.TRAINEE and user.id not in subgroup_user_ids
+                        for user in (group.source_group.members if group.source_group else [])
+                    )
+                ),
             )
             for group in item.groups
         ],
@@ -260,7 +304,12 @@ async def _load_session(
         .options(
             selectinload(TrainingSession.trainees),
             selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
-            selectinload(TrainingSession.groups),
+            selectinload(TrainingSession.groups)
+            .selectinload(TrainingGroup.source_group)
+            .selectinload(UserGroup.members),
+            selectinload(TrainingSession.groups)
+            .selectinload(TrainingGroup.subgroup_memberships)
+            .selectinload(TrainingSubgroupMember.user),
             selectinload(TrainingSession.master_instances).selectinload(ScenarioInstance.events),
             selectinload(TrainingSession.queue_items),
         )
@@ -391,7 +440,12 @@ async def list_training_sessions(
     statement = select(TrainingSession).where(TrainingSession.is_archived.is_(False)).options(
         selectinload(TrainingSession.trainees),
         selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
-        selectinload(TrainingSession.groups),
+        selectinload(TrainingSession.groups)
+        .selectinload(TrainingGroup.source_group)
+        .selectinload(UserGroup.members),
+        selectinload(TrainingSession.groups)
+        .selectinload(TrainingGroup.subgroup_memberships)
+        .selectinload(TrainingSubgroupMember.user),
         selectinload(TrainingSession.master_instances).selectinload(ScenarioInstance.events),
         selectinload(TrainingSession.queue_items),
     )
@@ -484,9 +538,20 @@ async def join_training_session(
             trainee_id=current_user.id, workstation_number=payload.workstation_number
         )
         group = next(
-            (group for group in item.groups
-             if group.source_user_group_id is not None
-             and group.source_user_group_id == current_user.group_id),
+            (
+                group
+                for group in item.groups
+                if group.is_subgroup
+                and any(member.user_id == current_user.id for member in group.subgroup_memberships)
+            ),
+            None,
+        ) or next(
+            (
+                group
+                for group in item.groups
+                if group.source_user_group_id is not None
+                and group.source_user_group_id == current_user.group_id
+            ),
             None,
         )
         if group is not None:
@@ -540,8 +605,13 @@ async def create_group(
     _editable(item)
     if payload.source_user_group_id is not None:
         source = await database.get(UserGroup, payload.source_user_group_id)
-        if (source is None or source.is_archived or
-            (current_user.role != UserRole.ADMIN and source.created_by_user_id != current_user.id)):
+        if (
+            source is None
+            or source.is_archived
+            or (
+                current_user.role != UserRole.ADMIN and source.created_by_user_id != current_user.id
+            )
+        ):
             raise HTTPException(status_code=404, detail="Постоянная группа не найдена")
         if any(group.source_user_group_id == source.id for group in item.groups):
             raise HTTPException(status_code=409, detail="Группа уже добавлена в занятие")
@@ -549,6 +619,128 @@ async def create_group(
     if any(group.name == payload.name for group in item.groups):
         raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
     item.groups.append(TrainingGroup(**payload.model_dump()))
+    _invalidate_readiness(item)
+    return await _save(database, item)
+
+
+async def _validated_subgroup_users(
+    database: AsyncSession, item: TrainingSession, user_ids: list[int], group_id: int | None = None
+) -> list[User]:
+    if len(user_ids) != len(set(user_ids)):
+        raise HTTPException(422, "Участник указан дважды")
+    selected_sources = {
+        group.source_user_group_id
+        for group in item.groups
+        if group.source_user_group_id is not None
+    }
+    if not selected_sources:
+        raise HTTPException(422, "Сначала выберите постоянные группы для занятия")
+    users = list((await database.scalars(select(User).where(User.id.in_(user_ids)))).all())
+    if len(users) != len(user_ids) or any(
+        user.role != UserRole.TRAINEE or not user.is_active or user.group_id not in selected_sources
+        for user in users
+    ):
+        raise HTTPException(422, "Участник должен состоять в выбранной группе занятия")
+    occupied = {
+        membership.user_id
+        for group in item.groups
+        if group.is_subgroup and group.id != group_id
+        for membership in group.subgroup_memberships
+    }
+    if occupied.intersection(user_ids):
+        raise HTTPException(409, "Пользователь уже назначен в другую подгруппу этого занятия")
+    return users
+
+
+def _assign_run_to_group(run: TrainingRun, group: TrainingGroup | None) -> None:
+    run.group = group
+    run.group_id = group.id if group else None
+    run.dds_profile = (group.dds_profile or "ДДС") if group else "ДДС"
+    run.difficulty = group.difficulty if group else None
+    run.queue_mode = group.queue_mode if group else QueueMode.INDIVIDUAL_QUEUE
+
+
+@router.post("/{training_session_id}/subgroups", response_model=TrainingSessionRead)
+async def create_subgroup(
+    training_session_id: int,
+    payload: SubgroupWrite,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> TrainingSessionRead:
+    item = await _load_session(database, training_session_id, for_update=True)
+    _ensure_session_owner(item, current_user)
+    _editable(item)
+    if any(group.name == payload.name for group in item.groups):
+        raise HTTPException(409, "Группа с таким названием уже существует")
+    users = await _validated_subgroup_users(database, item, payload.member_user_ids)
+    group = TrainingGroup(
+        name=payload.name,
+        is_subgroup=True,
+        difficulty=payload.difficulty,
+        queue_mode=payload.queue_mode,
+    )
+    item.groups.append(group)
+    await database.flush()
+    group.subgroup_memberships = [
+        TrainingSubgroupMember(
+            training_session_id=item.id,
+            user_id=user.id,
+            user=user,
+        )
+        for user in users
+    ]
+    for run in item.runs:
+        if run.trainee_id in payload.member_user_ids:
+            _assign_run_to_group(run, group)
+    _invalidate_readiness(item)
+    return await _save(database, item)
+
+
+@router.put("/{training_session_id}/subgroups/{group_id}", response_model=TrainingSessionRead)
+async def update_subgroup(
+    training_session_id: int,
+    group_id: int,
+    payload: SubgroupWrite,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> TrainingSessionRead:
+    item = await _load_session(database, training_session_id, for_update=True)
+    _ensure_session_owner(item, current_user)
+    _editable(item)
+    group = next(
+        (group for group in item.groups if group.id == group_id and group.is_subgroup), None
+    )
+    if group is None:
+        raise HTTPException(404, "Подгруппа не найдена")
+    if any(other.id != group_id and other.name == payload.name for other in item.groups):
+        raise HTTPException(409, "Группа с таким названием уже существует")
+    users = await _validated_subgroup_users(database, item, payload.member_user_ids, group_id)
+    old_ids = {member.user_id for member in group.subgroup_memberships}
+    new_ids = set(payload.member_user_ids)
+    group.name = payload.name
+    group.difficulty = payload.difficulty
+    group.queue_mode = payload.queue_mode
+    group.subgroup_memberships = [
+        member for member in group.subgroup_memberships if member.user_id in new_ids
+    ] + [
+        TrainingSubgroupMember(training_session_id=item.id, user_id=user.id, user=user)
+        for user in users
+        if user.id not in old_ids
+    ]
+    sources = {
+        source.source_user_group_id: source
+        for source in item.groups
+        if source.source_user_group_id is not None
+    }
+    for run in item.runs:
+        if run.trainee_id in new_ids - old_ids:
+            _assign_run_to_group(run, group)
+        elif run.trainee_id in old_ids - new_ids and run.group_id == group.id:
+            _assign_run_to_group(run, sources.get(run.trainee.group_id))
+        elif run.group_id == group.id:
+            run.dds_profile = group.dds_profile or "ДДС"
+            run.difficulty = group.difficulty
+            run.queue_mode = group.queue_mode
     _invalidate_readiness(item)
     return await _save(database, item)
 
@@ -597,17 +789,63 @@ async def delete_group(
     group = next((group for group in item.groups if group.id == group_id), None)
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
-    if await database.scalar(
-        select(ScenarioInstance.id).where(ScenarioInstance.training_group_id == group_id)
-    ) is not None:
-        raise HTTPException(
-            status_code=409, detail="Сначала исключите подготовленные карточки группы"
+    if group.source_user_group_id is not None:
+        source_user_ids = {user.id for user in group.source_group.members}
+        if any(
+            member.user_id in source_user_ids
+            for subgroup in item.groups
+            if subgroup.is_subgroup
+            for member in subgroup.subgroup_memberships
+        ):
+            raise HTTPException(
+                409, "Нельзя убрать группу: её участники входят в подгруппы занятия"
+            )
+    prepared_cards = list(
+        (
+            await database.scalars(
+                select(ScenarioInstance)
+                .where(ScenarioInstance.training_group_id == group_id)
+                .options(selectinload(ScenarioInstance.events))
+            )
+        ).all()
+    )
+    if prepared_cards and not group.is_subgroup:
+        raise HTTPException(409, "Сначала исключите подготовленные карточки группы")
+    if group.is_subgroup:
+        card_ids = {card.id for card in prepared_cards}
+        queue_items = list(
+            (
+                await database.scalars(
+                    select(ScenarioQueueItem).where(
+                        or_(
+                            ScenarioQueueItem.training_group_id == group_id,
+                            ScenarioQueueItem.scenario_instance_id.in_(card_ids),
+                        )
+                    )
+                )
+            ).all()
         )
+        for queue_item in queue_items:
+            if queue_item in item.queue_items:
+                item.queue_items.remove(queue_item)
+            await database.delete(queue_item)
+        await database.flush()
+        for card in prepared_cards:
+            if card in item.master_instances:
+                item.master_instances.remove(card)
+            await database.delete(card)
+        await database.flush()
     for run in item.runs:
         if run.group_id == group_id:
-            run.group_id = None
-            if run.queue_mode == QueueMode.SHARED_QUEUE:
-                run.queue_mode = QueueMode.INDIVIDUAL_QUEUE
+            source = next(
+                (
+                    candidate
+                    for candidate in item.groups
+                    if candidate.source_user_group_id == run.trainee.group_id
+                ),
+                None,
+            )
+            _assign_run_to_group(run, source if group.is_subgroup else None)
     item.groups.remove(group)
     _invalidate_readiness(item)
     return await _save(database, item)

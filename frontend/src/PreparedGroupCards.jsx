@@ -6,12 +6,11 @@ import styles from './InstructorWorkspace.module.css'
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const factNames = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
 
-export default function PreparedGroupCards({ group, sessionId, instances, editable, api, refresh, onAdd }) {
+export default function PreparedGroupCards({ group, instances, editable, api, refresh, onAdd, onAddSaved }) {
   const [selectedId, setSelectedId] = useState(null)
   const [selectedForRerender, setSelectedForRerender] = useState([])
   const [text, setText] = useState('')
   const [facts, setFacts] = useState({})
-  const [messages, setMessages] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -26,7 +25,6 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
   useEffect(() => {
     setText(selected?.initial_state_snapshot.render?.rendered_text || '')
     setFacts(selected?.initial_state_snapshot.variant_facts || {})
-    setMessages(Object.fromEntries((selected?.events || []).map((event) => [event.id, event.render?.rendered_text || ''])))
   }, [selected])
 
   const perform = async (path, options, success) => {
@@ -49,8 +47,7 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
   const rerenderSelected = async () => {
     const chosen = drafts.filter((item) => selectedForRerender.includes(item.id))
     if (!chosen.length) return
-    if (chosen.some((item) => item.initial_state_snapshot.render?.render_origin === 'MANUAL'
-      || item.events.some((event) => event.render?.render_origin === 'MANUAL'))
+    if (chosen.some((item) => item.initial_state_snapshot.render?.render_origin === 'MANUAL')
       && !window.confirm('Выбранные карточки содержат ручные правки текста. Заменить их?')) return
     setBusy(true)
     setError('')
@@ -58,9 +55,6 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
     try {
       for (const card of chosen) {
         await api(`/api/scenario-instances/${card.id}/rerender-initial-message`, { method: 'POST' })
-        for (const event of card.events.filter((item) => item.event_type === 'RESPONSE_MESSAGE')) {
-          await api(`/api/scenario-instances/${card.id}/events/${event.id}/rerender`, { method: 'POST' })
-        }
       }
       await refresh()
       setSelectedForRerender([])
@@ -74,20 +68,20 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
 
   return <article className={styles.card}>
     <h3>{group.name}</h3>
-    <p>{group.difficulty || 'Без сложности'} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</p>
-    <p>Подготовлено {instances.length} карточек · {drafts.length ? `ожидают утверждения: ${drafts.length}` : instances.length ? 'набор утверждён' : 'набор пуст'}</p>
+    <p>{group.member_count} человек · {group.difficulty || 'Без сложности'} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</p>
+    <p>Подготовлено {instances.length} карточек</p>
     {Object.entries(counts).map(([name, count]) => <p key={name}>{name} · {count}</p>)}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     {editable && <div className={styles.actions}>
-      <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Добавить карточки по сценарию</button>
+      <button type="button" disabled={busy} onClick={() => onAddSaved(group.id)}>+ Добавить готовые карточки</button>
+      <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Сформировать из шаблона</button>
       <button type="button" disabled={busy || !selectedForRerender.some((id) => drafts.some((item) => item.id === id))} onClick={rerenderSelected}>Перегенерировать тексты выбранных</button>
-      <button type="button" disabled={busy || !instances.length || !drafts.length} onClick={() => perform(`/api/training/sessions/${sessionId}/groups/${group.id}/cards/approve`, { method: 'POST' }, 'Набор группы утверждён')}>Утвердить набор</button>
     </div>}
     {!!instances.length && <div className={styles.scenarioList}>
       <nav aria-label={`Карточки группы ${group.name}`} className={styles.cardList}>{instances.map((item, index) => <div key={item.id}>
         {editable && item.status === 'DRAFT' && <input type="checkbox" aria-label={`Выбрать карточку ${index + 1} для перегенерации`} checked={selectedForRerender.includes(item.id)} onChange={(event) => setSelectedForRerender((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />}
-        <button type="button" className={item.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(item.id)}>{index + 1}. {item.template_snapshot.name} · {item.object_snapshot.name} · {item.status === 'CONFIRMED' ? 'Утверждена' : 'Черновик'}</button>
+        <button type="button" className={item.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(item.id)}>{index + 1}. {item.template_snapshot.name} · {item.object_snapshot.name}</button>
       </div>)}</nav>
       {selected && <section className={styles.scenario}>
         <h4>{selected.template_snapshot.name}</h4>
@@ -99,21 +93,14 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
           <button type="button" disabled={busy || Object.keys(variantOptions).every((key) => facts[key] === selected.initial_state_snapshot.variant_facts[key])} onClick={() => perform(`${path}/variant-facts`, json('PATCH', facts), 'Условия сохранены')}>Сохранить условия</button>
         </div>}
         <label>Текст карточки<textarea value={text} readOnly={!canEdit} onChange={(event) => setText(event.target.value)} /></label>
+        {editable && <button type="button" disabled={busy || (canEdit && text !== selected.initial_state_snapshot.render?.rendered_text)} onClick={() => perform(`/api/incident-cards/from-instance/${selected.id}`, { method: 'POST' }, 'Карточка сохранена в библиотеку')}>Сохранить в библиотеку</button>}
         {canEdit && <div className={styles.actions}>
           <button type="button" disabled={busy || !text.trim() || text === selected.initial_state_snapshot.render?.rendered_text} onClick={() => perform(`${path}/initial-message`, json('PATCH', { text }), 'Текст сохранён')}>Исправить текст</button>
           <button type="button" disabled={busy} onClick={() => perform(`${path}/rerender-initial-message`, { method: 'POST' }, 'Текст перегенерирован')}>Перегенерировать текст</button>
           <button type="button" disabled={busy} onClick={() => perform(`${path}/regenerate-card`, { method: 'POST' }, 'Карточка перегенерирована')}>Перегенерировать карточку</button>
           <button type="button" disabled={busy} onClick={() => perform(path, { method: 'DELETE' }, 'Карточка исключена')}>Исключить</button>
         </div>}
-        <h4>Работа служб</h4>
-        {selected.events.filter((event) => event.event_type !== 'RESPONSE_MESSAGE').map((event) => <p key={event.id}><b>{event.title}</b>{event.description ? ` · ${event.description}` : ''}</p>)}
-        {selected.events.filter((event) => event.event_type === 'RESPONSE_MESSAGE').map((event) => <div key={event.id}>
-          <label>{event.payload_snapshot.target_service_name || 'Сообщение службы'}<textarea value={messages[event.id] || ''} readOnly={!canEdit} onChange={(change) => setMessages((current) => ({ ...current, [event.id]: change.target.value }))} /></label>
-          {canEdit && <div className={styles.actions}>
-            <button type="button" disabled={busy || !messages[event.id]?.trim() || messages[event.id] === event.render?.rendered_text} onClick={() => perform(`${path}/events/${event.id}/message`, json('PATCH', { text: messages[event.id] }), 'Сообщение сохранено')}>Сохранить сообщение</button>
-            <button type="button" disabled={busy} onClick={() => perform(`${path}/events/${event.id}/rerender`, { method: 'POST' }, 'Сообщение перегенерировано')}>Перегенерировать сообщение</button>
-          </div>}
-        </div>)}
+        <p className={styles.hint}>Ход работы служб формируется тренажёром автоматически во время занятия. Здесь преподаватель проверяет только карточку, которую увидит ДДС.</p>
       </section>}
     </div>}
   </article>

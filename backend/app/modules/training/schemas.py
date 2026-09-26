@@ -104,9 +104,32 @@ class GroupWrite(BaseModel):
         return normalized
 
 
+class GroupMemberRead(BaseModel):
+    id: int
+    full_name: str
+
+
 class GroupRead(GroupWrite):
     id: int
     run_ids: list[int]
+    is_subgroup: bool = False
+    members: list[GroupMemberRead] = Field(default_factory=list)
+    member_count: int = 0
+
+
+class SubgroupWrite(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    member_user_ids: list[int] = Field(min_length=1)
+    difficulty: str | None = Field(default="Средняя", max_length=40)
+    queue_mode: QueueMode = QueueMode.SHARED_QUEUE
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        result = value.strip()
+        if not result:
+            raise ValueError("Название подгруппы не может быть пустым")
+        return result
 
 
 class JoinRequest(BaseModel):

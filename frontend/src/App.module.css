@@ -239,6 +239,27 @@
   box-shadow: 0 4px 14px rgb(0 0 0 / 22%);
 }
 
+.sessionCompletedNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #a2c4d5;
+  background: #e5f3fa;
+  color: #16394d;
+  font-size: 14px;
+}
+
+.sessionCompletedNotice button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: #1476a8;
+  color: white;
+  cursor: pointer;
+}
+
 .registryWorkspace,
 .incidentWorkspace {
   min-height: 100vh;
@@ -1159,6 +1180,55 @@
 .reportPanel span {
   color: #69757a;
   font-size: 9px;
+}
+
+.incidentActivity {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid #b9c8cf;
+}
+
+.incidentActivity h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+
+.activityEntry,
+.brigadeActivity {
+  padding: 7px 9px;
+  border: 1px solid #cbd7dd;
+  background: #fff;
+}
+
+.brigadeActivity {
+  border: 2px solid #af611e;
+  background: #fff1dc;
+}
+
+.activityEntry strong,
+.brigadeActivity strong {
+  display: block;
+  font-size: 10px;
+}
+
+.brigadeActivity strong {
+  color: #843e0c;
+  letter-spacing: .06em;
+}
+
+.activityEntry time,
+.brigadeActivity time {
+  display: block;
+  margin-top: 2px;
+  color: #52616a;
+  font-size: 9px;
+}
+
+.incidentActivity article p {
+  margin: 5px 0 0;
+  font-size: 11px;
 }
 
 .classificationColumn {

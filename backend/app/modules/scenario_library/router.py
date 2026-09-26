@@ -112,6 +112,61 @@ class TemplateInput(BaseModel):
     created_by_user_id: int | None = Field(default=None, gt=0)
 
 
+class SimpleTemplateInput(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    classifier_rule_id: int
+    object_type_id: int
+    difficulty: int = Field(default=3, ge=1, le=5)
+    variant_options: dict[str, list[str | int]] = Field(default_factory=dict)
+
+
+SIMPLE_VARIANTS = {
+    "floor": {1, 2, 3, 4},
+    "room": {"кабинет", "коридор", "подсобное помещение"},
+    "observation": {"нет", "слабое", "сильное"},
+    "casualties": {"нет", "неизвестно", "есть"},
+}
+SIMPLE_VARIANT_LABELS = {
+    "floor": "Этаж",
+    "room": "Место",
+    "observation": "Задымление",
+    "casualties": "Пострадавшие",
+}
+
+
+async def simple_template_data(database: AsyncSession, data: SimpleTemplateInput) -> TemplateInput:
+    rule = await database.get(IncidentClassifierRule, data.classifier_rule_id)
+    if rule is None:
+        raise HTTPException(422, "Выберите тип происшествия")
+    service_ids = (
+        await database.scalars(
+            select(IncidentRuleService.service_id).where(IncidentRuleService.rule_id == rule.id)
+        )
+    ).all()
+    if set(data.variant_options) - set(SIMPLE_VARIANTS) or any(
+        not values
+        or len(values) > len(SIMPLE_VARIANTS[key])
+        or any(value not in SIMPLE_VARIANTS[key] for value in values)
+        for key, values in data.variant_options.items()
+    ):
+        raise HTTPException(422, "Недопустимые варианты условий")
+    facts = "; ".join(f"{SIMPLE_VARIANT_LABELS[key]}: {{{key}}}" for key in data.variant_options)
+    description = rule.final_incident_type + (f"; {facts}" if facts else "")
+    return TemplateInput(
+        name=data.name.strip(),
+        difficulty=data.difficulty,
+        classifier_rule_id=rule.id,
+        object_rule=ObjectRuleInput(selection_mode="GENERIC", object_type_id=data.object_type_id),
+        initial_title=data.name.strip(),
+        initial_description=description,
+        variant_options=data.variant_options,
+        events=[EventInput(offset_seconds=0, event_type="INITIAL_REPORT", title=data.name.strip())],
+        services=[
+            ServiceInput(service_id=service_id, source="CLASSIFIER") for service_id in service_ids
+        ],
+    )
+
+
 async def require_editor(user: Annotated[User, Depends(get_current_user)]) -> User:
     if user.role not in (UserRole.INSTRUCTOR, UserRole.ADMIN):
         raise HTTPException(
@@ -611,6 +666,67 @@ async def list_templates(
     }
 
 
+@router.get("/simple")
+async def list_simple_templates(
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> list[dict]:
+    rows = (
+        await database.scalars(
+            select(ScenarioTemplate)
+            .where(ScenarioTemplate.status != "ARCHIVED")
+            .options(*detail_options())
+            .order_by(ScenarioTemplate.updated_at.desc(), ScenarioTemplate.id.desc())
+        )
+    ).all()
+    return [{**serialize(row), "usable": not await readiness_errors(database, row)} for row in rows]
+
+
+@router.post("/simple", status_code=201)
+async def create_simple_template(
+    data: SimpleTemplateInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    payload = await simple_template_data(database, data)
+    await validate_references(database, payload)
+    if await matching_object_count(database, payload.object_rule) == 0:
+        raise HTTPException(422, "Для этого типа нет подходящих объектов")
+    row = ScenarioTemplate(created_by_user_id=user.id)
+    populate(row, payload)
+    database.add(row)
+    await database.commit()
+    return serialize(await get_template(database, row.id))
+
+
+@router.patch("/simple/{template_id}")
+async def update_simple_template(
+    template_id: int,
+    data: SimpleTemplateInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    row = await get_template(database, template_id)
+    if row.status == "ARCHIVED":
+        raise HTTPException(409, "Удалённый шаблон недоступен")
+    if not can_archive(row, user):
+        raise HTTPException(403, "Редактировать шаблон может только автор или администратор")
+    payload = await simple_template_data(database, data)
+    await validate_references(database, payload)
+    if await matching_object_count(database, payload.object_rule) == 0:
+        raise HTTPException(422, "Для этого типа нет подходящих объектов")
+    row.object_rule = None
+    row.events = []
+    row.services = []
+    row.expected_actions = []
+    row.criteria = []
+    await database.flush()
+    populate(row, payload)
+    row.version += 1
+    await database.commit()
+    return serialize(await get_template(database, template_id))
+
+
 @router.get("/{template_id}")
 async def read_template(
     template_id: int,
@@ -643,8 +759,8 @@ async def update_template(
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
     row = await get_template(database, template_id)
-    if row.status != "DRAFT":
-        raise HTTPException(status_code=409, detail="Редактируется только черновик; создайте копию")
+    if row.status == "ARCHIVED":
+        raise HTTPException(status_code=409, detail="Удалённый шаблон недоступен")
     await validate_references(database, data)
     if data.created_by_user_id is not None:
         row.created_by_user_id = await resolve_author(database, user, data.created_by_user_id)
@@ -658,6 +774,23 @@ async def update_template(
     row.version += 1
     await database.commit()
     return serialize(await get_template(database, template_id))
+
+
+@router.delete("/{template_id}", status_code=204)
+async def delete_template(
+    template_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> None:
+    row = await get_template(database, template_id)
+    if not can_archive(row, user):
+        raise HTTPException(
+            status_code=403, detail="Удалить шаблон может только автор или администратор"
+        )
+    row.status = "ARCHIVED"
+    row.archived_at = datetime.now(UTC)
+    row.updated_at = row.archived_at
+    await database.commit()
 
 
 @router.get("/{template_id}/validate")

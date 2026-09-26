@@ -23,6 +23,7 @@
 .inline label { min-width: 90px; }
 .inline input[type='checkbox'] { width: auto; }
 .detail details { border-top: 1px solid #e3ebef; padding: .7rem 0; }
+.aiSummary { white-space: pre-wrap; padding: .8rem; background: #f7fafc; border-left: 3px solid #1587c3; }
 .error { color: #a52929; }
 @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } .summary { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 600px) { .shell { padding: 1rem; } .summary, .scores { grid-template-columns: repeat(2, 1fr); } }

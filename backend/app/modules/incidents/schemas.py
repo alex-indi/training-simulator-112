@@ -138,6 +138,7 @@ class IncidentRead(BaseModel):
     available_actions: list[IncidentActionType]
     actions: list[IncidentActionRead]
     scenario_events: list[dict] = Field(default_factory=list)
+    activities: list[dict] = Field(default_factory=list)
     created_at: datetime
     delivered_at: datetime | None
     opened_at: datetime | None

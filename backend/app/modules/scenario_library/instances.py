@@ -69,6 +69,7 @@ class GenerationInput(BaseModel):
 class BatchGenerationInput(BaseModel):
     count: int = Field(ge=1, le=50)
     seed: int = Field(default=0, ge=0, le=2147483647)
+    distinct_objects: bool = True
     training_session_id: int = Field(gt=0)
     training_group_id: int | None = Field(default=None, gt=0)
     difficulty: int | None = Field(default=None, ge=1, le=5)
@@ -213,6 +214,11 @@ def _initial_request(content: dict) -> TextGenerationRequest:
             "object_name": content["object_snapshot"]["name"],
             "address": content["object_snapshot"].get("address"),
             "variant_facts": initial.get("variant_facts", {}),
+            "fallback_style": (
+                "SCHOOL_FIRE"
+                if content.get("template_snapshot", {}).get("seed_code") == SCHOOL_FIRE_CODE
+                else None
+            ),
         },
     )
 
@@ -295,8 +301,8 @@ async def _build(
     facts_override: dict | None = None,
 ) -> dict:
     template = await get_template(database, template_id)
-    if template.status != "READY":
-        raise HTTPException(status_code=409, detail="Генерация доступна только для READY-шаблона")
+    if template.status == "ARCHIVED":
+        raise HTTPException(status_code=409, detail="Удалённый шаблон недоступен")
     errors = await readiness_errors(database, template)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
@@ -397,10 +403,7 @@ async def _build(
             link.source == "CLASSIFIER" and link.service_id not in classifier_services
         ):
             raise HTTPException(status_code=422, detail=f"Служба {link.service_id} не подтверждена")
-        if (
-            service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
-            and not medical_needed
-        ):
+        if service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE and not medical_needed:
             continue
         services.append(
             {
@@ -522,12 +525,12 @@ async def _build(
         ],
         "template_snapshot": {
             "id": template.id,
+            "seed_code": template.seed_code,
             "version": template.version,
             "name": template.name,
             "description": template.description,
-            "variant_options": template.variant_options or (
-                SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
-            ),
+            "variant_options": template.variant_options
+            or (SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}),
             "object_rule": {
                 "selection_mode": rule.selection_mode,
                 "object_type_id": rule.object_type_id,
@@ -600,7 +603,10 @@ async def generate(
 
 
 def _instance_from_content(
-    template_id: int, content: dict, user: User, group_id: int | None = None,
+    template_id: int,
+    content: dict,
+    user: User,
+    group_id: int | None = None,
 ) -> ScenarioInstance:
     return ScenarioInstance(
         scenario_template_id=template_id,
@@ -645,22 +651,30 @@ async def generate_batch(
     objects = await _matching_objects(database, template)
     if not objects:
         raise HTTPException(status_code=422, detail="Нет подходящих объектов")
-    if len(objects) < data.count:
+    if data.distinct_objects and len(objects) < data.count:
         raise HTTPException(
             422,
             f"Для {data.count} карточек нужно столько же разных подходящих объектов; "
             f"найдено {len(objects)}",
         )
-    group_difficulty = {
-        "Начальная": 1, "Низкая": 1, "Ниже средней": 2,
-        "Средняя": 3, "Высокая": 4, "Экспертная": 5,
-    }.get(group.difficulty) if group is not None else None
+    group_difficulty = (
+        {
+            "Начальная": 1,
+            "Низкая": 1,
+            "Ниже средней": 2,
+            "Средняя": 3,
+            "Высокая": 4,
+            "Экспертная": 5,
+        }.get(group.difficulty)
+        if group is not None
+        else None
+    )
     ordered_ids = object_order([item.id for item in objects], data.seed)
     rows = []
     seen = set()
     seeds = card_seeds(data.seed, data.count * 10)
     for index in range(data.count):
-        object_id = ordered_ids[index]
+        object_id = ordered_ids[index % len(ordered_ids)]
         for candidate in seeds[index * 10 : (index + 1) * 10]:
             content = await _build(
                 database,
@@ -678,7 +692,7 @@ async def generate_batch(
                 content["object_snapshot"]["id"],
                 tuple(sorted(content["initial_state_snapshot"]["variant_facts"].items())),
             )
-            if key not in seen:
+            if not data.distinct_objects or key not in seen:
                 seen.add(key)
                 break
         else:
@@ -724,10 +738,25 @@ async def rerender_initial(
         "object_snapshot": row.object_snapshot,
     }
     snapshot = dict(row.initial_state_snapshot)
-    snapshot["render"] = await (await renderer_for_database(database)).render(
-        _initial_request(content)
+    previous_text = snapshot.get("render", {}).get("rendered_text", "")
+    request = _initial_request(content)
+    request = TextGenerationRequest(
+        task=request.task,
+        facts=request.facts,
+        context={"previous_text": previous_text} if previous_text else None,
     )
-    await _record_usage(database, [snapshot["render"]])
+    renderer = await renderer_for_database(database)
+    render = await renderer.render(request)
+    await _record_usage(database, [render])
+    if render["fallback_used"] and renderer.enabled and renderer.provider.name != "template":
+        await database.commit()
+        raise HTTPException(
+            503, "Модель не смогла сформировать текст. Проверьте настройки AI и повторите попытку"
+        )
+    if render["rendered_text"].strip() == previous_text.strip():
+        await database.commit()
+        raise HTTPException(409, "Новая формулировка не получена. Текст карточки не изменился")
+    snapshot["render"] = render
     row.initial_state_snapshot = snapshot
     await database.commit()
     return await read_instance(instance_id, user, database)

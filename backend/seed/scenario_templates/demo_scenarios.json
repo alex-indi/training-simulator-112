@@ -2,7 +2,7 @@
   {
     "seed_code": "DEMO_EDUCATION_FIRE_001",
     "name": "Пожар в образовательном учреждении",
-    "description": "Пожар или задымление в здании школы с разными условиями и сообщениями пожарной службы.",
+    "description": "Пожар или задымление в здании школы с разными условиями. Работа служб во время занятия формируется единым runtime-механизмом тренажёра.",
     "difficulty": 3,
     "classifier_source_reference": "SRC-006-incident-classifier-v046-24.xlsx#Лист1!105",
     "object_type_code": "EDUCATION",
@@ -18,17 +18,12 @@
     "initial_description": "Поступило сообщение о дыме в здании школы.",
     "initial_caller_text": "В здании школы виден дым.",
     "events": [
-      {"offset_seconds": 0, "event_type": "INITIAL_REPORT", "title": "Первичное сообщение", "description": "Карточка передана диспетчеру."},
-      {"offset_seconds": 5, "event_type": "RESPONSE_MESSAGE", "title": "Принятие задания", "description": "задание принято", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-01", "target_response_state": "ACKNOWLEDGED"},
-      {"offset_seconds": 10, "event_type": "RESPONSE_MESSAGE", "title": "Выезд", "description": "выехали к школе", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-01", "target_response_state": "EN_ROUTE"},
-      {"offset_seconds": 15, "event_type": "RESPONSE_MESSAGE", "title": "Принятие задания медиками", "description": "бригада скорой помощи приняла задание", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-04", "target_response_state": "ACKNOWLEDGED"},
-      {"offset_seconds": 20, "event_type": "RESPONSE_MESSAGE", "title": "Выезд медиков", "description": "бригада скорой помощи выехала к школе, уточняем состояние людей", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-04", "target_response_state": "EN_ROUTE"},
-      {"offset_seconds": 90, "event_type": "RESPONSE_MESSAGE", "title": "Прибытие", "description": "на месте, {observation} на {floor} этаже, {room}", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-01", "target_response_state": "ARRIVED"},
-      {"offset_seconds": 100, "event_type": "RESPONSE_MESSAGE", "title": "Прибытие медиков", "description": "скорая помощь прибыла к школе", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-04", "target_response_state": "ARRIVED"},
-      {"offset_seconds": 120, "event_type": "RESPONSE_MESSAGE", "title": "Работы", "description": "проверяем {room}, {casualties}", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-01", "target_response_state": "WORKING"},
-      {"offset_seconds": 130, "event_type": "RESPONSE_MESSAGE", "title": "Работа медиков", "description": "оказываем помощь пострадавшим", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-04", "target_response_state": "WORKING"},
-      {"offset_seconds": 200, "event_type": "RESPONSE_MESSAGE", "title": "Завершение", "description": "работы завершены, обстановка проверена", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-01", "target_response_state": "COMPLETED"},
-      {"offset_seconds": 210, "event_type": "RESPONSE_MESSAGE", "title": "Завершение медиков", "description": "помощь оказана, работу завершили", "target_service_source_reference": "СЛУЖБЫ 112.docx#word/media/image1.png/row-04", "target_response_state": "COMPLETED"}
+      {
+        "offset_seconds": 0,
+        "event_type": "INITIAL_REPORT",
+        "title": "Первичное сообщение",
+        "description": "Карточка передана диспетчеру."
+      }
     ],
     "expected_actions": [],
     "criteria": []
