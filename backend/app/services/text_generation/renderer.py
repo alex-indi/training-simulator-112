@@ -96,7 +96,7 @@ class TemplateTextGenerationProvider:
         facts = request.facts
         if request.task == TextGenerationTask.INCIDENT_REPORT:
             variant = facts.get("variant_facts") or {}
-            if variant:
+            if variant and facts.get("fallback_style") == "SCHOOL_FIRE":
                 parts = [
                     f"{variant['observation']} на {variant['floor']} этаже школы, "
                     f"{variant['room']}; {variant['casualties']}"

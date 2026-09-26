@@ -31,7 +31,11 @@ from app.modules.object_registry.models import (
     ObjectType,
 )
 from app.modules.response import models as response_models  # noqa: F401
-from app.modules.scenario_library.instance_models import ScenarioInstance, ScenarioInstanceEvent
+from app.modules.scenario_library.instance_models import (
+    SavedIncidentCard,
+    ScenarioInstance,
+    ScenarioInstanceEvent,
+)
 from app.modules.scenario_library.instances import instance_router, session_router, template_router
 from app.modules.scenario_library.models import (
     ScenarioAssessmentCriterion,
@@ -42,6 +46,8 @@ from app.modules.scenario_library.models import (
     ScenarioTemplateRequiredObjectTag,
     ScenarioTemplateService,
 )
+from app.modules.scenario_library.router import router as library_router
+from app.modules.scenario_library.saved_cards import router as saved_cards_router
 from app.modules.training.models import TrainingGroup, TrainingSession
 from app.services.text_generation.providers import OpenAICompatibleProvider
 from app.services.text_generation.renderer import (
@@ -95,6 +101,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
         ScenarioAssessmentCriterion,
         ScenarioInstance,
         ScenarioInstanceEvent,
+        SavedIncidentCard,
     ]
     Base.metadata.create_all(engine, tables=[model.__table__ for model in tables])
     with Session(engine, expire_on_commit=False) as db:
@@ -164,9 +171,12 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
         db.add(ObjectTag(object_id=other_school.id, tag="children"))
         extra_schools = [
             CityObject(
-                external_id=str(index), name=f"Школа №{index}",
-                object_type_id=school_type.id, source="test",
-                address=f"Пехотная, {index}", district="Щукино",
+                external_id=str(index),
+                name=f"Школа №{index}",
+                object_type_id=school_type.id,
+                source="test",
+                address=f"Пехотная, {index}",
+                district="Щукино",
             )
             for index in range(3, 6)
         ]
@@ -219,9 +229,11 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
         db.add_all([template, session])
         db.commit()
         app = FastAPI()
+        app.include_router(library_router)
         app.include_router(template_router)
         app.include_router(instance_router)
         app.include_router(session_router)
+        app.include_router(saved_cards_router)
         app.include_router(admin_router)
         principal = {"user": instructor}
 
@@ -260,8 +272,8 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 template.status = "DRAFT"
                 db.commit()
                 assert (
-                    await client.post(f"{path}/instances", json=random_input)
-                ).status_code == 409
+                    await client.post(f"{path}/generate-preview", json=random_input)
+                ).status_code == 200
                 template.status = "READY"
                 db.commit()
                 payload = {"object_id": school.id, "seed": 12, "difficulty": 5}
@@ -383,28 +395,49 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     "training_session_id": session.id,
                     "training_group_id": group.id,
                 }
-                insufficient = await client.post(
-                    f"{path}/batch", json={**batch_input, "count": 6}
-                )
+                insufficient = await client.post(f"{path}/batch", json={**batch_input, "count": 6})
                 assert insufficient.status_code == 422
                 assert "разных подходящих объектов" in insufficient.json()["detail"]
+                repeated_objects = await client.post(
+                    f"{path}/batch",
+                    json={**batch_input, "count": 6, "distinct_objects": False},
+                )
+                assert repeated_objects.status_code == 201, repeated_objects.text
+                assert len(repeated_objects.json()) == 6
+                for card in repeated_objects.json():
+                    assert (
+                        await client.delete(f"/api/scenario-instances/{card['id']}")
+                    ).status_code == 204
                 batch = await client.post(f"{path}/batch", json=batch_input)
                 assert batch.status_code == 201, batch.text
                 cards = batch.json()
                 assert len(cards) == 5
                 assert len({card["object_snapshot"]["id"] for card in cards}) == 5
                 assert all(card["difficulty"] == 1 for card in cards)
-                assert len({
-                    (card["object_snapshot"]["id"], tuple(sorted(
-                        card["initial_state_snapshot"]["variant_facts"].items()
-                    ))) for card in cards
-                }) == 5
+                assert (
+                    len(
+                        {
+                            (
+                                card["object_snapshot"]["id"],
+                                tuple(
+                                    sorted(card["initial_state_snapshot"]["variant_facts"].items())
+                                ),
+                            )
+                            for card in cards
+                        }
+                    )
+                    == 5
+                )
                 assert cards[0]["object_snapshot"]["id"] != cards[1]["object_snapshot"]["id"]
                 assert all(card["training_session_id"] == session.id for card in cards)
                 assert all(card["training_group_id"] == group.id for card in cards)
-                assert [
-                    card["template_snapshot"]["batch_position"] for card in cards
-                ] == [1, 2, 3, 4, 5]
+                assert [card["template_snapshot"]["batch_position"] for card in cards] == [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                ]
                 assert all(card["template_snapshot"]["batch_seed"] == 43 for card in cards)
                 first_card = f"/api/scenario-instances/{cards[0]['id']}"
                 rerendered = await client.post(f"{first_card}/rerender-initial-message")
@@ -441,14 +474,29 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 repeated_batch = await client.post(f"{path}/batch", json=batch_input)
                 assert repeated_batch.status_code == 201, repeated_batch.text
                 assert [
-                    (card["generation_seed"], card["object_snapshot"]["id"],
-                     card["initial_state_snapshot"]["variant_facts"])
+                    (
+                        card["generation_seed"],
+                        card["object_snapshot"]["id"],
+                        card["initial_state_snapshot"]["variant_facts"],
+                    )
                     for card in repeated_batch.json()
                 ] == [
-                    (card["generation_seed"], card["object_snapshot"]["id"],
-                     card["initial_state_snapshot"]["variant_facts"])
+                    (
+                        card["generation_seed"],
+                        card["object_snapshot"]["id"],
+                        card["initial_state_snapshot"]["variant_facts"],
+                    )
                     for card in cards
                 ]
+                library_saved = await client.post(
+                    f"/api/incident-cards/from-instance/{instance['id']}"
+                )
+                assert library_saved.status_code == 201, library_saved.text
+                card_id = library_saved.json()["id"]
+                assert (
+                    library_saved.json()["service_snapshot"][0]["official_name"]
+                    == "Пожарная охрана"
+                )
                 school.address = "Изменённый адрес"
                 rule.final_incident_type = "Изменённый тип"
                 template.initial_title = "Изменённая карточка"
@@ -457,7 +505,63 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 assert saved["object_snapshot"]["address"] == "Пехотная, 1"
                 assert saved["classifier_snapshot"]["final_incident_type"] == "Пожар в школе"
                 assert saved["initial_state_snapshot"]["title"] == "Дым"
+                assert (await client.get(f"/api/incident-cards/{card_id}")).json()[
+                    "object_snapshot"
+                ]["address"] == "Пехотная, 1"
+                copied = await client.post(
+                    f"/api/incident-cards/{card_id}/add-to-group",
+                    json={"session_id": session.id, "group_id": group.id},
+                )
+                assert copied.status_code == 201, copied.text
+                clone = (await client.get(f"/api/scenario-instances/{copied.json()['id']}")).json()
+                assert clone["status"] == "CONFIRMED"
+                assert clone["object_snapshot"]["address"] == "Пехотная, 1"
+                edited_card = await client.patch(
+                    f"/api/incident-cards/{card_id}/text", json={"text": "Проверенный текст"}
+                )
+                assert edited_card.status_code == 200, edited_card.text
+                assert (
+                    clone["initial_state_snapshot"]["render"]["rendered_text"]
+                    != "Проверенный текст"
+                )
+                assert (await client.delete(f"/api/incident-cards/{card_id}")).status_code == 204
+                assert (await client.get(f"/api/incident-cards/{card_id}")).status_code == 404
+                simple = await client.post(
+                    "/api/scenario-templates/simple",
+                    json={
+                        "name": "Пожар в школе",
+                        "classifier_rule_id": rule.id,
+                        "object_type_id": school_type.id,
+                        "variant_options": {"floor": [1, 2]},
+                    },
+                )
+                assert simple.status_code == 201, simple.text
+                simple_instance = await client.post(
+                    f"/api/scenario-templates/{simple.json()['id']}/instances",
+                    json={"object_id": school.id, "seed": 10},
+                )
+                assert simple_instance.status_code == 201, simple_instance.text
+                simple_card = await client.post(
+                    f"/api/incident-cards/from-instance/{simple_instance.json()['id']}"
+                )
+                assert simple_card.status_code == 201, simple_card.text
+                simple_card_id = simple_card.json()["id"]
+                changed_facts = await client.patch(
+                    f"/api/incident-cards/{simple_card_id}/facts",
+                    json={"facts": {"floor": 2}},
+                )
+                assert changed_facts.status_code == 200, changed_facts.text
+                assert changed_facts.json()["initial_state_snapshot"]["variant_facts"] == {
+                    "floor": 2
+                }
+                assert (
+                    await client.patch(
+                        f"/api/incident-cards/{simple_card_id}/facts",
+                        json={"facts": {"floor": 99}},
+                    )
+                ).status_code == 422
                 principal["user"] = trainee
+                assert (await client.get("/api/incident-cards")).status_code == 403
                 assert (
                     await client.get(f"/api/scenario-instances/{instance['id']}")
                 ).status_code == 403

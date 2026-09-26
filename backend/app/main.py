@@ -33,6 +33,7 @@ from app.modules.scenario_library.instances import (
     template_router as scenario_generation_router,
 )
 from app.modules.scenario_library.router import router as scenario_library_router
+from app.modules.scenario_library.saved_cards import router as incident_cards_router
 from app.modules.training.assessment import router as assessment_router
 from app.modules.training.control import router as control_router
 from app.modules.training.delivery import router as delivery_router
@@ -138,6 +139,7 @@ app.include_router(identity_router)
 app.include_router(classifier_router)
 app.include_router(admin_router)
 app.include_router(scenario_library_router)
+app.include_router(incident_cards_router)
 app.include_router(scenario_generation_router)
 app.include_router(scenario_instance_router)
 app.include_router(session_instances_router)
