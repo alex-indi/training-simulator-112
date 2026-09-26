@@ -14,6 +14,8 @@ from app.modules.incidents.models import (
     IncidentActivity,
     IncidentLifecycleState,
 )
+from app.modules.response import models as response_models  # noqa: F401
+from app.modules.scenario_library import instance_models as scenario_instance_models  # noqa: F401
 from app.modules.training.assessment import BRIGADE_REACTION_LIMIT_SECONDS, assess_run
 from app.modules.training.models import TrainingRun
 
@@ -86,17 +88,51 @@ def test_other_service_reaction_does_not_depend_on_incident_id() -> None:
     snapshot = {
         "scenario_services": [
             {"service_id": 1, "name": "Служба 101"},
-            {"service_id": 2, "name": "Служба 103"},
+            {"service_id": 2, "name": "Служба 102"},
+            {"service_id": 3, "name": "Служба 103"},
         ]
     }
-    incidents = [
-        Incident(id=10, source_snapshot=snapshot, activities=[]),
-        Incident(id=11, source_snapshot=snapshot, activities=[]),
-    ]
+    incidents = [Incident(
+        id=incident_id,
+        source_snapshot=snapshot,
+        activities=[],
+        dds_status=DDSResponseStatus.ACCEPTED,
+    ) for incident_id in range(10, 20)]
 
     for incident in incidents:
         record_other_service_reactions(incident, now)
-        assert len(incident.activities) == 1
-        assert incident.activities[0].service_name == "Служба 103"
-        assert incident.activities[0].stage == "ACCEPTED"
-        assert incident.activities[0].body == "Карточка принята"
+        record_other_service_reactions(incident, now)
+        assert [(item.service_name, item.stage, item.body) for item in incident.activities] == [
+            ("Служба 102", "ACCEPTED", "Карточка принята"),
+            ("Служба 103", "ACCEPTED", "Карточка принята"),
+        ]
+        assert incident.dds_status == DDSResponseStatus.ACCEPTED
+
+
+def test_other_service_reaction_uses_explicit_snapshot_value() -> None:
+    incident = Incident(
+        id=42,
+        source_snapshot={"scenario_services": [
+            {"service_id": 1, "name": "Служба 101"},
+            {"service_id": 2, "name": "Служба 102", "initial_reaction": "REJECTED"},
+        ]},
+        activities=[],
+        dds_status=DDSResponseStatus.ACCEPTED,
+    )
+    record_other_service_reactions(incident, datetime(2026, 9, 26, 12, tzinfo=UTC))
+    assert [(item.service_name, item.stage, item.body) for item in incident.activities] == [
+        ("Служба 102", "REJECTED", "Карточка не принята"),
+    ]
+    assert incident.dds_status == DDSResponseStatus.ACCEPTED
+
+
+def test_other_service_reactions_use_only_notified_services_fallback() -> None:
+    incident = Incident(
+        id=77,
+        source_snapshot={"notified_services": ["Служба 101", "Служба 103"]},
+        activities=[],
+    )
+    record_other_service_reactions(incident, datetime(2026, 9, 26, 12, tzinfo=UTC))
+    assert [(item.service_name, item.stage) for item in incident.activities] == [
+        ("Служба 103", "ACCEPTED"),
+    ]
