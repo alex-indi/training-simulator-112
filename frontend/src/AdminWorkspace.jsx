@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 
 import styles from './AdminWorkspace.module.css'
-import ScenarioLibrary from './ScenarioLibrary.jsx'
+import IncidentTemplates from './IncidentTemplates.jsx'
 import WorkspaceClock from './WorkspaceClock.jsx'
 
 const sections = [
@@ -10,7 +10,7 @@ const sections = [
   ['users', 'Пользователи'],
   ['services', 'Службы 112'],
   ['ai', 'AI'],
-  ['scenarios', 'Сценарии'],
+  ['scenarios', 'Шаблоны инцидентов'],
   ['audit', 'Аудит'],
   ['system', 'Система'],
 ]
@@ -966,7 +966,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </>
   )
 
-  const renderScenarios = () => <ScenarioLibrary user={user} requestJson={requestJson} embedded listView />
+  const renderScenarios = () => <IncidentTemplates user={user} requestJson={requestJson} />
 
   const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.auditList}>{filteredRows.map((item) => {
     const changes = auditChanges(item)
