@@ -23,7 +23,7 @@ function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
   </div>
 }
 
-export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
+export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false, listView = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
@@ -163,6 +163,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
 
   const serviceName = (id) => catalog.services.find((service) => service.id === id)?.name || 'Служба'
   const objectTypeName = (id) => catalog.object_types.find((item) => item.id === id)?.name || 'Подходящий объект'
+  const visibleTemplates = templates.filter((item) => `${item.name} ${item.incident_type || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
 
   if (editorOpen) return <AdvancedScenarioLibrary embedded startCreate user={user} requestJson={requestJson} onBack={() => setEditorOpen(false)} onSaved={(saved) => { setEditorOpen(false); setTemplates((current) => [saved, ...current]); setChosen(saved); setCards([]) }} />
 
@@ -173,11 +174,21 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
     <div className={styles.content}>
       {!chosen && <><div className={styles.topline}><div><h2>Выберите сценарий</h2><p>Карточки для занятия формируются из готового сценария.</p></div></div>
         <label className={styles.search}>Поиск<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название или тип происшествия" /></label>
-        <div className={styles.cards}>{templates.filter((item) => `${item.name} ${item.incident_type || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((item) => <button key={item.id} type="button" className={styles.card} onClick={() => { setCards([]); setChosen(item) }}>
+        {listView ? <div className={styles.scenarioList}>
+          <div className={styles.scenarioListHead}><span>Сценарий</span><span>Тип происшествия</span><span>Сложность</span><span>Объекты</span><span>Службы</span><span>Действия</span></div>
+          {visibleTemplates.map((item) => <div className={styles.scenarioListRow} key={item.id}>
+            <div><strong>{item.name}</strong><small>{item.description || 'Описание не заполнено'}</small></div>
+            <span>{item.incident_type || '—'}</span>
+            <span>{difficultyLabels[item.difficulty] || item.difficulty || '—'}</span>
+            <span>{objectTypeName(item.object_rule?.object_type_id)}</span>
+            <span>{item.services.map((service) => serviceName(service.service_id)).join(', ') || 'По условиям сценария'}</span>
+            <button type="button" onClick={() => { setCards([]); setChosen(item) }}>Открыть</button>
+          </div>)}
+        </div> : <div className={styles.cards}>{visibleTemplates.map((item) => <button key={item.id} type="button" className={styles.card} onClick={() => { setCards([]); setChosen(item) }}>
           <span className={styles.status}>Готов к использованию</span><h3>{item.name}</h3><p>{item.description}</p>
           <dl><div><dt>Сложность</dt><dd>{difficultyLabels[item.difficulty]}</dd></div><div><dt>Объекты</dt><dd>{objectTypeName(item.object_rule?.object_type_id)}</dd></div></dl>
           <small>Службы: {item.services.map((service) => serviceName(service.service_id)).join(', ') || 'По условиям сценария'}</small><strong>Сформировать карточки →</strong>
-        </button>)}</div>{!templates.length && <p>Готовых сценариев пока нет.</p>}<div className={styles.actions}><button type="button" onClick={() => setEditorOpen(true)}>+ Создать новый сценарий</button></div></>}
+        </button>)}</div>}{!visibleTemplates.length && <p>Готовых сценариев не найдено.</p>}<div className={styles.actions}><button type="button" onClick={() => setEditorOpen(true)}>+ Создать новый сценарий</button></div></>}
       {chosen && <><button type="button" className={styles.link} onClick={() => { setChosen(null); setCards([]) }}>← Библиотека</button>
         <h2>{chosen.name}</h2>
         {!cards.length && <section className={styles.panel}><p>{chosen.description}</p><div className={styles.batchForm}>

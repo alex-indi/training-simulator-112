@@ -16,3 +16,12 @@
 .steps{gap:1px;margin-bottom:7px;padding:5px;border:1px solid var(--dds-border);background:var(--dds-panel)}.steps button{border-color:transparent;background:transparent}.steps .current{border-color:var(--dds-blue);background:var(--dds-blue);color:#fff}
 .fact{border-left-color:var(--dds-blue);background:#dfeaf0}.cardList{gap:2px}.cardList button{border-left:4px solid transparent;background:var(--dds-panel-bright)}.cardList .selectedCard{border-color:var(--dds-blue);background:#e2edf2}
 .error,.notice{margin:10px 16px 0;border-radius:0;border-left:4px solid}.error{border-left-color:var(--dds-danger);background:#ffd8cf;color:#791e10}.notice{border-left-color:var(--dds-blue);background:#e2f0f6;color:#175b7e}.shell .link{color:#17688a}
+.scenarioList{overflow-x:auto;border:1px solid var(--dds-border);background:var(--dds-panel-bright)}
+.scenarioListHead,.scenarioListRow{display:grid;grid-template-columns:minmax(190px,1.4fr) minmax(130px,.9fr) 90px minmax(120px,.8fr) minmax(200px,1.4fr) minmax(120px,.55fr);gap:0;min-width:960px;align-items:center}
+.scenarioListHead{min-height:36px;background:var(--dds-dark);color:#fff;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.scenarioListHead>span,.scenarioListRow>span,.scenarioListRow>div{align-self:stretch;display:flex;box-sizing:border-box;align-items:center;border-right:1px solid #c3c9cc;padding:8px 10px}
+.scenarioListHead>span{border-right-color:#667177}.scenarioListHead>span:last-child{border-right:0}
+.scenarioListRow{min-height:58px;border-bottom:1px solid #c6cccf}.scenarioListRow:last-child{border-bottom:0}.scenarioListRow:nth-child(odd){background:#eef0f0}.scenarioListRow:hover{background:#e2edf2}
+.scenarioListRow>div{min-width:0;align-items:flex-start;flex-direction:column;justify-content:center;gap:2px}.scenarioListRow strong{font-size:12px}.scenarioListRow small{display:-webkit-box;overflow:hidden;color:var(--dds-muted);font-size:10px;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.scenarioListRow>span{overflow-wrap:anywhere}.scenarioListRow>button{min-height:28px;margin:0 6px;padding:4px 8px}
+.shell input[type="checkbox"]{width:16px;height:16px;min-width:16px;min-height:16px;padding:0;accent-color:var(--dds-blue)}
