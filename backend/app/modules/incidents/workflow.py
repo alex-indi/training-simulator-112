@@ -12,6 +12,7 @@ from app.modules.incidents.models import (
     IncidentActionType,
     IncidentLifecycleState,
 )
+from app.modules.object_registry.address import normalize_address, normalize_generated_text
 
 
 class InvalidIncidentTransitionError(ValueError):
@@ -97,6 +98,12 @@ def create_delivered_incident(
     """Создаёт независимый snapshot карточки и фиксирует серверное время доставки."""
     delivered_at = server_time or datetime.now(UTC)
     snapshot = deepcopy(source_snapshot)
+    old_address = snapshot["address"]
+    snapshot["address"] = normalize_address(old_address) or old_address
+    if snapshot["source"] == "SCENARIO_INSTANCE" and old_address != snapshot["address"]:
+        snapshot["description"] = normalize_generated_text(
+            snapshot["description"], old_address, snapshot["address"]
+        )
     if snapshot.pop("reported_at_mode", None) == "DELIVERY":
         snapshot["reported_at"] = delivered_at.isoformat()
 

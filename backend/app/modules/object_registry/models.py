@@ -17,9 +17,10 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.db.base import Base
+from app.modules.object_registry.address import normalize_address
 
 
 class ObjectType(Base):
@@ -78,6 +79,10 @@ class CityObject(Base):
     tags: Mapped[list[ObjectTag]] = relationship(
         back_populates="object", cascade="all, delete-orphan"
     )
+
+    @validates("address")
+    def normalize_stored_address(self, _key: str, value: str | None) -> str | None:
+        return normalize_address(value)
 
 
 class ObjectAttribute(Base):

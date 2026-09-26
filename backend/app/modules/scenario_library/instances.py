@@ -19,6 +19,7 @@ from app.modules.incident_classifier.models import (
     IncidentRuleFeature,
     IncidentRuleService,
 )
+from app.modules.object_registry.address import normalize_address
 from app.modules.object_registry.models import CityObject, ObjectTag, ObjectType
 from app.modules.object_registry.queries import descendant_type_ids
 from app.modules.scenario_library.instance_models import (
@@ -280,9 +281,13 @@ async def _matching_objects(database: AsyncSession, template) -> list:
     )
     if type_code is None:
         return []
-    query = select(CityObject.id, CityObject.name, CityObject.address, CityObject.district).where(
-        CityObject.object_type_id.in_(descendant_type_ids(type_code))
-    )
+    query = select(
+        CityObject.id,
+        CityObject.name,
+        CityObject.address,
+        CityObject.district,
+        CityObject.source,
+    ).where(CityObject.object_type_id.in_(descendant_type_ids(type_code)))
     if rule.selection_mode == "OBJECT_BOUND":
         query = query.where(CityObject.id == rule.specific_object_id)
     for item in rule.required_tags:
@@ -432,7 +437,10 @@ async def _build(
             "object_type_id": selected.object_type_id,
             "object_type_code": selected.object_type.code,
             "object_type_name": selected.object_type.name,
-            "address": selected.address,
+            "address": normalize_address(
+                selected.address,
+                default_city="г. Москва" if selected.source.startswith("data.mos.ru:") else None,
+            ),
             "district": selected.district,
             "administrative_area": selected.administrative_area,
             "latitude": str(selected.latitude) if selected.latitude is not None else None,
@@ -482,7 +490,15 @@ async def _build(
         "classifier_snapshot": classifier_snapshot,
         "object_snapshot": object_snapshot,
         "matching_objects": [
-            {"id": obj.id, "name": obj.name, "address": obj.address, "district": obj.district}
+            {
+                "id": obj.id,
+                "name": obj.name,
+                "address": normalize_address(
+                    obj.address,
+                    default_city="г. Москва" if obj.source.startswith("data.mos.ru:") else None,
+                ),
+                "district": obj.district,
+            }
             for obj in (
                 [
                     item

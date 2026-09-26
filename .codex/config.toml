@@ -4,6 +4,8 @@
 project_doc_max_bytes = 32768
 
 sandbox_mode = "workspace-write"
+model_reasoning_summary = "detailed"
+web_search = "live"
 [mcp_servers.weeek]
 command = "uvx"
 args = ["--from", "weeek-mcp", "weeek-mcp"]
@@ -31,3 +33,6 @@ enabled_tools = [
 ]
 
 default_tools_approval_mode = "writes"
+
+[sandbox_workspace_write]
+network_access = true

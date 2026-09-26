@@ -7,7 +7,7 @@ async function json(response) {
   return response.json()
 }
 
-async function login(page, username) {
+async function login(page, username, workstation = 1) {
   await page.goto('/')
   const password = page.locator('input[type="password"]')
   const currentUser = page.getByRole('combobox', { name: 'Текущий пользователь' })
@@ -15,20 +15,13 @@ async function login(page, username) {
   if (await password.isVisible()) {
     await page.getByLabel('Пользователь').selectOption(username)
     await password.fill('учебный')
+    const workstationSelect = page.getByLabel('Рабочее место')
+    await expect(workstationSelect).toBeEnabled()
+    await workstationSelect.selectOption(String(workstation))
     await page.getByRole('button', { name: 'Войти' }).click()
   } else {
     await currentUser.selectOption(username)
   }
-}
-
-async function join(page, title, workstation) {
-  await page.getByLabel('Занятие', { exact: true }).selectOption({ label: title })
-  await page.getByLabel('Рабочее место').fill(String(workstation))
-  const [response] = await Promise.all([
-    page.waitForResponse((item) => item.url().endsWith('/join') && item.request().method() === 'POST'),
-    page.getByRole('button', { name: 'Занять АРМ' }).click(),
-  ])
-  expect(response.ok(), await response.text()).toBeTruthy()
 }
 
 test('MVP: общий пул, claim, принятие и сообщение бригады 101', async ({ page }) => {
@@ -48,8 +41,7 @@ test('MVP: общий пул, claim, принятие и сообщение бр
       data: { title, mode: 'FIXED_SET', workstation_count: 1 },
     }))
 
-    await login(page, 'trainee')
-    await join(page, title, 1)
+    await login(page, 'trainee', 1)
 
     const grouped = await json(await instructor.post(`/api/training/sessions/${session.id}/groups`, {
       data: {

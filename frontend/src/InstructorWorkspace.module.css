@@ -31,8 +31,10 @@
 .itemRow > select { flex: 1 1 240px; }
 .itemRow > button { flex: 0 0 auto; margin-left: auto; }
 .itemRow > .actions { flex: 0 0 auto; margin: 0 0 0 auto; }
-.groupRow { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(180px, 1fr) minmax(100px, .65fr) minmax(220px, 1.35fr) auto; gap: 12px; min-width: 920px; min-height: 42px; padding-block: 4px; }
-.groupRow > strong, .groupRow > span, .groupRow > small { min-width: 0; }
+.groupRow { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(90px, .5fr) minmax(170px, .9fr) minmax(170px, .9fr) 220px; gap: 12px; min-width: 980px; min-height: 72px; padding-block: 8px; }
+.groupIdentity { display: grid; gap: 2px; min-width: 0; }
+.groupIdentity p { margin: 0; overflow-wrap: anywhere; }
+.groupRow > small, .groupRow > label { min-width: 0; }
 .groupRow > .actions { display: flex; flex-wrap: nowrap; gap: 8px; margin: 0; }
 .groupRow > .actions button { flex: 0 0 auto; min-height: 32px; padding: 5px 10px; white-space: nowrap; }
 .sessionRow { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(160px, .8fr) minmax(250px, 1fr) auto; gap: 12px; min-width: 940px; min-height: 52px; padding-block: 8px; }
@@ -82,7 +84,8 @@
 .cardList > div { display: flex; align-items: center; gap: 8px; }
 .cardList > div button { flex: 1; }
 .cardList button { text-align: left; }
-.selectedCard { border-color: var(--dds-blue) !important; background: #e2f1f9 !important; }
+.cardList button span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.cardList button .openCardHint { flex: 0 0 auto; color: var(--dds-blue); font-weight: 600; }
 .scenario { padding: 13px; border: 1px solid #d8e2ea; border-radius: 8px; background: #f8fbfd; }
 .scenario div:first-child { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .scenario small { color: #627385; }
@@ -125,6 +128,12 @@
 .section h3 { font-size: 17px; font-weight: 500; }
 .cards { gap: 7px; }
 .card { min-height: 92px; padding: 13px 14px; border: 1px solid var(--dds-border); border-top: 5px solid var(--dds-dock); border-radius: 0; background: var(--dds-panel-bright); box-shadow: none; }
+.preparedGroupCard { gap: 8px; }
+.preparedGroupHeader { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; }
+.preparedGroupHeader h3, .preparedGroupCard > p { margin: 0; }
+.preparedGroupHeader span { color: var(--dds-muted); }
+.preparedGroupCard > .actions { margin-top: 2px; }
+.preparedGroupCard > .actions button { margin-top: 0; }
 .card:hover { border-color: var(--dds-blue); border-top-color: var(--dds-blue); background: #e2edf2; }
 .card span, .card small { color: var(--dds-muted); }
 .steps { gap: 1px; margin-bottom: 7px; padding: 5px; border: 1px solid var(--dds-border); background: var(--dds-panel); }
@@ -308,6 +317,24 @@
 }
 .pickerOverlay{position:fixed;inset:0;z-index:100;background:#132b38b8;display:grid;place-items:center;padding:20px;box-sizing:border-box}
 .pickerDialog,.useDialog{width:min(100%,1100px);max-height:calc(100vh - 40px);overflow:auto;background:#f0f2f2;border:1px solid #82939c;padding:16px;box-sizing:border-box;box-shadow:0 12px 35px #10232e55}
+.cardEditorDialog{width:min(100%,900px)}
+.cardEditorHeader{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--dds-border)}
+.cardEditorHeader h3{margin:3px 0 0;font-size:18px}
+.cardEditorHeader small{color:var(--dds-muted)}
+.cardEditorHeader button{flex:0 0 auto}
+.generationStatus{display:inline-flex;align-items:center;gap:7px;width:max-content;max-width:100%;box-sizing:border-box;margin:6px 0;padding:5px 9px;border-left:3px solid var(--dds-blue);background:#e2f0f6;color:#175b7e;font-size:12px;font-weight:600}
+.generationStatus::before{content:'';flex:none;width:12px;height:12px;border:2px solid #a6ccdd;border-top-color:var(--dds-blue);border-radius:50%;animation:generationSpin .8s linear infinite}
+.cardEditorDialog>.generationStatus{position:sticky;top:0;z-index:2}
+@keyframes generationSpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.generationStatus::before{animation:none}}
+.cardEditorBody{display:grid;gap:12px;min-width:0}
+.cardEditorBody p{margin:0;overflow-wrap:anywhere}
+.cardEditorBody>label{display:grid;gap:6px;font-weight:600}
+.cardEditorBody textarea{width:100%;min-height:150px;box-sizing:border-box;padding:9px;border:1px solid var(--dds-border);background:var(--dds-panel-bright);font:inherit;resize:vertical}
+.cardEditorBody>.actions{margin-top:0}
+.cardEditorBody>button{justify-self:start}
+.preparedGroupCard .cardList button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
 .useDialog{width:min(100%,520px);display:grid;gap:12px}
 .useDialog h2,.useDialog p{margin:0}
 .useDialog label{display:grid;gap:6px}
+@media(max-width:520px){.cardEditorDialog{padding:10px}.cardEditorHeader{align-items:stretch;flex-direction:column}.cardEditorHeader button{align-self:start}}

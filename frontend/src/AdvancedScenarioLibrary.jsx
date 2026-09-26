@@ -30,10 +30,10 @@ function RenderEditor({ title, facts, render, editable, busy, onSave, onRerender
 
 function InstanceReview({ instance, busy, api, perform, onChange, sessions, trainingSessionId, onSelectSession }) {
   const editable = instance.status === 'DRAFT'
-  const action = (path, options) => perform(async () => {
+  const action = (path, options, status = '') => perform(async () => {
     const updated = await api(path, options)
     onChange(updated)
-  })
+  }, status)
   const base = `/api/scenario-instances/${instance.id}`
   const initial = instance.initial_state_snapshot
   return <section className={styles.panel}>
@@ -45,11 +45,11 @@ function InstanceReview({ instance, busy, api, perform, onChange, sessions, trai
     <h4>Службы</h4><ul>{instance.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul>
     <RenderEditor title="Исходная карточка" facts={[initial.title, initial.description, initial.caller_text]} render={initial.render} editable={editable} busy={busy}
       onSave={(text) => action(`${base}/initial-message`, asOptions('PATCH', { text }))}
-      onRerender={() => action(`${base}/rerender-initial-message`, { method: 'POST' })} />
+      onRerender={() => action(`${base}/rerender-initial-message`, { method: 'POST' }, 'ИИ перегенерирует текст карточки…')} />
     <h4>События</h4><ol>{instance.events.map((event) => <li key={event.id}>T+{formatOffset(event.offset_seconds)} · {event.title}
       {event.event_type === 'RESPONSE_MESSAGE' ? <RenderEditor title="Сообщение группы" facts={[event.title, event.description]} render={event.render} editable={editable} busy={busy}
         onSave={(text) => action(`${base}/events/${event.id}/message`, asOptions('PATCH', { text }))}
-        onRerender={() => action(`${base}/events/${event.id}/rerender`, { method: 'POST' })} /> : <p>{event.description}</p>}
+        onRerender={() => action(`${base}/events/${event.id}/rerender`, { method: 'POST' }, 'ИИ перегенерирует текст сообщения…')} /> : <p>{event.description}</p>}
     </li>)}</ol>
     {editable && <button type="button" disabled={busy} onClick={() => action(`${base}/confirm`, { method: 'POST' })}>Подтвердить тексты и экземпляр</button>}
     {!instance.training_session_id && <label>Использовать в занятии<select value={trainingSessionId || ''} onChange={(event) => onSelectSession(Number(event.target.value) || null)}><option value="">Выберите занятие</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title} · #{session.id}</option>)}</select></label>}
@@ -74,6 +74,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
   const [dirty, setDirty] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [generation, setGeneration] = useState(null)
@@ -129,9 +130,9 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
     change('variant_options', next)
   }
   const changeFilter = (field, value) => { setFilters((old) => ({ ...old, [field]: value })); setOffset(0) }
-  const perform = async (action) => {
-    setBusy(true); setError(''); setNotice('')
-    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false) }
+  const perform = async (action, status = '') => {
+    setBusy(true); setGenerationStatus(status); setError(''); setNotice('')
+    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false); setGenerationStatus('') }
   }
   const open = (item) => { setSelected(item); setDraft(toInput(item)); setStep(null); setValidation(null); setDirty(false) }
   const save = () => perform(async () => {
@@ -190,7 +191,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
   const createInstance = () => perform(async () => {
     const created = await api(`/api/scenario-templates/${generation.id}/instances`, asOptions('POST', generationInput))
     setGeneratedInstance(created); setGenerationPreview(null); setNotice('Карточка создана'); await load()
-  })
+  }, 'ИИ формирует карточку…')
   const openInstance = (instance) => perform(async () => {
     const availableSessions = await api('/api/training/sessions')
     setSessions(availableSessions.filter((session) => ['DRAFT', 'READY'].includes(session.state)))
@@ -212,6 +213,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
     {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя / методические материалы</small><h1>Библиотека сценариев</h1></div></header>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
+    {generationStatus && <p className={`${styles.generationStatus} ${styles.floatingGenerationStatus}`} role="status">{generationStatus}</p>}
     {generation && <div className={styles.content}>
       <div className={styles.topline}><div><h2>Карточка: {generation.name}</h2></div></div>
       {!generatedInstance && <section className={styles.panel}>

@@ -7,7 +7,7 @@ import IncidentTemplates from './IncidentTemplates.jsx'
 const options = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const variantFactLabels = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
 
-export default function ScenarioLibrary({ user, requestJson, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
+export default function ScenarioLibrary({ user, requestJson, sessionId, groupId, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
@@ -26,6 +26,7 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
   const [editedText, setEditedText] = useState('')
   const [variantDraft, setVariantDraft] = useState({})
   const [busy, setBusy] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -73,11 +74,12 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
     setVariantDraft(selected?.initial_state_snapshot?.variant_facts || {})
   }, [selectedId, selected?.initial_state_snapshot?.variant_facts])
 
-  const perform = async (action) => {
+  const perform = async (action, status = '') => {
     setBusy(true)
+    setGenerationStatus(status)
     setError('')
     setNotice('')
-    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false) }
+    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false); setGenerationStatus('') }
   }
 
   const updateCard = (updated) => setCards((current) => current.map((item) => item.id === updated.id ? updated : item))
@@ -97,7 +99,7 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
     setSaveSelected([])
     setSavedIds([])
     setNotice(`Сформировано ${generated.length} карточек. Просмотрите их и добавьте в занятие.`)
-  })
+  }, 'ИИ формирует карточки…')
 
   const replaceBatch = () => {
     if (!confirmOverwrite() || !window.confirm('Пересоздать весь набор карточек?')) return
@@ -114,10 +116,10 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
       setSelectedId(generated[0]?.id)
       setSaveSelected([])
       setSavedIds([])
-    })
+    }, 'ИИ пересоздаёт набор карточек…')
   }
 
-  const changeCard = (path, init) => perform(async () => updateCard(await api(path, init)))
+  const changeCard = (path, init, status = '') => perform(async () => updateCard(await api(path, init)), status)
 
   const saveVariantFacts = () => {
     if (selected.initial_state_snapshot.render?.render_origin === 'MANUAL'
@@ -125,17 +127,18 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
     changeCard(`/api/scenario-instances/${selected.id}/variant-facts`, options('PATCH', {
       ...variantDraft,
       ...(Object.hasOwn(variantDraft, 'floor') ? { floor: Number(variantDraft.floor) } : {}),
-    }))
+    }), 'ИИ обновляет текст карточки…')
   }
 
   const rerenderAll = () => {
     if (!confirmOverwrite()) return
     perform(async () => {
-      for (const card of cards) {
+      for (const [index, card] of cards.entries()) {
+        setGenerationStatus(`ИИ перегенерирует тексты: ${index + 1} из ${cards.length}…`)
         updateCard(await api(`/api/scenario-instances/${card.id}/rerender-initial-message`, { method: 'POST' }))
       }
       setNotice('Тексты карточек обновлены; факты и объекты сохранены.')
-    })
+    }, `ИИ перегенерирует тексты: 1 из ${cards.length}…`)
   }
 
   const exclude = () => perform(async () => {
@@ -207,23 +210,38 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
         <h2>{chosen.name}</h2>
         {!cards.length && <section className={styles.panel}>
           <p>{chosen.description}</p>
-          <div className={styles.batchForm}>
-            {!picker && <label>Занятие<select value={selectedSessionId} onChange={(event) => { setSelectedSessionId(event.target.value); setTarget('') }}><option value="">Выберите занятие</option>{sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
-            <label>Количество карточек<input type="number" min="1" max="50" value={count} onChange={(event) => setCount(event.target.value)} /></label>
-            {picker && groupDifficulty && <p>Сложность группы: {groupDifficulty}</p>}
+          <div className={`${styles.batchForm} ${styles.generateForm}`}>
+            {!picker && <label className={styles.sessionField}>Занятие<select value={selectedSessionId} onChange={(event) => { setSelectedSessionId(event.target.value); setTarget('') }}><option value="">Выберите занятие</option>{sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
+            <label className={styles.countField}>Количество карточек<input type="number" min="1" max="50" value={count} onChange={(event) => setCount(event.target.value)} /></label>
             <label className={styles.inlineCheck}><input type="checkbox" checked={distinctObjects} onChange={(event) => setDistinctObjects(event.target.checked)} /> Использовать разные объекты</label>
           </div>
           {!picker && session && !targets.length && <p>Сначала создайте общую группу или назначьте АРМ в занятии.</p>}
           <button type="button" disabled={busy || (!picker && (!session || !targets.length)) || Number(count) < 1 || Number(count) > 50} onClick={createBatch}>Сформировать</button>
+          {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
         </section>}
 
         {!!cards.length && <>
-          <div className={styles.topline}><div><h3>Сформировано {cards.length} карточек</h3><p>Просмотрите весь набор перед запуском занятия.</p></div></div>
+          <section className={styles.reviewToolbar} aria-label="Действия с набором карточек">
+            <div className={styles.reviewToolbarHeader}>
+              <div><h3>Сформировано {cards.length} карточек</h3><p>Просмотрите весь набор перед запуском занятия.</p></div>
+              {!picker && <label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
+            </div>
+            <div className={styles.reviewActions}>
+              <button type="button" className={styles.approveButton} disabled={busy || !target} onClick={approve}>Добавить в занятие</button>
+              <button type="button" disabled={busy || !saveSelected.length} onClick={() => saveCards(saveSelected)}>Сохранить выбранные</button>
+              <button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button>
+              <button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button>
+            </div>
+            {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
+          </section>
           <div className={styles.reviewLayout}>
-            <nav className={styles.cardList} aria-label="Карточки набора">{cards.map((card, index) => <div key={card.id}>
-              <label><input type="checkbox" checked={saveSelected.includes(card.id)} disabled={savedIds.includes(card.id)} onChange={(event) => setSaveSelected((current) => event.target.checked ? [...current, card.id] : current.filter((id) => id !== card.id))} /> Сохранить</label>
-              <button type="button" className={card.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(card.id)}><b>{String(index + 1).padStart(2, '0')}</b><span>{card.object_snapshot.name}</span><small>{card.initial_state_snapshot.render?.render_origin === 'MANUAL' ? 'Изменена' : 'Готова'}</small></button>
-            </div>)}</nav>
+            <nav className={styles.cardList} aria-label="Карточки набора">{cards.map((card, index) => {
+              const isSaved = savedIds.includes(card.id)
+              return <div key={card.id} className={`${styles.cardListItem} ${card.id === selected?.id ? styles.cardListItemSelected : ''}`}>
+                <button type="button" onClick={() => setSelectedId(card.id)}><b>{String(index + 1).padStart(2, '0')}</b><span>{card.object_snapshot.name}</span><small>{card.initial_state_snapshot.render?.render_origin === 'MANUAL' ? 'Изменена' : 'Готова'}</small></button>
+                <label className={styles.cardSave}><input type="checkbox" aria-label={`Сохранить в библиотеку: ${card.object_snapshot.name}`} checked={saveSelected.includes(card.id) || isSaved} disabled={isSaved} onChange={(event) => setSaveSelected((current) => event.target.checked ? [...current, card.id] : current.filter((id) => id !== card.id))} />{isSaved ? 'В библиотеке' : 'Сохранить в библиотеку'}</label>
+              </div>
+            })}</nav>
 
             {selected && <section className={styles.panel}>
               <h3>Карточка {cards.findIndex((item) => item.id === selected.id) + 1} из {cards.length}</h3>
@@ -240,8 +258,8 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
               <small>{renderOriginLabels[selected.initial_state_snapshot.render?.render_origin] || 'Текст подготовлен'}</small>
               <div className={styles.actions}>
                 <button type="button" disabled={busy || !editedText.trim() || editedText === selected.initial_state_snapshot.render?.rendered_text} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/initial-message`, options('PATCH', { text: editedText }))}>Сохранить текст</button>
-                <button type="button" disabled={busy} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/rerender-initial-message`, { method: 'POST' })}>Перегенерировать текст</button>
-                <button type="button" disabled={busy} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/regenerate-card`, { method: 'POST' })}>Перегенерировать карточку</button>
+                <button type="button" disabled={busy} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/rerender-initial-message`, { method: 'POST' }, 'ИИ перегенерирует текст карточки…')}>Перегенерировать текст</button>
+                <button type="button" disabled={busy} onClick={() => changeCard(`/api/scenario-instances/${selected.id}/regenerate-card`, { method: 'POST' }, 'ИИ перегенерирует карточку…')}>Перегенерировать карточку</button>
                 <button type="button" disabled={busy || savedIds.includes(selected.id)} onClick={() => saveCards([selected.id])}>Сохранить в библиотеку</button>
                 <button type="button" disabled={busy} onClick={exclude}>Удалить неудачную</button>
               </div>
@@ -249,16 +267,6 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
             </section>}
           </div>
 
-          <section className={styles.panel}>
-            <h3>Подготовленные карточки</h3>
-            {!picker && <label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
-            <div className={styles.actions}>
-              <button type="button" disabled={busy || !saveSelected.length} onClick={() => saveCards(saveSelected)}>Сохранить выбранные</button>
-              <button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button>
-              <button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button>
-              <button type="button" disabled={busy || !target} onClick={approve}>Добавить в занятие</button>
-            </div>
-          </section>
         </>}
       </>}
     </div>

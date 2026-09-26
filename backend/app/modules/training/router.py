@@ -70,6 +70,27 @@ def _invalidate_readiness(item: TrainingSession) -> None:
         item.state = TrainingSessionState.DRAFT
 
 
+def _staffed_groups(item: TrainingSession) -> list[TrainingGroup]:
+    subgroup_user_ids = {
+        membership.user_id
+        for group in item.groups
+        if group.is_subgroup
+        for membership in group.subgroup_memberships
+    }
+    return [
+        group
+        for group in item.groups
+        if (
+            bool(group.subgroup_memberships)
+            if group.is_subgroup
+            else any(
+                user.role == UserRole.TRAINEE and user.id not in subgroup_user_ids
+                for user in (group.source_group.members if group.source_group else [])
+            )
+        )
+    ]
+
+
 def _readiness(item: TrainingSession) -> ReadinessRead:
     now = datetime.now(UTC)
     runs = item.runs
@@ -78,7 +99,11 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
     stationed = sum(bool(run.workstation_number) for run in runs)
     warnings = []
     if any(group.source_user_group_id is not None for group in item.groups):
-        masters = [row for row in item.master_instances if row.training_group_id is not None]
+        staffed_groups = _staffed_groups(item)
+        staffed_group_ids = {group.id for group in staffed_groups}
+        masters = [
+            row for row in item.master_instances if row.training_group_id in staffed_group_ids
+        ]
         assigned_runs = [run for run in runs if run.group_id is not None]
         unassigned = len(runs) - len(assigned_runs)
         required = (
@@ -94,7 +119,7 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
             warnings.append(f"Не распределены: {unassigned}; карточки им не выдаются")
         if online < len(runs):
             warnings.append(f"Offline: {len(runs) - online}")
-        for group in item.groups:
+        for group in staffed_groups:
             cards = [row for row in masters if row.training_group_id == group.id]
             if len(cards) < required:
                 warnings.append(f"Группа «{group.name}»: нужно не менее {required} карточек")
@@ -105,16 +130,16 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
         return ReadinessRead(
             participant_count=len(runs),
             workstation_count=item.workstation_count,
-            group_count=len(item.groups),
+            group_count=len(staffed_groups),
             profiles_assigned=len(assigned_runs),
             online_count=online,
             offline_count=len(runs) - online,
             warnings=warnings,
             can_start=bool(assigned_runs)
-            and bool(item.groups)
+            and bool(staffed_groups)
             and all(
                 sum(row.training_group_id == group.id for row in masters) >= required
-                for group in item.groups
+                for group in staffed_groups
             )
             and prepared == approved,
             prepared_count=prepared,
@@ -678,17 +703,17 @@ async def create_subgroup(
         is_subgroup=True,
         difficulty=payload.difficulty,
         queue_mode=payload.queue_mode,
+        subgroup_memberships=[
+            TrainingSubgroupMember(
+                training_session_id=item.id,
+                user_id=user.id,
+                user=user,
+            )
+            for user in users
+        ],
     )
     item.groups.append(group)
     await database.flush()
-    group.subgroup_memberships = [
-        TrainingSubgroupMember(
-            training_session_id=item.id,
-            user_id=user.id,
-            user=user,
-        )
-        for user in users
-    ]
     for run in item.runs:
         if run.trainee_id in payload.member_user_ids:
             _assign_run_to_group(run, group)
