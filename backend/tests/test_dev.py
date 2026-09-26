@@ -17,6 +17,19 @@ class FakeProcess:
         return None
 
 
+def test_apply_migrations_uses_alembic_head(monkeypatch) -> None:
+    """Локальный запуск использует цепочку миграций репозитория."""
+    calls: list[tuple[list[str], object, bool]] = []
+
+    def record(command: list[str], *, cwd, check: bool) -> None:
+        calls.append((command, cwd, check))
+
+    monkeypatch.setattr(dev.subprocess, "run", record)
+    dev.apply_migrations("uv")
+
+    assert calls == [(["uv", "run", "alembic", "upgrade", "head"], dev.BACKEND_DIR, True)]
+
+
 def test_keyboard_interrupt_is_successful_shutdown(monkeypatch) -> None:
     """Остановка через Ctrl+C возвращает успешный код независимо от сигналов детям."""
     processes = [FakeProcess(), FakeProcess()]

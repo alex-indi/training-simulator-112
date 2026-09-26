@@ -72,7 +72,5 @@ async def run_migrations_online() -> None:
 
 if context.is_offline_mode():
     run_migrations_offline()
-elif connection := config.attributes.get("connection"):
-    run_sync_migrations(connection)
 else:
     run(run_migrations_online())

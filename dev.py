@@ -74,7 +74,7 @@ def apply_migrations(uv_command: str) -> None:
     """Обновляет локальную схему до запуска фоновых задач backend."""
     print("[setup] Проверяю миграции PostgreSQL...", flush=True)
     subprocess.run(
-        [uv_command, "run", "python", "-m", "app.scripts.prepare_dev_database"],
+        [uv_command, "run", "alembic", "upgrade", "head"],
         cwd=BACKEND_DIR,
         check=True,
     )

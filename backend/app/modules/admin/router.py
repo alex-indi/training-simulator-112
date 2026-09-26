@@ -1171,6 +1171,9 @@ async def audit(
 @router.get("/system")
 async def system(session: Database) -> dict[str, Any]:
     await session.execute(text("SELECT 1"))
+    db_revisions = (
+        await session.scalars(text("SELECT version_num FROM alembic_version ORDER BY version_num"))
+    ).all()
     ai_config = await session.get(AIProviderConfig, 1) or _ai_from_environment()
     ai_status = "DISABLED"
     if ai_config.enabled:
@@ -1185,7 +1188,7 @@ async def system(session: Database) -> dict[str, Any]:
         },
         "version": "0.1.0",
         "git_commit": getenv("APP_GIT_COMMIT", "unknown"),
-        "db_revision": "20260924_18",
+        "db_revision": ", ".join(db_revisions) if db_revisions else "unknown",
         "environment": getenv("APP_ENVIRONMENT", "development"),
         "server_time": datetime.now(UTC),
     }
