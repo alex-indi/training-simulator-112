@@ -1,6 +1,7 @@
 """Prepared group packs become independent runtime queues only at launch."""
 
 import asyncio
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import FastAPI
@@ -17,13 +18,16 @@ from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incident_classifier.models import IncidentClassifierRule
 from app.modules.incidents import models as incident_models  # noqa: F401
+from app.modules.incidents.models import DDSResponseStatus, Incident
 from app.modules.response import models as response_models  # noqa: F401
 from app.modules.scenario_library.instance_models import ScenarioInstance
 from app.modules.scenario_library.models import ScenarioTemplate
+from app.modules.training.delivery import tick_session
 from app.modules.training.models import (
     QueueMode,
     ScenarioQueueItem,
     TrainingGroup,
+    TrainingRun,
     TrainingSession,
 )
 from app.modules.training.router import router
@@ -114,6 +118,17 @@ def test_four_trainees_auto_assign_and_launch_shared_and_individual_pools():
                 )
                 assert moved.status_code == 200, moved.text
                 assert db.get(User, students[0].id).group_id == sources[0].id
+                original = read["runs"][0]
+                moved_run = next(run for run in moved.json()["runs"] if run["id"] == original["id"])
+                assert {
+                    key: moved_run[key] for key in ("dds_profile", "difficulty", "queue_mode")
+                } == {
+                    key: original[key] for key in ("dds_profile", "difficulty", "queue_mode")
+                }
+                assert (
+                    db.get(TrainingRun, read["runs"][0]["id"]).queue_mode
+                    == QueueMode.SHARED_QUEUE
+                )
                 restored = await client.post(
                     f"{path}/assign", json={"run_ids": [read["runs"][0]["id"]],
                                             "group_id": groups[0].id}
@@ -138,6 +153,21 @@ def test_four_trainees_auto_assign_and_launch_shared_and_individual_pools():
                 assert [item.snapshot["description"] for item in each[0]] == [
                     item.snapshot["description"] for item in each[1]
                 ] == ["Готовый текст"] * 6
+                delivered_ids = await tick_session(AsyncAdapter(db), session.id, datetime.now(UTC))
+                assert len(delivered_ids) == 20
+                incidents = db.scalars(select(Incident).order_by(Incident.id)).all()
+                first = next(
+                    item for item in incidents
+                    if item.training_run_id == read["runs"][2]["id"]
+                )
+                second = next(
+                    item for item in incidents
+                    if item.training_run_id == read["runs"][3]["id"]
+                )
+                assert first.id != second.id
+                first.dds_status = DDSResponseStatus.COMPLETED
+                db.flush()
+                assert second.dds_status != DDSResponseStatus.COMPLETED
 
         asyncio.run(run())
     engine.dispose()

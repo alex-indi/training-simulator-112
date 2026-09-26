@@ -72,7 +72,6 @@ class BatchGenerationInput(BaseModel):
     training_session_id: int = Field(gt=0)
     training_group_id: int | None = Field(default=None, gt=0)
     difficulty: int | None = Field(default=None, ge=1, le=5)
-    different_objects: bool = True
 
 
 class MaterializeInput(BaseModel):
@@ -632,32 +631,43 @@ async def generate_batch(
 ) -> list[dict]:
     """Prepare a set of distinct, reviewable drafts in one transaction."""
     await _session(database, data.training_session_id, user)
-    if data.training_group_id is not None and await database.scalar(
-        select(TrainingGroup.id).where(
-            TrainingGroup.id == data.training_group_id,
-            TrainingGroup.training_session_id == data.training_session_id,
+    group = None
+    if data.training_group_id is not None:
+        group = await database.scalar(
+            select(TrainingGroup).where(
+                TrainingGroup.id == data.training_group_id,
+                TrainingGroup.training_session_id == data.training_session_id,
+            )
         )
-    ) is None:
-        raise HTTPException(422, "Группа не принадлежит занятию")
+        if group is None:
+            raise HTTPException(422, "Группа не принадлежит занятию")
     template = await get_template(database, template_id)
     objects = await _matching_objects(database, template)
     if not objects:
         raise HTTPException(status_code=422, detail="Нет подходящих объектов")
-    if template.seed_code != "DEMO_EDUCATION_FIRE_001" and len(objects) < data.count:
-        raise HTTPException(422, "Для этого сценария недостаточно разных объектов")
+    if len(objects) < data.count:
+        raise HTTPException(
+            422,
+            f"Для {data.count} карточек нужно столько же разных подходящих объектов; "
+            f"найдено {len(objects)}",
+        )
+    group_difficulty = {
+        "Начальная": 1, "Низкая": 1, "Ниже средней": 2,
+        "Средняя": 3, "Высокая": 4, "Экспертная": 5,
+    }.get(group.difficulty) if group is not None else None
     ordered_ids = object_order([item.id for item in objects], data.seed)
     rows = []
     seen = set()
     seeds = card_seeds(data.seed, data.count * 10)
     for index in range(data.count):
-        object_id = ordered_ids[index % len(ordered_ids)] if data.different_objects else None
+        object_id = ordered_ids[index]
         for candidate in seeds[index * 10 : (index + 1) * 10]:
             content = await _build(
                 database,
                 template_id,
                 GenerationInput(
                     object_id=object_id,
-                    difficulty=data.difficulty,
+                    difficulty=group_difficulty or data.difficulty,
                     seed=candidate,
                     variant_mode="RANDOM",
                     training_session_id=data.training_session_id,

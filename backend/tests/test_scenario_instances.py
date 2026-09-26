@@ -162,6 +162,17 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
         db.add(other_school)
         db.flush()
         db.add(ObjectTag(object_id=other_school.id, tag="children"))
+        extra_schools = [
+            CityObject(
+                external_id=str(index), name=f"Школа №{index}",
+                object_type_id=school_type.id, source="test",
+                address=f"Пехотная, {index}", district="Щукино",
+            )
+            for index in range(3, 6)
+        ]
+        db.add_all(extra_schools)
+        db.flush()
+        db.add_all(ObjectTag(object_id=item.id, tag="children") for item in extra_schools)
         template = ScenarioTemplate(
             name="Пожар в школе",
             status="READY",
@@ -203,7 +214,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
             criteria=[ScenarioAssessmentCriterion(name="Время реакции", weight=3)],
         )
         session = TrainingSession(title="Занятие", instructor_id=instructor.id)
-        group = TrainingGroup(name="Группа без АРМ")
+        group = TrainingGroup(name="Группа без АРМ", difficulty="Начальная")
         session.groups.append(group)
         db.add_all([template, session])
         db.commit()
@@ -372,10 +383,17 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     "training_session_id": session.id,
                     "training_group_id": group.id,
                 }
+                insufficient = await client.post(
+                    f"{path}/batch", json={**batch_input, "count": 6}
+                )
+                assert insufficient.status_code == 422
+                assert "разных подходящих объектов" in insufficient.json()["detail"]
                 batch = await client.post(f"{path}/batch", json=batch_input)
                 assert batch.status_code == 201, batch.text
                 cards = batch.json()
                 assert len(cards) == 5
+                assert len({card["object_snapshot"]["id"] for card in cards}) == 5
+                assert all(card["difficulty"] == 1 for card in cards)
                 assert len({
                     (card["object_snapshot"]["id"], tuple(sorted(
                         card["initial_state_snapshot"]["variant_facts"].items()

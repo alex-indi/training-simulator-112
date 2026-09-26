@@ -8,6 +8,7 @@ const factNames = { floor: 'Этаж', room: 'Помещение', observation: 
 
 export default function PreparedGroupCards({ group, sessionId, instances, editable, api, refresh, onAdd }) {
   const [selectedId, setSelectedId] = useState(null)
+  const [selectedForRerender, setSelectedForRerender] = useState([])
   const [text, setText] = useState('')
   const [facts, setFacts] = useState({})
   const [messages, setMessages] = useState({})
@@ -45,6 +46,31 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
   const path = selected ? `/api/scenario-instances/${selected.id}` : ''
   const variantOptions = selected?.template_snapshot.variant_options || {}
   const canEdit = editable && selected?.status === 'DRAFT'
+  const rerenderSelected = async () => {
+    const chosen = drafts.filter((item) => selectedForRerender.includes(item.id))
+    if (!chosen.length) return
+    if (chosen.some((item) => item.initial_state_snapshot.render?.render_origin === 'MANUAL'
+      || item.events.some((event) => event.render?.render_origin === 'MANUAL'))
+      && !window.confirm('Выбранные карточки содержат ручные правки текста. Заменить их?')) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      for (const card of chosen) {
+        await api(`/api/scenario-instances/${card.id}/rerender-initial-message`, { method: 'POST' })
+        for (const event of card.events.filter((item) => item.event_type === 'RESPONSE_MESSAGE')) {
+          await api(`/api/scenario-instances/${card.id}/events/${event.id}/rerender`, { method: 'POST' })
+        }
+      }
+      await refresh()
+      setSelectedForRerender([])
+      setNotice(`Тексты обновлены: ${chosen.length} карточек`)
+    } catch (cause) {
+      setError(cause.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return <article className={styles.card}>
     <h3>{group.name}</h3>
@@ -55,10 +81,14 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     {editable && <div className={styles.actions}>
       <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Добавить карточки по сценарию</button>
+      <button type="button" disabled={busy || !selectedForRerender.some((id) => drafts.some((item) => item.id === id))} onClick={rerenderSelected}>Перегенерировать тексты выбранных</button>
       <button type="button" disabled={busy || !instances.length || !drafts.length} onClick={() => perform(`/api/training/sessions/${sessionId}/groups/${group.id}/cards/approve`, { method: 'POST' }, 'Набор группы утверждён')}>Утвердить набор</button>
     </div>}
     {!!instances.length && <div className={styles.scenarioList}>
-      <nav aria-label={`Карточки группы ${group.name}`} className={styles.cardList}>{instances.map((item, index) => <button key={item.id} type="button" className={item.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(item.id)}>{index + 1}. {item.template_snapshot.name} · {item.object_snapshot.name} · {item.status === 'CONFIRMED' ? 'Утверждена' : 'Черновик'}</button>)}</nav>
+      <nav aria-label={`Карточки группы ${group.name}`} className={styles.cardList}>{instances.map((item, index) => <div key={item.id}>
+        {editable && item.status === 'DRAFT' && <input type="checkbox" aria-label={`Выбрать карточку ${index + 1} для перегенерации`} checked={selectedForRerender.includes(item.id)} onChange={(event) => setSelectedForRerender((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />}
+        <button type="button" className={item.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(item.id)}>{index + 1}. {item.template_snapshot.name} · {item.object_snapshot.name} · {item.status === 'CONFIRMED' ? 'Утверждена' : 'Черновик'}</button>
+      </div>)}</nav>
       {selected && <section className={styles.scenario}>
         <h4>{selected.template_snapshot.name}</h4>
         <p><b>Объект:</b> {selected.object_snapshot.name}</p>

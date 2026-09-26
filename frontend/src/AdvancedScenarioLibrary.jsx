@@ -36,17 +36,17 @@ function InstanceReview({ instance, busy, api, perform, onChange, sessions, trai
   const base = `/api/scenario-instances/${instance.id}`
   const initial = instance.initial_state_snapshot
   return <section className={styles.panel}>
-    <h3>Экземпляр #{instance.id} · {instance.status}</h3>
+    <h3>Карточка на проверке · {instance.status === 'CONFIRMED' ? 'Подтверждена' : 'Черновик'}</h3>
     <p>{instance.name} · сложность {instance.difficulty}/5</p>
     <p>Объект: {instance.object_snapshot.name} · {instance.object_snapshot.address}</p>
     <p>Классификация: {instance.classifier_snapshot.final_incident_type}</p>
-    <p>Занятие: {instance.training_session_id ? `#${instance.training_session_id}` : 'не привязано'}</p>
+    <p>Занятие: {instance.training_session_id ? 'Выбрано' : 'не выбрано'}</p>
     <h4>Службы</h4><ul>{instance.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul>
     <RenderEditor title="Исходная карточка" facts={[initial.title, initial.description, initial.caller_text]} render={initial.render} editable={editable} busy={busy}
       onSave={(text) => action(`${base}/initial-message`, asOptions('PATCH', { text }))}
       onRerender={() => action(`${base}/rerender-initial-message`, { method: 'POST' })} />
     <h4>События</h4><ol>{instance.events.map((event) => <li key={event.id}>T+{formatOffset(event.offset_seconds)} · {event.title}
-      {event.event_type === 'RESPONSE_MESSAGE' ? <RenderEditor title="Сообщение группы" facts={[event.title, event.description, event.source_type]} render={event.render} editable={editable} busy={busy}
+      {event.event_type === 'RESPONSE_MESSAGE' ? <RenderEditor title="Сообщение группы" facts={[event.title, event.description]} render={event.render} editable={editable} busy={busy}
         onSave={(text) => action(`${base}/events/${event.id}/message`, asOptions('PATCH', { text }))}
         onRerender={() => action(`${base}/events/${event.id}/rerender`, { method: 'POST' })} /> : <p>{event.description}</p>}
     </li>)}</ol>
@@ -186,7 +186,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
   })
   const createInstance = () => perform(async () => {
     const created = await api(`/api/scenario-templates/${generation.id}/instances`, asOptions('POST', generationInput))
-    setGeneratedInstance(created); setGenerationPreview(null); setNotice(`Экземпляр #${created.id} создан`); await load()
+    setGeneratedInstance(created); setGenerationPreview(null); setNotice('Карточка создана'); await load()
   })
   const openInstance = (instance) => perform(async () => {
     const availableSessions = await api('/api/training/sessions')
@@ -210,7 +210,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     {generation && <div className={styles.content}>
-      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { setGeneration(null); setGenerationPreview(null); setGeneratedInstance(null) }}>← Библиотека</button><h2>Экземпляр: {generation.name}</h2></div></div>
+      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { setGeneration(null); setGenerationPreview(null); setGeneratedInstance(null) }}>← Библиотека</button><h2>Карточка: {generation.name}</h2></div></div>
       {!generatedInstance && <section className={styles.panel}>
         <h3>Параметры генерации</h3>
         <div className={styles.fields}>
@@ -221,12 +221,12 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
         </div>
         {!generationPreview && <button type="button" disabled={busy} onClick={refreshGenerationPreview}>Показать предпросмотр</button>}
         {generationPreview && <div className={styles.preview}><div><h4>Объект</h4><p>{generationPreview.object_snapshot?.name || 'Выберите объект'}</p><p>{generationPreview.object_snapshot?.address}</p><p>Подходящих объектов: {generationPreview.matching_object_count}</p></div><div><h4>Классификация и службы</h4><p>{generationPreview.classifier_snapshot.final_incident_type}</p><ul>{generationPreview.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul><h4>События</h4><ol>{generationPreview.events.map((event, index) => <li key={index}>T+{formatOffset(event.offset_seconds)} · {event.title} — {event.description}</li>)}</ol></div></div>}
-        {generationPreview?.object_snapshot && <button type="button" disabled={busy} onClick={createInstance}>Сгенерировать экземпляр</button>}
+        {generationPreview?.object_snapshot && <button type="button" disabled={busy} onClick={createInstance}>Создать карточку</button>}
       </section>}
       {generatedInstance && <InstanceReview instance={generatedInstance} busy={busy} api={api} perform={perform} onChange={(updated) => { setGeneratedInstance(updated); if (updated.status !== generatedInstance.status) load() }} sessions={sessions} trainingSessionId={generationInput.training_session_id} onSelectSession={(id) => setGenerationInput((old) => ({ ...old, training_session_id: id }))} />}
     </div>}
     {!selected && !generation && <div className={styles.content}>
-      {availableInstances.some((instance) => instance.status === 'DRAFT') && <section className={styles.panel}><h3>Экземпляры на проверке</h3><div className={styles.cards}>{availableInstances.filter((instance) => instance.status === 'DRAFT').map((instance) => <button className={styles.card} type="button" key={instance.id} onClick={() => openInstance(instance)}><b>#{instance.id} · {instance.name}</b><small>{instance.object_snapshot.name} · тексты ждут подтверждения</small></button>)}</div></section>}
+      {availableInstances.some((instance) => instance.status === 'DRAFT') && <section className={styles.panel}><h3>Карточки на проверке</h3><div className={styles.cards}>{availableInstances.filter((instance) => instance.status === 'DRAFT').map((instance) => <button className={styles.card} type="button" key={instance.id} onClick={() => openInstance(instance)}><b>{instance.name}</b><small>{instance.object_snapshot.name} · тексты ждут подтверждения</small></button>)}</div></section>}
       <div className={styles.topline}><div><h2>Сценарии</h2><p>Создавайте сценарии и подготавливайте их для занятий.</p></div><button type="button" onClick={() => { setSelected({ status: 'DRAFT' }); setDraft(blank()); setStep(null); setValidation(null); setDirty(false) }}>+ Создать сценарий</button></div>
       <div className={styles.filters}>
         <label>Поиск<input value={filters.q} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Название" /></label>
@@ -250,7 +250,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
       <div className={styles.actions}><button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 24))}>Назад</button><span>{total ? offset + 1 : 0}–{Math.min(total, offset + 24)} из {total}</span><button type="button" disabled={offset + 24 >= total} onClick={() => setOffset(offset + 24)}>Далее</button></div>
     </div>}
     {selected && !generation && <div className={styles.content}>
-      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { if (startCreate) onBack?.(); else { setSelected(null); setValidation(null) } }}>← {startCreate ? 'К выбору сценария' : 'Библиотека'}</button><h2>{selected.id ? draft.name || 'Без названия' : 'Новый сценарий'}</h2><p>{({ DRAFT: 'Черновик', READY: 'Готов к использованию', ARCHIVED: 'В архиве' })[selected.status]}{selected.id ? ` · № ${selected.id}` : ''}</p></div><div className={styles.actions}>{editable && <button type="button" disabled={busy} onClick={save}>Сохранить черновик</button>}{editable && onSaved && <button type="button" disabled={busy} onClick={saveAndUse}>Сохранить и использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => duplicate()}>Изменить</button>}{selected.status === 'READY' && onUse && <button type="button" onClick={() => onUse(selected)}>Использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => startGeneration(selected)}>Создать отдельную карточку</button>}{selected.status === 'READY' && (user.role === 'ADMIN' || selected.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => archive()}>Архивировать</button>}</div></div>
+      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { if (startCreate) onBack?.(); else { setSelected(null); setValidation(null) } }}>← {startCreate ? 'К выбору сценария' : 'Библиотека'}</button><h2>{selected.id ? draft.name || 'Без названия' : 'Новый сценарий'}</h2><p>{({ DRAFT: 'Черновик', READY: 'Готов к использованию', ARCHIVED: 'В архиве' })[selected.status]}</p></div><div className={styles.actions}>{editable && <button type="button" disabled={busy} onClick={save}>Сохранить черновик</button>}{editable && onSaved && <button type="button" disabled={busy} onClick={saveAndUse}>Сохранить и использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => duplicate()}>Изменить</button>}{selected.status === 'READY' && onUse && <button type="button" onClick={() => onUse(selected)}>Использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => startGeneration(selected)}>Создать отдельную карточку</button>}{selected.status === 'READY' && (user.role === 'ADMIN' || selected.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => archive()}>Архивировать</button>}</div></div>
       <nav className={styles.steps} aria-label="Разделы сценария"><button type="button" onClick={() => setStep(null)} className={step === null ? styles.current : ''}>Все разделы</button>{steps.map((label, index) => <button type="button" key={label} onClick={() => setStep(index)} className={step === index ? styles.current : ''}>{label}</button>)}</nav>
       <section className={styles.panel}>
         <h3>{step === null ? 'Параметры сценария' : steps[step]}</h3>

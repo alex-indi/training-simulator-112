@@ -57,6 +57,8 @@
 .scenarioList { display: grid; gap: 10px; margin-top: 16px; max-height: 560px; overflow-y: auto; }
 .groupCardSets { display: grid; gap: 20px; }
 .cardList { display: grid; gap: 6px; }
+.cardList > div { display: flex; align-items: center; gap: 8px; }
+.cardList > div button { flex: 1; }
 .cardList button { text-align: left; }
 .selectedCard { border-color: var(--dds-blue) !important; background: #e2f1f9 !important; }
 .scenario { padding: 13px; border: 1px solid #d8e2ea; border-radius: 8px; background: #f8fbfd; }

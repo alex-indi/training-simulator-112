@@ -633,6 +633,13 @@ async def assign_runs(
         and any(run.group_id is not None for run in targets)
     ):
         raise HTTPException(status_code=422, detail="Сначала исключите участника из группы")
+    if any(group.source_user_group_id is not None for group in item.groups):
+        if overrides:
+            raise HTTPException(422, "Параметры группы задаются на шаге «Группы»")
+        for run in targets:
+            run.group_id = payload.group_id
+        _invalidate_readiness(item)
+        return await _save(database, item)
     for run in targets:
         if payload.group_id is not None:
             group = next(group for group in item.groups if group.id == payload.group_id)
@@ -675,6 +682,13 @@ async def start_session(
     _ensure_session_owner(item, current_user)
     if not _readiness(item).can_start:
         raise HTTPException(status_code=409, detail="Подключите участников и назначьте профиль ДДС")
+    if any(group.source_user_group_id is not None for group in item.groups):
+        groups = {group.id: group for group in item.groups}
+        for run in item.runs:
+            group = groups.get(run.group_id)
+            run.dds_profile = (group.dds_profile or "ДДС") if group else "ДДС"
+            run.difficulty = group.difficulty if group else None
+            run.queue_mode = group.queue_mode if group else QueueMode.INDIVIDUAL_QUEUE
     try:
         start_training_session(item)
     except InvalidTrainingSessionTransitionError as error:

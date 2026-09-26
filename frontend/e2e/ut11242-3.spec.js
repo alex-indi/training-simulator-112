@@ -30,7 +30,9 @@ test('two groups prepare and approve mixed cards with no connected workstations'
     ...Array.from({ length: 2 }, (_, index) => card(index + 9, templates[1], 7)),
   ]
   let generatedFor = null
+  let generatedPayload = null
   let approved = []
+  const rerenderedIds = []
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
@@ -45,7 +47,8 @@ test('two groups prepare and approve mixed cards with no connected workstations'
     else if (path === '/api/scenario-templates/catalog') body = { services: [], object_types: [] }
     else if (path === '/api/scenario-templates' && method === 'GET') body = { items: templates, total: 2 }
     else if (path === '/api/scenario-templates/11/batch') {
-      generatedFor = route.request().postDataJSON().training_group_id
+      generatedPayload = route.request().postDataJSON()
+      generatedFor = generatedPayload.training_group_id
       const created = card(11, templates[1], generatedFor)
       instances = [...instances, created]
       body = [created]
@@ -56,6 +59,7 @@ test('two groups prepare and approve mixed cards with no connected workstations'
       body = { count: instances.filter((item) => item.training_group_id === groupId).length, approved: true }
     } else if (path.match(/^\/api\/scenario-instances\/\d+\/rerender-initial-message$/)) {
       const id = Number(path.split('/')[3])
+      rerenderedIds.push(id)
       instances = instances.map((item) => item.id === id ? { ...item, initial_state_snapshot: { ...item.initial_state_snapshot, render: { rendered_text: 'Новый текст' } } } : item)
       body = instances.find((item) => item.id === id)
     } else if (path.match(/^\/api\/scenario-instances\/\d+\/variant-facts$/)) {
@@ -81,8 +85,13 @@ test('two groups prepare and approve mixed cards with no connected workstations'
   await expect(groupA).toContainText('Пожар в школе · 5')
   await expect(groupA).toContainText('ДТП · 3')
   await expect(groupB).toContainText('Подготовлено 2 карточек')
-  await groupA.getByRole('button', { name: 'Перегенерировать текст' }).click()
+  await groupA.getByRole('button', { name: 'Перегенерировать текст', exact: true }).click()
   await expect(groupA.getByLabel('Текст карточки')).toHaveValue('Новый текст')
+  await groupA.getByLabel('Выбрать карточку 1 для перегенерации').check()
+  await groupA.getByLabel('Выбрать карточку 2 для перегенерации').check()
+  await groupA.getByRole('button', { name: 'Перегенерировать тексты выбранных' }).click()
+  await expect(groupA).toContainText('Тексты обновлены: 2 карточек')
+  expect(rerenderedIds).toEqual([1, 1, 2])
   await groupA.getByLabel('Этаж').selectOption('2')
   await groupA.getByRole('button', { name: 'Сохранить условия' }).click()
   await expect(groupA).toContainText('Этаж: 2')
@@ -91,10 +100,12 @@ test('two groups prepare and approve mixed cards with no connected workstations'
   await groupA.getByRole('button', { name: '+ Добавить карточки по сценарию' }).click()
   const picker = page.getByRole('dialog', { name: 'Выберите сценарий' })
   await picker.getByRole('button', { name: /ДТП/ }).click()
+  await expect(picker.getByLabel('Использовать разные объекты')).toHaveCount(0)
   await picker.getByLabel('Количество карточек').fill('1')
   await picker.getByRole('button', { name: 'Сформировать', exact: true }).click()
   await picker.getByRole('button', { name: 'Добавить в набор группы' }).click()
   expect(generatedFor).toBe(6)
+  expect(generatedPayload).not.toHaveProperty('different_objects')
   await expect(groupA).toContainText('Подготовлено 8 карточек')
   await groupA.getByRole('button', { name: 'Утвердить набор' }).click()
   await groupB.getByRole('button', { name: 'Утвердить набор' }).click()

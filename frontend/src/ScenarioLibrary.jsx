@@ -23,7 +23,7 @@ function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
   </div>
 }
 
-export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
+export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
@@ -33,7 +33,6 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
   const [editorOpen, setEditorOpen] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState(sessionId || '')
   const [count, setCount] = useState(5)
-  const [differentObjects, setDifferentObjects] = useState(true)
   const [target, setTarget] = useState(picker ? `group:${groupId}` : '')
   const [cards, setCards] = useState([])
   const [selectedId, setSelectedId] = useState(null)
@@ -102,7 +101,6 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
     const generated = await api(`/api/scenario-templates/${chosen.id}/batch`, options('POST', {
       count: Number(count), seed: Math.floor(Math.random() * 2147483647),
       training_session_id: Number(selectedSessionId), training_group_id: groupId || null,
-      different_objects: differentObjects,
     }))
     setCards(generated)
     setSelectedId(generated[0]?.id)
@@ -114,7 +112,6 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
       const generated = await api(`/api/scenario-templates/${chosen.id}/batch`, options('POST', {
         count: Number(count), seed: Math.floor(Math.random() * 2147483647),
         training_session_id: Number(selectedSessionId), training_group_id: groupId || null,
-        different_objects: differentObjects,
       }))
       for (const card of cards) await api(`/api/scenario-instances/${card.id}`, { method: 'DELETE' })
       setCards(generated)
@@ -186,7 +183,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
         {!cards.length && <section className={styles.panel}><p>{chosen.description}</p><div className={styles.batchForm}>
           {!picker && <label>Занятие<select value={selectedSessionId} onChange={(event) => { setSelectedSessionId(event.target.value); setTarget('') }}><option value="">Выберите занятие</option>{sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
           <label>Количество карточек<input type="number" min="1" max="50" value={count} onChange={(event) => setCount(event.target.value)} /></label>
-          <label className={styles.inlineCheck}><input type="checkbox" checked={differentObjects} onChange={(event) => setDifferentObjects(event.target.checked)} /> Использовать разные объекты</label>
+          {picker && groupDifficulty && <p>Сложность группы: {groupDifficulty}</p>}
+          <p>Для каждой карточки будет выбран отдельный подходящий объект.</p>
         </div>{!picker && session && !targets.length && <p>Сначала создайте общую группу или назначьте АРМ в занятии.</p>}
           <button type="button" disabled={busy || (!picker && (!session || !targets.length)) || Number(count) < 1 || Number(count) > 50} onClick={createBatch}>Сформировать</button>
         </section>}
