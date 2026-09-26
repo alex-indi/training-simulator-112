@@ -187,22 +187,28 @@ def test_library_lifecycle_and_permissions():
                 assert bad_type.status_code == 422
                 missing_object = await client.patch(
                     f"/api/scenario-templates/{scenario_id}",
-                    json={**payload, "object_rule": {
-                        **payload["object_rule"],
-                        "selection_mode": "OBJECT_BOUND",
-                        "specific_object_id": 999,
-                    }},
+                    json={
+                        **payload,
+                        "object_rule": {
+                            **payload["object_rule"],
+                            "selection_mode": "OBJECT_BOUND",
+                            "specific_object_id": 999,
+                        },
+                    },
                 )
                 assert missing_object.status_code == 422
                 saved = await client.patch(f"/api/scenario-templates/{scenario_id}", json=payload)
                 assert saved.status_code == 200, saved.text
                 no_match = await client.patch(
                     f"/api/scenario-templates/{scenario_id}",
-                    json={**payload, "object_rule": {
-                        **payload["object_rule"],
-                        "object_type_id": empty_type.id,
-                        "required_tags": [],
-                    }},
+                    json={
+                        **payload,
+                        "object_rule": {
+                            **payload["object_rule"],
+                            "object_type_id": empty_type.id,
+                            "required_tags": [],
+                        },
+                    },
                 )
                 assert no_match.status_code == 200
                 assert (await client.get(f"/api/scenario-templates/{scenario_id}/validate")).json()[
@@ -256,32 +262,41 @@ def test_library_lifecycle_and_permissions():
                     json={**payload, "events": message_events},
                 )
                 assert missing_target.status_code == 200
-                assert "Выберите службу для сообщения группы" in (
-                    await client.get(f"/api/scenario-templates/{copy_id}/validate")
-                ).json()["errors"]
+                assert (
+                    "Выберите службу для сообщения группы"
+                    in (await client.get(f"/api/scenario-templates/{copy_id}/validate")).json()[
+                        "errors"
+                    ]
+                )
                 assert (
                     await client.post(f"/api/scenario-templates/{copy_id}/ready")
                 ).status_code == 422
                 outside_target = await client.patch(
                     f"/api/scenario-templates/{copy_id}",
-                    json={**payload, "events": [
-                        *payload["events"],
-                        {**message_events[1], "target_service_id": other_service.id},
-                    ]},
+                    json={
+                        **payload,
+                        "events": [
+                            *payload["events"],
+                            {**message_events[1], "target_service_id": other_service.id},
+                        ],
+                    },
                 )
                 assert outside_target.status_code == 422
                 addressed = await client.patch(
                     f"/api/scenario-templates/{copy_id}",
-                    json={**payload, "events": [
-                        *payload["events"],
-                        {**message_events[1], "target_service_id": service.id},
-                    ]},
+                    json={
+                        **payload,
+                        "events": [
+                            *payload["events"],
+                            {**message_events[1], "target_service_id": service.id},
+                        ],
+                    },
                 )
                 assert addressed.status_code == 200
                 assert addressed.json()["events"][1]["target_service_id"] == service.id
-                assert (
-                    await client.get(f"/api/scenario-templates/{copy_id}/validate")
-                ).json()["errors"] == []
+                assert (await client.get(f"/api/scenario-templates/{copy_id}/validate")).json()[
+                    "errors"
+                ] == []
                 denied_author = await client.patch(
                     f"/api/scenario-templates/{copy_id}",
                     json={**payload, "created_by_user_id": admin.id},
@@ -320,6 +335,41 @@ def test_library_lifecycle_and_permissions():
                     await client.post(f"/api/scenario-templates/{scenario_id}/archive")
                 ).status_code == 200
                 assert (await client.get("/api/scenario-templates")).json()["total"] == 0
+                simple_payload = {
+                    "name": "Пожар в школе",
+                    "classifier_rule_id": rule.id,
+                    "object_type_id": object_type.id,
+                    "difficulty": 3,
+                    "variant_options": {"floor": [1, 2], "room": ["кабинет", "коридор"]},
+                }
+                assert (
+                    await client.post(
+                        "/api/scenario-templates/simple",
+                        json={**simple_payload, "object_type_id": empty_type.id},
+                    )
+                ).status_code == 422
+                simple = await client.post("/api/scenario-templates/simple", json=simple_payload)
+                assert simple.status_code == 201, simple.text
+                simple_id = simple.json()["id"]
+                assert simple.json()["services"] == [
+                    {"service_id": service.id, "source": "CLASSIFIER"}
+                ]
+                assert (await client.get(f"/api/scenario-templates/{simple_id}/validate")).json()[
+                    "errors"
+                ] == []
+                updated_simple = await client.patch(
+                    f"/api/scenario-templates/simple/{simple_id}",
+                    json={**simple_payload, "name": "Пожар в учебном корпусе"},
+                )
+                assert updated_simple.status_code == 200, updated_simple.text
+                assert updated_simple.json()["name"] == "Пожар в учебном корпусе"
+                assert (
+                    await client.delete(f"/api/scenario-templates/{simple_id}")
+                ).status_code == 204
+                assert simple_id not in [
+                    item["id"]
+                    for item in (await client.get("/api/scenario-templates/simple")).json()
+                ]
 
         asyncio.run(run())
     engine.dispose()

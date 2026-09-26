@@ -57,6 +57,22 @@ class ScenarioInstance(Base):
     )
 
 
+class SavedIncidentCard(Base):
+    """Reusable copy of a prepared card, independent of its template and session."""
+
+    __tablename__ = "saved_incident_cards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    source_template_id: Mapped[int | None] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(String(500))
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ScenarioInstanceEvent(Base):
     __tablename__ = "scenario_instance_events"
     __table_args__ = (CheckConstraint("offset_seconds >= 0", name="ck_instance_event_offset"),)

@@ -6,7 +6,7 @@ import styles from './InstructorWorkspace.module.css'
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const factNames = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
 
-export default function PreparedGroupCards({ group, sessionId, instances, editable, api, refresh, onAdd }) {
+export default function PreparedGroupCards({ group, instances, editable, api, refresh, onAdd, onAddSaved }) {
   const [selectedId, setSelectedId] = useState(null)
   const [selectedForRerender, setSelectedForRerender] = useState([])
   const [text, setText] = useState('')
@@ -75,19 +75,19 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
   return <article className={styles.card}>
     <h3>{group.name}</h3>
     <p>{group.difficulty || 'Без сложности'} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</p>
-    <p>Подготовлено {instances.length} карточек · {drafts.length ? `ожидают утверждения: ${drafts.length}` : instances.length ? 'набор утверждён' : 'набор пуст'}</p>
+    <p>Подготовлено {instances.length} карточек</p>
     {Object.entries(counts).map(([name, count]) => <p key={name}>{name} · {count}</p>)}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     {editable && <div className={styles.actions}>
-      <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Добавить карточки по сценарию</button>
+      <button type="button" disabled={busy} onClick={() => onAddSaved(group.id)}>+ Добавить готовые карточки</button>
+      <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Сформировать из шаблона</button>
       <button type="button" disabled={busy || !selectedForRerender.some((id) => drafts.some((item) => item.id === id))} onClick={rerenderSelected}>Перегенерировать тексты выбранных</button>
-      <button type="button" disabled={busy || !instances.length || !drafts.length} onClick={() => perform(`/api/training/sessions/${sessionId}/groups/${group.id}/cards/approve`, { method: 'POST' }, 'Набор группы утверждён')}>Утвердить набор</button>
     </div>}
     {!!instances.length && <div className={styles.scenarioList}>
       <nav aria-label={`Карточки группы ${group.name}`} className={styles.cardList}>{instances.map((item, index) => <div key={item.id}>
         {editable && item.status === 'DRAFT' && <input type="checkbox" aria-label={`Выбрать карточку ${index + 1} для перегенерации`} checked={selectedForRerender.includes(item.id)} onChange={(event) => setSelectedForRerender((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />}
-        <button type="button" className={item.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(item.id)}>{index + 1}. {item.template_snapshot.name} · {item.object_snapshot.name} · {item.status === 'CONFIRMED' ? 'Утверждена' : 'Черновик'}</button>
+        <button type="button" className={item.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(item.id)}>{index + 1}. {item.template_snapshot.name} · {item.object_snapshot.name}</button>
       </div>)}</nav>
       {selected && <section className={styles.scenario}>
         <h4>{selected.template_snapshot.name}</h4>
@@ -99,6 +99,7 @@ export default function PreparedGroupCards({ group, sessionId, instances, editab
           <button type="button" disabled={busy || Object.keys(variantOptions).every((key) => facts[key] === selected.initial_state_snapshot.variant_facts[key])} onClick={() => perform(`${path}/variant-facts`, json('PATCH', facts), 'Условия сохранены')}>Сохранить условия</button>
         </div>}
         <label>Текст карточки<textarea value={text} readOnly={!canEdit} onChange={(event) => setText(event.target.value)} /></label>
+        {editable && <button type="button" disabled={busy || (canEdit && text !== selected.initial_state_snapshot.render?.rendered_text)} onClick={() => perform(`/api/incident-cards/from-instance/${selected.id}`, { method: 'POST' }, 'Карточка сохранена в библиотеку')}>Сохранить в библиотеку</button>}
         {canEdit && <div className={styles.actions}>
           <button type="button" disabled={busy || !text.trim() || text === selected.initial_state_snapshot.render?.rendered_text} onClick={() => perform(`${path}/initial-message`, json('PATCH', { text }), 'Текст сохранён')}>Исправить текст</button>
           <button type="button" disabled={busy} onClick={() => perform(`${path}/rerender-initial-message`, { method: 'POST' }, 'Текст перегенерирован')}>Перегенерировать текст</button>

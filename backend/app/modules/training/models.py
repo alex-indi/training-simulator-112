@@ -366,6 +366,9 @@ class AssessmentResult(Base):
     final_score: Mapped[int | None] = mapped_column(Integer)
     score_override: Mapped[int | None] = mapped_column(Integer)
     final_comment: Mapped[str | None] = mapped_column(Text)
+    ai_summary: Mapped[str | None] = mapped_column(Text)
+    ai_summary_provider: Mapped[str | None] = mapped_column(String(40))
+    ai_summary_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

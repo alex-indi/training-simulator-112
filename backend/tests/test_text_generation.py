@@ -101,17 +101,36 @@ def test_school_fire_fallback_is_short_and_keeps_variant_facts():
     }
     request = TextGenerationRequest(
         TextGenerationTask.INCIDENT_REPORT,
-        {"description": "Служебное описание", "caller_text": "", "variant_facts": variant},
+        {
+            "description": "Служебное описание",
+            "caller_text": "",
+            "variant_facts": variant,
+            "fallback_style": "SCHOOL_FIRE",
+        },
     )
 
     async def run():
         result = await AITextRenderer(FakeProvider(), enabled=False).render(request)
         text = result["rendered_text"]
-        assert text == (
-            "сильное задымление на 2 этаже школы, коридор; пострадавшие неизвестны"
-        )
+        assert text == ("сильное задымление на 2 этаже школы, коридор; пострадавшие неизвестны")
         assert "Зафиксировано происшествие" not in text
         assert "Служебное описание" not in text
+
+    asyncio.run(run())
+
+
+def test_offline_incident_report_accepts_partial_simple_variants():
+    request = TextGenerationRequest(
+        TextGenerationTask.INCIDENT_REPORT,
+        {
+            "description": "Пожар в школе; Этаж: 2",
+            "variant_facts": {"floor": 2},
+        },
+    )
+
+    async def run():
+        result = await AITextRenderer(FakeProvider(), enabled=False).render(request)
+        assert result["rendered_text"] == "Пожар в школе; Этаж: 2"
 
     asyncio.run(run())
 

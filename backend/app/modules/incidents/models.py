@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, String, Text, func
+from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -141,6 +141,32 @@ class Incident(Base):
         back_populates="incident",
         cascade="all, delete-orphan",
     )
+    activities: Mapped[list[IncidentActivity]] = relationship(
+        back_populates="incident",
+        cascade="all, delete-orphan",
+        order_by="IncidentActivity.created_at, IncidentActivity.id",
+    )
+
+
+class IncidentActivity(Base):
+    """Неизменяемое сообщение службы или учебной бригады с серверным временем."""
+
+    __tablename__ = "incident_activities"
+    __table_args__ = (UniqueConstraint("incident_id", "event_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    incident_id: Mapped[int] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"), index=True
+    )
+    event_key: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(32))
+    service_id: Mapped[int | None] = mapped_column(ForeignKey("dispatch_services.id"))
+    service_name: Mapped[str] = mapped_column(String(200))
+    stage: Mapped[str | None] = mapped_column(String(32))
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    incident: Mapped[Incident] = relationship(back_populates="activities")
 
 
 class IncidentAction(Base):

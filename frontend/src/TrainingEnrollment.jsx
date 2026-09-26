@@ -22,7 +22,8 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
     return () => { active = false; window.clearInterval(timer) }
   }, [api])
 
-  const selected = sessions.find((item) => String(item.id) === sessionId) || sessions[0]
+  const availableSessions = sessions.filter((item) => ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
+  const selected = availableSessions.find((item) => String(item.id) === sessionId) || availableSessions[0]
   const ownRun = selected?.own_run
   const selectedId = selected?.id
   const ownRunId = ownRun?.id
@@ -65,14 +66,14 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
     } catch (cause) { setError(cause.message) } finally { setBusy(false) }
   }
 
-  if (!sessions.length && !error) return null
+  if (!availableSessions.length && !error) return null
   if (ownRun && !error && !selected?.paused_at && !ownRun.paused_at) return null
   return <section className={styles.panel} aria-label="Учебное занятие">
     <strong>Учебное занятие</strong>
     {error && <span className={styles.error} role="alert">{error}</span>}
-    {sessions.length > 0 && <>
+    {availableSessions.length > 0 && <>
       <select aria-label="Занятие" value={selected?.id || ''} onChange={(event) => { setSessionId(event.target.value); setStation('') }}>
-        {sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+        {availableSessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
       </select>
       {ownRun ? <span>АРМ {String(ownRun.workstation_number).padStart(2, '0')} · {ownRun.dds_profile === 'ДДС' ? 'профиль ожидает назначения' : ownRun.dds_profile} · {ownRun.online ? 'online' : 'подключение'}</span>
         : <form onSubmit={join}><label>Рабочее место <input type="number" min="1" max={selected.workstation_count} value={station} onChange={(event) => setStation(event.target.value)} required /></label><button type="submit" disabled={busy || !station}>Занять АРМ</button></form>}
