@@ -389,11 +389,6 @@ def as_input(row: ScenarioTemplate) -> TemplateInput:
     return TemplateInput.model_validate({key: data[key] for key in TemplateInput.model_fields})
 
 
-def can_change(row: ScenarioTemplate, user: User) -> None:
-    if user.role != UserRole.ADMIN and row.created_by_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Изменять можно только свои сценарии")
-
-
 async def readiness_errors(database: AsyncSession, row: ScenarioTemplate) -> list[str]:
     errors: list[str] = []
     if not row.name.strip():
@@ -639,7 +634,6 @@ async def update_template(
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
     row = await get_template(database, template_id)
-    can_change(row, user)
     if row.status != "DRAFT":
         raise HTTPException(status_code=409, detail="Редактируется только черновик; создайте копию")
     await validate_references(database, data)
@@ -679,7 +673,6 @@ async def ready_template(
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
     row = await get_template(database, template_id)
-    can_change(row, user)
     if row.status != "DRAFT":
         raise HTTPException(status_code=409, detail="Только черновик можно перевести в READY")
     errors = await readiness_errors(database, row)
@@ -698,7 +691,6 @@ async def archive_template(
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
     row = await get_template(database, template_id)
-    can_change(row, user)
     if row.status != "READY":
         raise HTTPException(status_code=409, detail="Архивируется только READY-сценарий")
     row.status = "ARCHIVED"

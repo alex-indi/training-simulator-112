@@ -11,7 +11,7 @@
 .sidebar footer { margin-top: auto; display: grid; gap: 8px; padding: 16px; background: #0d1d2e; }
 .sidebar footer select { width: 100%; padding: 8px; }.sidebar footer small { color: #93a8bb; }.sidebar footer button { padding: 8px; border: 1px solid #54708a; border-radius: 6px; background: transparent; color: #fff; cursor: pointer; }
 .workspace { min-width: 0; }.topbar { min-height: 84px; display: flex; align-items: center; gap: 18px; padding: 14px 28px; background: #fff; border-bottom: 1px solid #dce3e9; }
-.topbar div { margin-right: auto; }.topbar small { color: #68788a; text-transform: uppercase; letter-spacing: .08em; }.topbar h1 { margin: 3px 0 0; font-size: 25px; }
+.topbarMain > div:first-child { margin-right: auto; }.topbar small { color: #68788a; text-transform: uppercase; letter-spacing: .08em; }.topbar h1 { margin: 3px 0 0; font-size: 25px; }
 .topbar form { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }.topbar input { width: 170px; }
 .topbar button, .content button { border: 1px solid #8ca0b2; border-radius: 6px; padding: 8px 12px; background: #fff; color: #183047; cursor: pointer; }
 .topbar button:hover, .content button:hover { border-color: #245d86; background: #eef6fb; }.content button:disabled { opacity: .55; cursor: wait; }
@@ -47,6 +47,7 @@
 
 /* Operator workstation visual language */
 .shell {
+  --admin-header-height: 118px;
   --dds-blue: #1587c3;
   --dds-dark: #30373c;
   --dds-dock: #455159;
@@ -65,12 +66,18 @@
 }
 
 .sidebar {
+  min-width: 0;
+  overflow: hidden;
   background: var(--dds-dark);
   color: #fff;
 }
 
 .sidebar header {
-  min-height: 72px;
+  width: 100%;
+  max-width: 100%;
+  height: var(--admin-header-height);
+  min-height: var(--admin-header-height);
+  flex: 0 0 var(--admin-header-height);
   box-sizing: border-box;
   gap: 11px;
   padding: 13px 14px;
@@ -97,6 +104,7 @@
 }
 
 .sidebar header strong {
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 600;
 }
@@ -159,11 +167,32 @@
 }
 
 .topbar {
-  min-height: 72px;
-  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 370px;
+  gap: 0;
+  height: var(--admin-header-height);
+  min-height: var(--admin-header-height);
+  box-sizing: border-box;
+  padding: 0;
   border-bottom: 5px solid var(--dds-divider);
   background: var(--dds-panel);
 }
+
+.topbarMain {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 18px;
+}
+
+.topbarMain > * { min-width: 0; }
+.topbarMain > div:first-child {
+  border-left: 4px solid #455159;
+  padding-left: 12px;
+}
+.topbar > :last-child { width: 370px; align-self: stretch; }
+.topbar > :last-child button { min-height: 0; border: 0; padding: 0; background: transparent; }
 
 .topbar small {
   color: var(--dds-muted);

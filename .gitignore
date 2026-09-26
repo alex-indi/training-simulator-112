@@ -63,6 +63,7 @@ frontend/playwright-report/
 tmp/
 temp/
 .cache/
+.playwright-cli/
 output/
 outputs/
 

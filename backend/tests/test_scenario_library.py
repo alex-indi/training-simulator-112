@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import UserGroup
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.incident_classifier.models import (
@@ -69,6 +70,7 @@ def test_library_lifecycle_and_permissions():
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     tables = [
+        UserGroup,
         User,
         IncidentClassifierRule,
         DispatchService,
@@ -286,12 +288,29 @@ def test_library_lifecycle_and_permissions():
                 )
                 assert denied_author.status_code == 403
                 principal["user"] = admin
+                admin_updated_instructor_draft = await client.patch(
+                    f"/api/scenario-templates/{copy_id}",
+                    json={**payload, "name": "Исправлено администратором"},
+                )
+                assert admin_updated_instructor_draft.status_code == 200
+                assert admin_updated_instructor_draft.json()["name"] == "Исправлено администратором"
+                admin_own = await client.post(
+                    "/api/scenario-templates", json={"name": "Черновик администратора"}
+                )
+                assert admin_own.status_code == 201
                 admin_created = await client.post(
                     "/api/scenario-templates",
                     json={"name": "Сценарий преподавателя", "created_by_user_id": instructor.id},
                 )
                 assert admin_created.status_code == 201, admin_created.text
                 assert admin_created.json()["created_by_user_id"] == instructor.id
+                principal["user"] = instructor
+                instructor_updated_admin_draft = await client.patch(
+                    f"/api/scenario-templates/{admin_own.json()['id']}",
+                    json={"name": "Исправлено преподавателем"},
+                )
+                assert instructor_updated_admin_draft.status_code == 200
+                assert instructor_updated_admin_draft.json()["name"] == "Исправлено преподавателем"
                 principal["user"] = trainee
                 assert (
                     await client.get(f"/api/scenario-templates/{scenario_id}")

@@ -22,7 +22,7 @@ function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
   </div>
 }
 
-export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }) {
+export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, embedded = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
@@ -157,8 +157,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId }
   const serviceName = (id) => catalog.services.find((service) => service.id === id)?.name || 'Служба'
   const objectTypeName = (id) => catalog.object_types.find((item) => item.id === id)?.name || 'Подходящий объект'
 
-  return <main className={styles.shell}>
-    <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Библиотека сценариев</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>
+  return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
+    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Библиотека сценариев</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     <div className={styles.content}>
