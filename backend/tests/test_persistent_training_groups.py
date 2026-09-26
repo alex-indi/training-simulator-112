@@ -9,8 +9,15 @@ from fastapi import HTTPException
 
 from app.modules.admin.models import UserGroup
 from app.modules.identity.models import User, UserRole
-from app.modules.response.models import ResponseAssignment  # noqa: F401 — registers relationship mapper
-from app.modules.training.models import QueueMode, TrainingMode, TrainingSession, TrainingSessionState
+from app.modules.response.models import (
+    ResponseAssignment,  # noqa: F401 — registers relationship mapper
+)
+from app.modules.training.models import (
+    QueueMode,
+    TrainingMode,
+    TrainingSession,
+    TrainingSessionState,
+)
 from app.modules.training.router import create_group, update_group
 from app.modules.training.schemas import GroupWrite
 from app.modules.training.user_groups import UserGroupWrite, _check_owner, _members
@@ -31,7 +38,10 @@ def draft() -> TrainingSession:
 
 def test_session_group_uses_owned_source_without_training_run() -> None:
     session = draft()
-    source = UserGroup(id=7, name="ДДС пожарной охраны", code="ДДС-101-01", created_by_user_id=2, is_archived=False)
+    source = UserGroup(
+        id=7, name="ДДС пожарной охраны", code="ДДС-101-01",
+        created_by_user_id=2, is_archived=False,
+    )
     database = MagicMock()
     database.get = AsyncMock(return_value=source)
 
@@ -60,7 +70,10 @@ def test_instructor_cannot_attach_foreign_or_archived_source() -> None:
         database.get = AsyncMock(return_value=UserGroup(
             id=7, name="Чужая группа", created_by_user_id=owner_id, is_archived=archived,
         ))
-        with patch("app.modules.training.router._load_session", new=AsyncMock(return_value=session)):
+        with patch(
+            "app.modules.training.router._load_session",
+            new=AsyncMock(return_value=session),
+        ):
             with pytest.raises(HTTPException) as error:
                 asyncio.run(create_group(
                     10, GroupWrite(name="Группа", source_user_group_id=7), instructor(), database,

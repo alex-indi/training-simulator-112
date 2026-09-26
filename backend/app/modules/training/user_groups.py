@@ -74,16 +74,23 @@ async def _read(database: AsyncSession, group: UserGroup) -> UserGroupRead:
     return UserGroupRead(
         id=group.id, name=group.name, code=group.code,
         is_archived=group.is_archived,
-        members=[MemberRead(id=member.id, full_name=member.full_name, group_id=member.group_id) for member in members],
+        members=[
+            MemberRead(id=member.id, full_name=member.full_name, group_id=member.group_id)
+            for member in members
+        ],
         member_count=len(members),
     )
 
 
-async def _members(database: AsyncSession, ids: list[int], target_group_id: int | None = None) -> list[User]:
+async def _members(
+    database: AsyncSession, ids: list[int], target_group_id: int | None = None,
+) -> list[User]:
     if not ids:
         return []
     users = (await database.scalars(
-        select(User).where(User.id.in_(ids), User.role == UserRole.TRAINEE, User.is_active.is_(True))
+        select(User).where(
+            User.id.in_(ids), User.role == UserRole.TRAINEE, User.is_active.is_(True)
+        )
     )).all()
     if {item.id for item in users} != set(ids):
         raise HTTPException(status_code=422, detail="Выберите существующих активных обучаемых")
@@ -92,7 +99,9 @@ async def _members(database: AsyncSession, ids: list[int], target_group_id: int 
     return list(users)
 
 
-async def _check_unique(database: AsyncSession, payload: UserGroupWrite, group_id: int | None = None) -> None:
+async def _check_unique(
+    database: AsyncSession, payload: UserGroupWrite, group_id: int | None = None,
+) -> None:
     duplicate = await database.scalar(
         select(UserGroup.id).where(
             (func.lower(UserGroup.name) == payload.name.lower())
@@ -127,7 +136,10 @@ async def list_available_trainees(
         select(User).where(User.role == UserRole.TRAINEE, User.is_active.is_(True))
         .order_by(User.full_name, User.id)
     )).all()
-    return [MemberRead(id=item.id, full_name=item.full_name, group_id=item.group_id) for item in users]
+    return [
+        MemberRead(id=item.id, full_name=item.full_name, group_id=item.group_id)
+        for item in users
+    ]
 
 
 @router.post("", response_model=UserGroupRead, status_code=status.HTTP_201_CREATED)
@@ -150,7 +162,9 @@ async def create_user_group(
         await database.commit()
     except IntegrityError as error:
         await database.rollback()
-        raise HTTPException(status_code=409, detail="Название или код группы уже используется") from error
+        raise HTTPException(
+            status_code=409, detail="Название или код группы уже используется"
+        ) from error
     return await _read(database, group)
 
 
@@ -181,7 +195,9 @@ async def update_user_group(
         await database.commit()
     except IntegrityError as error:
         await database.rollback()
-        raise HTTPException(status_code=409, detail="Название или код группы уже используется") from error
+        raise HTTPException(
+            status_code=409, detail="Название или код группы уже используется"
+        ) from error
     return await _read(database, group)
 
 

@@ -20,7 +20,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("scenario_instances", sa.Column("training_group_id", sa.Integer(), nullable=True))
-    op.create_index("ix_scenario_instances_training_group_id", "scenario_instances", ["training_group_id"])
+    op.create_index(
+        "ix_scenario_instances_training_group_id", "scenario_instances", ["training_group_id"]
+    )
     op.create_foreign_key(
         "fk_scenario_instances_training_group_id",
         "scenario_instances", "training_groups", ["training_group_id"], ["id"], ondelete="RESTRICT",
@@ -28,6 +30,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_scenario_instances_training_group_id", "scenario_instances", type_="foreignkey")
+    op.drop_constraint(
+        "fk_scenario_instances_training_group_id", "scenario_instances", type_="foreignkey"
+    )
     op.drop_index("ix_scenario_instances_training_group_id", table_name="scenario_instances")
     op.drop_column("scenario_instances", "training_group_id")

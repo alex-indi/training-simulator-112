@@ -20,7 +20,8 @@ def upgrade() -> None:
     op.add_column("user_groups", sa.Column("code", sa.String(40), nullable=True))
     op.add_column("user_groups", sa.Column("created_by_user_id", sa.Integer(), nullable=True))
     op.add_column(
-        "user_groups", sa.Column("is_archived", sa.Boolean(), nullable=False, server_default="false")
+        "user_groups",
+        sa.Column("is_archived", sa.Boolean(), nullable=False, server_default="false"),
     )
     op.create_index("ix_user_groups_code", "user_groups", ["code"], unique=True)
     op.create_index("ix_user_groups_created_by_user_id", "user_groups", ["created_by_user_id"])
