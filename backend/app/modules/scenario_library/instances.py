@@ -41,6 +41,7 @@ from app.modules.training.delivery import _editable, _invalidate_readiness, _new
 from app.modules.training.models import (
     QueueMode,
     ScenarioQueueItem,
+    TrainingGroup,
     TrainingSession,
     TrainingSessionState,
 )
@@ -69,6 +70,7 @@ class BatchGenerationInput(BaseModel):
     count: int = Field(ge=1, le=50)
     seed: int = Field(default=0, ge=0, le=2147483647)
     training_session_id: int = Field(gt=0)
+    training_group_id: int | None = Field(default=None, gt=0)
     difficulty: int | None = Field(default=None, ge=1, le=5)
     different_objects: bool = True
 
@@ -553,6 +555,7 @@ def _serialize(row: ScenarioInstance) -> dict:
         "id": row.id,
         "scenario_template_id": row.scenario_template_id,
         "training_session_id": row.training_session_id,
+        "training_group_id": row.training_group_id,
         "created_by_user_id": row.created_by_user_id,
         "name": row.name,
         "difficulty": row.difficulty,
@@ -597,10 +600,13 @@ async def generate(
     return await read_instance(row.id, user, database)
 
 
-def _instance_from_content(template_id: int, content: dict, user: User) -> ScenarioInstance:
+def _instance_from_content(
+    template_id: int, content: dict, user: User, group_id: int | None = None,
+) -> ScenarioInstance:
     return ScenarioInstance(
         scenario_template_id=template_id,
         training_session_id=content["training_session_id"],
+        training_group_id=group_id,
         created_by_user_id=user.id,
         name=content["name"],
         difficulty=content["difficulty"],
@@ -626,6 +632,13 @@ async def generate_batch(
 ) -> list[dict]:
     """Prepare a set of distinct, reviewable drafts in one transaction."""
     await _session(database, data.training_session_id, user)
+    if data.training_group_id is not None and await database.scalar(
+        select(TrainingGroup.id).where(
+            TrainingGroup.id == data.training_group_id,
+            TrainingGroup.training_session_id == data.training_session_id,
+        )
+    ) is None:
+        raise HTTPException(422, "Группа не принадлежит занятию")
     template = await get_template(database, template_id)
     objects = await _matching_objects(database, template)
     if not objects:
@@ -663,7 +676,7 @@ async def generate_batch(
         content["template_snapshot"]["batch_seed"] = data.seed
         content["template_snapshot"]["batch_position"] = index + 1
         await _render_content(content, database)
-        row = _instance_from_content(template_id, content, user)
+        row = _instance_from_content(template_id, content, user, data.training_group_id)
         database.add(row)
         rows.append(row)
     await database.commit()
@@ -970,6 +983,46 @@ async def confirm_batch(
     result = {"count": len(items), "queue_item_ids": [item.id for item in items]}
     await database.commit()
     return result
+
+
+@session_router.post("/{session_id}/groups/{group_id}/cards/approve")
+async def approve_group_cards(
+    session_id: int,
+    group_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Approve the group's complete master set without creating runtime queues."""
+    session = await _load_session(database, session_id, for_update=True)
+    _editable(session, user)
+    if group_id not in {group.id for group in session.groups}:
+        raise HTTPException(404, "Группа занятия не найдена")
+    rows = (
+        await database.scalars(
+            select(ScenarioInstance)
+            .where(
+                ScenarioInstance.training_session_id == session_id,
+                ScenarioInstance.training_group_id == group_id,
+            )
+            .options(selectinload(ScenarioInstance.events))
+            .with_for_update()
+        )
+    ).all()
+    if not rows:
+        raise HTTPException(409, "Сначала добавьте карточки группы")
+    for row in rows:
+        if row.status not in {"DRAFT", "CONFIRMED"}:
+            raise HTTPException(409, "Недопустимое состояние карточки")
+        if not row.initial_state_snapshot.get("render", {}).get("rendered_text") or any(
+            event.event_type == "RESPONSE_MESSAGE"
+            and not event.payload_snapshot.get("render", {}).get("rendered_text")
+            for event in row.events
+        ):
+            raise HTTPException(409, "Сначала подготовьте все тексты набора")
+    for row in rows:
+        row.status = "CONFIRMED"
+    await database.commit()
+    return {"group_id": group_id, "count": len(rows), "approved": True}
 
 
 @instance_router.get("")

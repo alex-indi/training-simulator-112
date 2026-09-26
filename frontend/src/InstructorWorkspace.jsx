@@ -6,6 +6,7 @@ import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
 import ScenarioLibrary from './ScenarioLibrary.jsx'
 import InstructorGroups from './InstructorGroups.jsx'
+import PreparedGroupCards from './PreparedGroupCards.jsx'
 import AdvancedScenarioLibrary from './AdvancedScenarioLibrary.jsx'
 import WorkspaceClock from './WorkspaceClock.jsx'
 import { sessionStateLabels, trainingModeLabels } from './uiLabels.js'
@@ -409,14 +410,9 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
         <div className={styles.actions}><button type="button" onClick={() => setStep(4)}>К готовности →</button></div></section>}
       {step === 2 && user.role !== 'ADMIN' && <section className={styles.section}>
         <h3>Карточки происшествий</h3>
-        <p>Для каждой группы выберите сценарий и количество карточек. Набор можно пополнять несколькими сценариями.</p>
-        <div className={styles.cards}>{session.groups.map((group) => <article className={styles.card} key={group.id}><strong>{group.name}</strong><span>{group.difficulty} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</span><small>Подготовлено: {queue.filter((item) => item.training_group_id === group.id).length} карточек</small>{editable && <button type="button" onClick={() => openPicker(group.id)}>+ Добавить карточки по сценарию</button>}</article>)}</div>
-        <div className={styles.cards}>{queue.map((item) => <article className={styles.card} key={item.id}>
-          <strong>{item.title}</strong>
-          <span>{item.snapshot.address}</span>
-          <small>{item.training_group_id ? `Общий пул · ${session.groups.find((group) => group.id === item.training_group_id)?.name || 'Группа'}` : `АРМ ${session.runs.find((run) => run.id === item.training_run_id)?.workstation_number || '—'}`} · {item.approved ? 'Утверждена' : 'Ожидает утверждения'}</small>
-        </article>)}</div>
-        {!queue.length && <p>Карточки пока не добавлены.</p>}
+        <p>Подготовьте для каждой группы карточки из одного или нескольких сценариев и утвердите проверенный набор.</p>
+        <div className={styles.groupCardSets}>{session.groups.map((group) => <PreparedGroupCards key={group.id} group={group} sessionId={session.id} instances={scenarioInstances.filter((item) => item.training_group_id === group.id)} editable={editable} api={api} refresh={() => reload(session.id)} onAdd={openPicker} />)}</div>
+        {!session.groups.length && <p>Сначала выберите группы занятия.</p>}
         <div className={styles.actions}><button type="button" onClick={() => setStep(3)}>К подключению →</button></div>
         {pickerGroupId && <div className={styles.pickerOverlay}><section className={styles.pickerDialog} role="dialog" aria-modal="true" aria-label="Выберите сценарий"><button type="button" className={styles.back} onClick={closePicker}>Закрыть</button><ScenarioLibrary key={`${session.id}:${pickerGroupId}:${pickerTemplate?.id || ''}`} embedded picker user={user} requestJson={requestJson} sessionId={session.id} groupId={pickerGroupId} initialTemplate={pickerTemplate} onCompleted={closePicker} /></section></div>}
       </section>}

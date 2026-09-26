@@ -12,7 +12,6 @@ test('new scenario from the picker keeps the selected session and group', async 
   }
   let saved = null
   let batchInput = null
-  let confirmed = null
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
@@ -21,6 +20,7 @@ test('new scenario from the picker keeps the selected session and group', async 
     else if (path === '/api/users/me') body = user
     else if (path === '/api/training/sessions') body = [session]
     else if (path === '/api/training/templates') body = []
+    else if (path === '/api/training/user-groups') body = []
     else if (path === '/api/training/sessions/4/queue') body = []
     else if (path === '/api/training/sessions/4/scenario-instances') body = []
     else if (path === '/api/scenario-instances') body = []
@@ -39,9 +39,6 @@ test('new scenario from the picker keeps the selected session and group', async 
         template_snapshot: { variant_options: {} }, object_snapshot: { name: 'Школа №1', address: 'Школьная, 1' },
         initial_state_snapshot: { variant_facts: {}, render: { rendered_text: 'дым в школе', render_origin: 'GENERATED' } },
         events: [] }]
-    } else if (path === '/api/training/sessions/4/scenario-instances/confirm-batch') {
-      confirmed = route.request().postDataJSON()
-      body = { count: 1, queue_item_ids: [90] }
     }
     await route.fulfill({ status: body === null ? 404 : 200,
       contentType: 'application/json', body: JSON.stringify(body ?? { detail: 'Unknown route' }) })
@@ -49,7 +46,7 @@ test('new scenario from the picker keeps the selected session and group', async 
   await page.addInitScript(() => sessionStorage.setItem('ut112-demo-username', 'instructor'))
   await page.goto('/')
   await page.getByRole('button', { name: /Учебная смена/ }).click()
-  await page.getByRole('button', { name: /Задания/ }).click()
+  await page.getByRole('button', { name: /Карточки происшествий/ }).click()
   await page.getByRole('button', { name: '+ Добавить карточки по сценарию' }).click()
   const picker = page.getByRole('dialog', { name: 'Выберите сценарий' })
   await picker.getByRole('button', { name: '+ Создать новый сценарий' }).click()
@@ -61,9 +58,10 @@ test('new scenario from the picker keeps the selected session and group', async 
   await expect(picker.getByLabel('Группа')).toHaveCount(0)
   await picker.getByRole('button', { name: 'Сформировать', exact: true }).click()
   expect(batchInput.training_session_id).toBe(4)
+  expect(batchInput.training_group_id).toBe(6)
   expect(saved.status).toBe('READY')
-  await picker.getByRole('button', { name: 'Утвердить набор и добавить в занятие' }).click()
-  expect(confirmed).toEqual({ instance_ids: [30], training_group_id: 6 })
+  await picker.getByRole('button', { name: 'Добавить в набор группы' }).click()
+  await expect(picker).toHaveCount(0)
 })
 
 test('ready scenarios open an editable copy and archive stays author-only', async ({ page }) => {

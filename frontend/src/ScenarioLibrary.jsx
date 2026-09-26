@@ -101,7 +101,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
   const createBatch = () => perform(async () => {
     const generated = await api(`/api/scenario-templates/${chosen.id}/batch`, options('POST', {
       count: Number(count), seed: Math.floor(Math.random() * 2147483647),
-      training_session_id: Number(selectedSessionId), different_objects: differentObjects,
+      training_session_id: Number(selectedSessionId), training_group_id: groupId || null,
+      different_objects: differentObjects,
     }))
     setCards(generated)
     setSelectedId(generated[0]?.id)
@@ -112,7 +113,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
     perform(async () => {
       const generated = await api(`/api/scenario-templates/${chosen.id}/batch`, options('POST', {
         count: Number(count), seed: Math.floor(Math.random() * 2147483647),
-        training_session_id: Number(selectedSessionId), different_objects: differentObjects,
+        training_session_id: Number(selectedSessionId), training_group_id: groupId || null,
+        different_objects: differentObjects,
       }))
       for (const card of cards) await api(`/api/scenario-instances/${card.id}`, { method: 'DELETE' })
       setCards(generated)
@@ -147,6 +149,10 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
     setSelectedId(null)
   })
   const approve = () => perform(async () => {
+    if (picker) {
+      onCompleted?.()
+      return
+    }
     const [kind, id] = target.split(':')
     await api(`/api/training/sessions/${selectedSessionId}/scenario-instances/confirm-batch`, options('POST', {
       instance_ids: cards.map((card) => card.id),
@@ -202,8 +208,8 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
                 <button type="button" disabled={busy} onClick={exclude}>Исключить из набора</button></div>
               <h4>Работа служб</h4>{selected.events.filter((event) => event.event_type === 'RESPONSE_MESSAGE').map((event) => <ResponseMessageEditor key={event.id} event={event} instanceId={selected.id} busy={busy} onChange={changeCard} />)}
             </section>}</div>
-          <section className={styles.panel}><h3>Утверждение набора</h3>{!picker && <label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
-            <div className={styles.actions}><button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button><button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button><button type="button" disabled={busy || !target} onClick={approve}>Утвердить набор и добавить в занятие</button></div>
+          <section className={styles.panel}><h3>{picker ? 'Добавление в набор группы' : 'Утверждение набора'}</h3>{!picker && <label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
+            <div className={styles.actions}><button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button><button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button><button type="button" disabled={busy || !target} onClick={approve}>{picker ? 'Добавить в набор группы' : 'Утвердить набор и добавить в занятие'}</button></div>
           </section></>}
       </>}
     </div>

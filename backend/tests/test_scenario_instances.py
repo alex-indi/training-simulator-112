@@ -42,7 +42,7 @@ from app.modules.scenario_library.models import (
     ScenarioTemplateRequiredObjectTag,
     ScenarioTemplateService,
 )
-from app.modules.training.models import TrainingSession
+from app.modules.training.models import TrainingGroup, TrainingSession
 from app.services.text_generation.providers import OpenAICompatibleProvider
 from app.services.text_generation.renderer import (
     ProviderHealth,
@@ -85,6 +85,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
         ObjectAttribute,
         ObjectTag,
         TrainingSession,
+        TrainingGroup,
         ScenarioTemplate,
         ScenarioTemplateObjectRule,
         ScenarioTemplateRequiredObjectTag,
@@ -202,6 +203,8 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
             criteria=[ScenarioAssessmentCriterion(name="Время реакции", weight=3)],
         )
         session = TrainingSession(title="Занятие", instructor_id=instructor.id)
+        group = TrainingGroup(name="Группа без АРМ")
+        session.groups.append(group)
         db.add_all([template, session])
         db.commit()
         app = FastAPI()
@@ -367,6 +370,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     "count": 5,
                     "seed": 43,
                     "training_session_id": session.id,
+                    "training_group_id": group.id,
                 }
                 batch = await client.post(f"{path}/batch", json=batch_input)
                 assert batch.status_code == 201, batch.text
@@ -379,6 +383,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 }) == 5
                 assert cards[0]["object_snapshot"]["id"] != cards[1]["object_snapshot"]["id"]
                 assert all(card["training_session_id"] == session.id for card in cards)
+                assert all(card["training_group_id"] == group.id for card in cards)
                 assert [
                     card["template_snapshot"]["batch_position"] for card in cards
                 ] == [1, 2, 3, 4, 5]

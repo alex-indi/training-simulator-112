@@ -14,6 +14,7 @@ from app.db.dependencies import get_database_session
 from app.modules.admin.models import UserGroup
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
+from app.modules.scenario_library.instance_models import ScenarioInstance
 from app.modules.training.models import (
     QueueMode,
     TrainingGroup,
@@ -527,6 +528,12 @@ async def delete_group(
     group = next((group for group in item.groups if group.id == group_id), None)
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+    if await database.scalar(
+        select(ScenarioInstance.id).where(ScenarioInstance.training_group_id == group_id)
+    ) is not None:
+        raise HTTPException(
+            status_code=409, detail="Сначала исключите подготовленные карточки группы"
+        )
     for run in item.runs:
         if run.group_id == group_id:
             run.group_id = None
