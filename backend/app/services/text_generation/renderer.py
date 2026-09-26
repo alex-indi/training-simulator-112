@@ -24,7 +24,7 @@ class TextGenerationTask(StrEnum):
 
 
 PROMPT_VERSIONS = {
-    TextGenerationTask.INCIDENT_REPORT: "incident_operator_entry_v2",
+    TextGenerationTask.INCIDENT_REPORT: "incident_operator_entry_v3",
     TextGenerationTask.RESPONSE_MESSAGE: "response_crew_message_v2",
     TextGenerationTask.ASSESSMENT_SUMMARY: "assessment_summary_v1",
 }
@@ -171,6 +171,17 @@ class AITextRenderer:
 
     async def render(self, request: TextGenerationRequest) -> dict[str, Any]:
         prompt = prompt_for(request.task)
+        if (
+            request.task == TextGenerationTask.INCIDENT_REPORT
+            and request.context
+            and request.context.get("previous_text")
+        ):
+            prompt += (
+                " Это повторная генерация. Текст из context.previous_text уже показан "
+                "преподавателю. "
+                "Сформулируй новую запись заметно иначе. Используй только факты из facts; "
+                "previous_text нужен лишь для сравнения формулировок."
+            )
         version = PROMPT_VERSIONS[request.task]
         fingerprint = input_hash(request, self.provider.name, self.provider.model)
         started = monotonic()

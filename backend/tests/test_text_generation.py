@@ -86,7 +86,7 @@ def test_incident_report_keeps_source_facts_in_offline_mode():
         assert result["rendered_text"] == (
             "Очевидец сообщил о задымлении.\nСведения о пострадавших отсутствуют."
         )
-        assert result["prompt_version"] == "incident_operator_entry_v2"
+        assert result["prompt_version"] == "incident_operator_entry_v3"
         assert facts["incident_type"] == "Пожар"
 
     asyncio.run(run())

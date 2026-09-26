@@ -738,10 +738,25 @@ async def rerender_initial(
         "object_snapshot": row.object_snapshot,
     }
     snapshot = dict(row.initial_state_snapshot)
-    snapshot["render"] = await (await renderer_for_database(database)).render(
-        _initial_request(content)
+    previous_text = snapshot.get("render", {}).get("rendered_text", "")
+    request = _initial_request(content)
+    request = TextGenerationRequest(
+        task=request.task,
+        facts=request.facts,
+        context={"previous_text": previous_text} if previous_text else None,
     )
-    await _record_usage(database, [snapshot["render"]])
+    renderer = await renderer_for_database(database)
+    render = await renderer.render(request)
+    await _record_usage(database, [render])
+    if render["fallback_used"] and renderer.enabled and renderer.provider.name != "template":
+        await database.commit()
+        raise HTTPException(
+            503, "Модель не смогла сформировать текст. Проверьте настройки AI и повторите попытку"
+        )
+    if render["rendered_text"].strip() == previous_text.strip():
+        await database.commit()
+        raise HTTPException(409, "Новая формулировка не получена. Текст карточки не изменился")
+    snapshot["render"] = render
     row.initial_state_snapshot = snapshot
     await database.commit()
     return await read_instance(instance_id, user, database)
