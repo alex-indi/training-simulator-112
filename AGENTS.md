@@ -205,14 +205,16 @@ Codex поддерживает в нём только:
 - Git status/diff;
 - WEEEK-задачи, если доступна.
 
-Дополнительно по теме:
+Карта действующих документов: `docs/README.md`. Дополнительно по теме:
 
 - продукт → `docs/product.md`;
 - предметная область → `docs/domain.md`;
 - архитектура → `docs/architecture.md` и ADR;
 - state machine → `docs/state-machines.md`;
 - история решений → `docs/decision-log.md`;
-- ответы заказчика → `docs/questions/customer-questions.md`.
+- ответы заказчика → `docs/questions/customer-questions.md`;
+- будущая подготовка занятия → `docs/instructor-preparation-workflow.md`;
+- проведение занятия и разбор → `docs/instructor-workspace-concept.md`.
 
 ---
 
@@ -231,8 +233,7 @@ Codex поддерживает в нём только:
 
 Учебные сценарии в коде называются `TrainingScenario`.
 
-При разработке сценариев, генератора и карточек используй [концепцию библиотеки](docs/scenario-library-and-generator.md) как источник требований и [концепцию Scenario Engine](docs/scenario-engine.md) как целевую модель исполнения.
-При разработке функциональности, связанной с инцидентами, сценариями, карточками происшествий и генерацией учебных ситуаций, используй [docs/scenario-library-and-generator.md](docs/scenario-library-and-generator.md) как источник требований и архитектурных решений.
+При разработке сценариев, генератора и карточек используй [концепцию библиотеки](docs/scenario-library-and-generator.md) как источник требований и [Scenario Engine](docs/scenario-engine.md) как целевую модель исполнения. Для нового процесса подготовки занятия используй [целевой workflow преподавателя](docs/instructor-preparation-workflow.md), не принимая его за уже реализованное поведение.
 
 ---
 
