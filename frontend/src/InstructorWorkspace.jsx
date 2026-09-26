@@ -6,6 +6,7 @@ import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
 import ScenarioLibrary from './ScenarioLibrary.jsx'
 import InstructorGroups from './InstructorGroups.jsx'
+import AdvancedScenarioLibrary from './AdvancedScenarioLibrary.jsx'
 import WorkspaceClock from './WorkspaceClock.jsx'
 import { sessionStateLabels, trainingModeLabels } from './uiLabels.js'
 
@@ -39,6 +40,11 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [groupsOpen, setGroupsOpen] = useState(false)
   const [userGroups, setUserGroups] = useState([])
+  const [pickerGroupId, setPickerGroupId] = useState(null)
+  const [pickerTemplate, setPickerTemplate] = useState(null)
+  const [libraryUse, setLibraryUse] = useState(null)
+  const [useSessionId, setUseSessionId] = useState('')
+  const [useGroupId, setUseGroupId] = useState('')
   const openSessionId = session?.id
 
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
@@ -277,6 +283,26 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
     if (session?.id) reload(session.id).catch((cause) => setError(cause.message))
   }
 
+  const openPicker = (groupId, template = null) => {
+    setPickerGroupId(groupId)
+    setPickerTemplate(template)
+  }
+  const closePicker = () => {
+    setPickerGroupId(null)
+    setPickerTemplate(null)
+    if (session?.id) reload(session.id).catch((cause) => setError(cause.message))
+  }
+  const startUsingTemplate = () => {
+    const item = sessions.find((entry) => entry.id === Number(useSessionId))
+    const group = item?.groups.find((entry) => entry.id === Number(useGroupId))
+    if (!item || !group) return
+    openSession(item)
+    setStep(2)
+    setLibraryOpen(false)
+    openPicker(group.id, libraryUse)
+    setLibraryUse(null)
+  }
+
   const renderNavigation = () => <aside className={styles.navigation}>
     <header><span>112</span><div><small>Учебный тренажёр</small><strong>Преподаватель</strong></div></header>
     <nav aria-label="Разделы кабинета преподавателя">
@@ -306,7 +332,10 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
 
   if (groupsOpen) return renderWorkspace('Группы обучающихся', <div className={styles.content}><InstructorGroups api={api} onChanged={setUserGroups} /></div>)
 
-  if (libraryOpen) return renderWorkspace('Библиотека сценариев', <div className={styles.embeddedContent}><ScenarioLibrary embedded user={user} requestJson={requestJson} sessionId={session?.id} onBack={closeLibrary} /></div>)
+  if (libraryOpen) return renderWorkspace('Библиотека сценариев', <div className={styles.embeddedContent}>
+    <AdvancedScenarioLibrary embedded user={user} requestJson={requestJson} onBack={closeLibrary} onUse={(item) => { setLibraryUse(item); setUseSessionId(String(session?.id || '')); setUseGroupId('') }} />
+    {libraryUse && <div className={styles.pickerOverlay}><section className={styles.useDialog} role="dialog" aria-modal="true" aria-label="Использовать сценарий"><h2>Использовать сценарий</h2><p>{libraryUse.name}</p><label>Занятие<select value={useSessionId} onChange={(event) => { setUseSessionId(event.target.value); setUseGroupId('') }}><option value="">Выберите занятие</option>{sessions.filter((item) => ['DRAFT', 'READY'].includes(item.state)).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label><label>Группа<select value={useGroupId} onChange={(event) => setUseGroupId(event.target.value)}><option value="">Выберите группу</option>{sessions.find((item) => item.id === Number(useSessionId))?.groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><div className={styles.actions}><button type="button" disabled={!useGroupId} onClick={startUsingTemplate}>Продолжить</button><button type="button" onClick={() => setLibraryUse(null)}>Отмена</button></div></section></div>}
+  </div>)
 
   if (session?.state === 'ACTIVE') return renderWorkspace('Live-монитор', <>
     <div className={styles.content}>
@@ -379,9 +408,9 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
         {!session.runs.length && <p>Обучаемые ещё не подключились. Группы уже сохранены.</p>}
         <div className={styles.actions}><button type="button" onClick={() => setStep(4)}>К готовности →</button></div></section>}
       {step === 2 && user.role !== 'ADMIN' && <section className={styles.section}>
-        <h3>Карточки занятия</h3>
-        <p>Выберите готовый сценарий в библиотеке, укажите количество карточек и просмотрите набор до утверждения.</p>
-        {editable && <button type="button" onClick={() => setLibraryOpen(true)}>Выбрать сценарий и сформировать карточки</button>}
+        <h3>Карточки происшествий</h3>
+        <p>Для каждой группы выберите сценарий и количество карточек. Набор можно пополнять несколькими сценариями.</p>
+        <div className={styles.cards}>{session.groups.map((group) => <article className={styles.card} key={group.id}><strong>{group.name}</strong><span>{group.difficulty} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</span><small>Подготовлено: {queue.filter((item) => item.training_group_id === group.id).length} карточек</small>{editable && <button type="button" onClick={() => openPicker(group.id)}>+ Добавить карточки по сценарию</button>}</article>)}</div>
         <div className={styles.cards}>{queue.map((item) => <article className={styles.card} key={item.id}>
           <strong>{item.title}</strong>
           <span>{item.snapshot.address}</span>
@@ -389,6 +418,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
         </article>)}</div>
         {!queue.length && <p>Карточки пока не добавлены.</p>}
         <div className={styles.actions}><button type="button" onClick={() => setStep(3)}>К подключению →</button></div>
+        {pickerGroupId && <div className={styles.pickerOverlay}><section className={styles.pickerDialog} role="dialog" aria-modal="true" aria-label="Выберите сценарий"><button type="button" className={styles.back} onClick={closePicker}>Закрыть</button><ScenarioLibrary key={`${session.id}:${pickerGroupId}:${pickerTemplate?.id || ''}`} embedded picker user={user} requestJson={requestJson} sessionId={session.id} groupId={pickerGroupId} initialTemplate={pickerTemplate} onCompleted={closePicker} /></section></div>}
       </section>}
       {step === 2 && user.role === 'ADMIN' && <section className={styles.section}>
         <h3>Подготовленные задания</h3>

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import styles from './ScenarioLibrary.module.css'
 import { difficultyLabels, renderOriginLabels } from './uiLabels.js'
+import AdvancedScenarioLibrary from './AdvancedScenarioLibrary.jsx'
 
 const options = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const variantFactLabels = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
@@ -22,16 +23,18 @@ function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
   </div>
 }
 
-export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, embedded = false }) {
+export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
   const [catalog, setCatalog] = useState({ services: [], object_types: [] })
-  const [chosen, setChosen] = useState(null)
+  const [chosen, setChosen] = useState(initialTemplate)
+  const [search, setSearch] = useState('')
+  const [editorOpen, setEditorOpen] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState(sessionId || '')
   const [count, setCount] = useState(5)
   const [differentObjects, setDifferentObjects] = useState(true)
-  const [target, setTarget] = useState('')
+  const [target, setTarget] = useState(picker ? `group:${groupId}` : '')
   const [cards, setCards] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [editedText, setEditedText] = useState('')
@@ -42,18 +45,18 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
 
   useEffect(() => {
     Promise.all([
-      api('/api/scenario-templates?status=READY&limit=100'),
-      api('/api/training/sessions'),
+      api('/api/scenario-templates?status=READY&limit=200'),
+      picker ? Promise.resolve([]) : api('/api/training/sessions'),
       api('/api/scenario-templates/catalog'),
     ]).then(([library, available, names]) => {
       setTemplates(library.items)
       setSessions(available.filter((item) => ['DRAFT', 'READY'].includes(item.state)))
       setCatalog(names)
     }).catch((cause) => setError(cause.message))
-  }, [api])
+  }, [api, picker])
 
   useEffect(() => {
-    if (!chosen?.id || !selectedSessionId) return undefined
+    if (!chosen?.id || !selectedSessionId || picker) return undefined
     let active = true
     api(`/api/training/sessions/${selectedSessionId}/scenario-instances`)
       .then((instances) => {
@@ -65,11 +68,11 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
         setSelectedId(currentBatch[0]?.id || null)
       }).catch((cause) => { if (active) setError(cause.message) })
     return () => { active = false }
-  }, [api, chosen?.id, selectedSessionId])
+  }, [api, chosen?.id, picker, selectedSessionId])
 
   const session = sessions.find((item) => item.id === Number(selectedSessionId))
   const selected = cards.find((item) => item.id === selectedId) || cards[0]
-  const targets = session ? [
+  const targets = session && !picker ? [
     ...session.groups.filter((group) => group.queue_mode === 'SHARED_QUEUE' && group.run_ids.length)
       .map((group) => ({ value: `group:${group.id}`, label: `Общий пул · ${group.name}` })),
     ...session.runs.filter((run) => run.queue_mode === 'INDIVIDUAL_QUEUE')
@@ -152,30 +155,34 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
     setCards([])
     setChosen(null)
     setNotice('Набор утверждён и добавлен в занятие.')
+    onCompleted?.()
   })
 
   const serviceName = (id) => catalog.services.find((service) => service.id === id)?.name || 'Служба'
   const objectTypeName = (id) => catalog.object_types.find((item) => item.id === id)?.name || 'Подходящий объект'
+
+  if (editorOpen) return <AdvancedScenarioLibrary embedded startCreate user={user} requestJson={requestJson} onBack={() => setEditorOpen(false)} onSaved={(saved) => { setEditorOpen(false); setTemplates((current) => [saved, ...current]); setChosen(saved); setCards([]) }} />
 
   return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
     {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Библиотека сценариев</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     <div className={styles.content}>
-      {!chosen && <><div className={styles.topline}><div><h2>Выберите готовый сценарий</h2><p>Карточки для занятия формируются автоматически из проверенных данных.</p></div></div>
-        <div className={styles.cards}>{templates.map((item) => <button key={item.id} type="button" className={styles.card} onClick={() => { setCards([]); setChosen(item) }}>
+      {!chosen && <><div className={styles.topline}><div><h2>Выберите сценарий</h2><p>Карточки для занятия формируются из готового сценария.</p></div></div>
+        <label className={styles.search}>Поиск<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название или тип происшествия" /></label>
+        <div className={styles.cards}>{templates.filter((item) => `${item.name} ${item.incident_type || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((item) => <button key={item.id} type="button" className={styles.card} onClick={() => { setCards([]); setChosen(item) }}>
           <span className={styles.status}>Готов к использованию</span><h3>{item.name}</h3><p>{item.description}</p>
           <dl><div><dt>Сложность</dt><dd>{difficultyLabels[item.difficulty]}</dd></div><div><dt>Объекты</dt><dd>{objectTypeName(item.object_rule?.object_type_id)}</dd></div></dl>
           <small>Службы: {item.services.map((service) => serviceName(service.service_id)).join(', ') || 'По условиям сценария'}</small><strong>Сформировать карточки →</strong>
-        </button>)}</div>{!templates.length && <p>Готовых сценариев пока нет.</p>}</>}
+        </button>)}</div>{!templates.length && <p>Готовых сценариев пока нет.</p>}<div className={styles.actions}><button type="button" onClick={() => setEditorOpen(true)}>+ Создать новый сценарий</button></div></>}
       {chosen && <><button type="button" className={styles.link} onClick={() => { setChosen(null); setCards([]) }}>← Библиотека</button>
         <h2>{chosen.name}</h2>
         {!cards.length && <section className={styles.panel}><p>{chosen.description}</p><div className={styles.batchForm}>
-          <label>Занятие<select value={selectedSessionId} onChange={(event) => { setSelectedSessionId(event.target.value); setTarget('') }}><option value="">Выберите занятие</option>{sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+          {!picker && <label>Занятие<select value={selectedSessionId} onChange={(event) => { setSelectedSessionId(event.target.value); setTarget('') }}><option value="">Выберите занятие</option>{sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
           <label>Количество карточек<input type="number" min="1" max="50" value={count} onChange={(event) => setCount(event.target.value)} /></label>
           <label className={styles.inlineCheck}><input type="checkbox" checked={differentObjects} onChange={(event) => setDifferentObjects(event.target.checked)} /> Использовать разные объекты</label>
-        </div>{session && !targets.length && <p>Сначала создайте общую группу или назначьте АРМ в занятии.</p>}
-          <button type="button" disabled={busy || !session || !targets.length || Number(count) < 1 || Number(count) > 50} onClick={createBatch}>Сформировать {count} карточек</button>
+        </div>{!picker && session && !targets.length && <p>Сначала создайте общую группу или назначьте АРМ в занятии.</p>}
+          <button type="button" disabled={busy || (!picker && (!session || !targets.length)) || Number(count) < 1 || Number(count) > 50} onClick={createBatch}>Сформировать</button>
         </section>}
         {!!cards.length && <><div className={styles.topline}><div><h3>Сформировано {cards.length} карточек</h3><p>Просмотрите набор перед запуском занятия.</p></div></div>
           <div className={styles.reviewLayout}><nav className={styles.cardList} aria-label="Карточки набора">{cards.map((card, index) => <button type="button" key={card.id} className={card.id === selected?.id ? styles.selectedCard : ''} onClick={() => setSelectedId(card.id)}><b>{String(index + 1).padStart(2, '0')}</b><span>{card.object_snapshot.name}</span><small>{card.initial_state_snapshot.render?.render_origin === 'MANUAL' ? 'Изменена' : 'Готова'}</small></button>)}</nav>
@@ -195,7 +202,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
                 <button type="button" disabled={busy} onClick={exclude}>Исключить из набора</button></div>
               <h4>Работа служб</h4>{selected.events.filter((event) => event.event_type === 'RESPONSE_MESSAGE').map((event) => <ResponseMessageEditor key={event.id} event={event} instanceId={selected.id} busy={busy} onChange={changeCard} />)}
             </section>}</div>
-          <section className={styles.panel}><h3>Утверждение набора</h3><label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <section className={styles.panel}><h3>Утверждение набора</h3>{!picker && <label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
             <div className={styles.actions}><button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button><button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button><button type="button" disabled={busy || !target} onClick={approve}>Утвердить набор и добавить в занятие</button></div>
           </section></>}
       </>}

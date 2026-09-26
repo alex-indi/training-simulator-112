@@ -15,12 +15,20 @@ SCHOOL_FIRE_OPTIONS = {
 }
 
 
-def variant_facts(seed_code: str | None, seed: int) -> dict[str, object]:
-    """Choose only facts explicitly allowed for a seeded methodical template."""
-    if seed_code != SCHOOL_FIRE_CODE:
-        return {}
+def variant_facts(
+    seed_code: str | None, seed: int, options: dict[str, list[str | int]] | None = None
+) -> dict[str, object]:
+    """Choose only facts explicitly allowed by the methodical template."""
+    choices = options or (SCHOOL_FIRE_OPTIONS if seed_code == SCHOOL_FIRE_CODE else {})
     rng = random.Random(seed)
-    return {key: rng.choice(values) for key, values in SCHOOL_FIRE_OPTIONS.items()}
+    return {key: rng.choice(values) for key, values in choices.items() if values}
+
+
+def render_variant_text(text: str, facts: dict[str, object]) -> str:
+    """Substitute only facts selected from the template's allowed choices."""
+    for key, value in facts.items():
+        text = text.replace("{" + key + "}", str(value))
+    return text
 
 
 def card_seeds(seed: int, count: int) -> list[int]:

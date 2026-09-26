@@ -34,6 +34,7 @@ from app.modules.scenario_library.variants import (
     SCHOOL_FIRE_OPTIONS,
     card_seeds,
     object_order,
+    render_variant_text,
     variant_facts,
 )
 from app.modules.training.delivery import _editable, _invalidate_readiness, _new_item
@@ -79,13 +80,6 @@ class MaterializeInput(BaseModel):
 
 class BatchConfirmInput(MaterializeInput):
     instance_ids: list[int] = Field(min_length=1, max_length=50)
-
-
-class SchoolFireFactsInput(BaseModel):
-    floor: int
-    room: str
-    observation: str
-    casualties: str
 
 
 @instance_router.post("/{instance_id}/materialize")
@@ -392,7 +386,7 @@ async def _build(
     variation = (
         facts_override
         if facts_override is not None
-        else variant_facts(template.seed_code, data.seed)
+        else variant_facts(template.seed_code, data.seed, template.variant_options)
     )
     medical_needed = variation.get("casualties") != "пострадавших нет"
     services = []
@@ -403,8 +397,7 @@ async def _build(
         ):
             raise HTTPException(status_code=422, detail=f"Служба {link.service_id} не подтверждена")
         if (
-            template.seed_code == SCHOOL_FIRE_CODE
-            and service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
+            service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
             and not medical_needed
         ):
             continue
@@ -449,12 +442,19 @@ async def _build(
     )
     if data.training_session_id is not None:
         await _session(database, data.training_session_id, user)
+    initial_title = template.initial_title
     initial_description = template.initial_description
-    if variation:
+    initial_caller_text = template.initial_caller_text
+    if variation and template.seed_code == SCHOOL_FIRE_CODE and not template.variant_options:
         initial_description = (
             f"{variation['observation']} на {variation['floor']} этаже, "
             f"{variation['room']}; {variation['casualties']}."
         )
+        initial_caller_text = ""
+    else:
+        initial_title = render_variant_text(initial_title, variation)
+        initial_description = render_variant_text(initial_description, variation)
+        initial_caller_text = render_variant_text(initial_caller_text, variation)
     selected_service_ids = {service["service_id"] for service in services}
     events = [
         _event_dict(event, services)
@@ -463,12 +463,12 @@ async def _build(
     ]
     if variation:
         for event in events:
-            if event["event_type"] == "RESPONSE_MESSAGE":
-                description = event["description"]
-                for key, value in variation.items():
-                    description = description.replace("{" + key + "}", str(value))
-                event["description"] = description
-                event["payload_snapshot"]["description"] = event["description"]
+            description = render_variant_text(event["description"], variation)
+            title = render_variant_text(event["title"], variation)
+            event["title"] = title
+            event["description"] = description
+            event["payload_snapshot"]["title"] = title
+            event["payload_snapshot"]["description"] = description
     return {
         "scenario_template_id": template.id,
         "training_session_id": data.training_session_id,
@@ -493,9 +493,9 @@ async def _build(
         "matching_object_count": len(objects),
         "service_snapshot": services,
         "initial_state_snapshot": {
-            "title": template.initial_title,
+            "title": initial_title,
             "description": initial_description,
-            "caller_text": "" if variation else template.initial_caller_text,
+            "caller_text": initial_caller_text,
             "variant_facts": variation,
         },
         "events": events,
@@ -524,7 +524,7 @@ async def _build(
             "version": template.version,
             "name": template.name,
             "description": template.description,
-            "variant_options": (
+            "variant_options": template.variant_options or (
                 SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
             ),
             "object_rule": {
@@ -764,19 +764,24 @@ async def regenerate_card(
 @instance_router.patch("/{instance_id}/variant-facts")
 async def edit_variant_facts(
     instance_id: int,
-    data: SchoolFireFactsInput,
+    data: dict[str, str | int],
     user: Annotated[User, Depends(require_editor)],
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
-    """Change only allowed school-fire facts in a draft, then prepare all affected texts."""
+    """Change only facts allowed by the template, then prepare affected texts."""
     row = await _editable_instance(instance_id, user, database)
     template = await get_template(database, row.scenario_template_id)
-    if template.seed_code != SCHOOL_FIRE_CODE:
+    choices_by_key = template.variant_options or (
+        SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
+    )
+    if not choices_by_key:
         raise HTTPException(422, "Для этого сценария изменение условий недоступно")
     if template.version != row.template_snapshot.get("version"):
         raise HTTPException(409, "Шаблон изменился; пересоздайте карточку перед правкой условий")
-    facts = data.model_dump()
-    for key, choices in SCHOOL_FIRE_OPTIONS.items():
+    facts = data
+    if set(facts) != set(choices_by_key):
+        raise HTTPException(422, "Укажите все условия сценария")
+    for key, choices in choices_by_key.items():
         if facts[key] not in choices:
             raise HTTPException(422, f"Недопустимое условие: {key}")
     content = await _build(

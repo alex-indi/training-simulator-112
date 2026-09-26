@@ -22,6 +22,7 @@ test('instructor previews, generates and attaches a scenario instance', async ({
     else if (path === '/api/users/me') body = user
     else if (path === '/api/training/sessions') body = [session]
     else if (path === '/api/training/templates') body = []
+    else if (path === '/api/scenario-instances') body = []
     else if (path === '/api/scenario-templates/catalog') body = { rules: [], object_types: [{ id: 5, name: 'Школа', code: 'SCHOOL' }], services: [{ id: 3, name: 'Пожарная охрана' }], objects: [], tags: [], authors: [{ id: 1, name: 'Преподаватель' }] }
     else if (path === '/api/scenario-templates') body = { items: [template], total: 1, offset: 0, limit: 24 }
     else if (path === '/incident-classifier/rules/9') body = { id: 9, final_incident_type: 'Пожар', incident_group: 'Пожар', source_reference: 'SRC:1', features: [], services: [] }
@@ -29,7 +30,7 @@ test('instructor previews, generates and attaches a scenario instance', async ({
       const input = route.request().postDataJSON()
       body = { matching_objects: [object], matching_object_count: 1, object_snapshot: input.object_id ? object : null, classifier_snapshot: { final_incident_type: 'Пожар' }, service_snapshot: [{ service_id: 3, official_name: 'Пожарная охрана' }], events: [{ offset_seconds: 0, title: 'Заявитель', description: 'Дым' }] }
     } else if (path.endsWith('/instances') && route.request().method() === 'POST') {
-      instance = { id: 42, name: 'Пожар в школе — Школа №1', difficulty: 3, training_session_id: null, object_snapshot: object, classifier_snapshot: { final_incident_type: 'Пожар' }, service_snapshot: [{ service_id: 3, official_name: 'Пожарная охрана' }], events: [{ offset_seconds: 0, title: 'Заявитель', description: 'Дым' }] }
+      instance = { id: 42, name: 'Пожар в школе — Школа №1', status: 'DRAFT', difficulty: 3, training_session_id: null, object_snapshot: object, classifier_snapshot: { final_incident_type: 'Пожар' }, service_snapshot: [{ service_id: 3, official_name: 'Пожарная охрана' }], initial_state_snapshot: { title: 'Дым', description: 'Сообщение о дыме', caller_text: '', render: { rendered_text: 'Дым в школе' } }, events: [{ id: 1, event_type: 'INITIAL_REPORT', offset_seconds: 0, title: 'Заявитель', description: 'Дым' }] }
       body = instance
     } else if (path.endsWith('/attach')) {
       instance = { ...instance, training_session_id: 4 }
@@ -40,8 +41,8 @@ test('instructor previews, generates and attaches a scenario instance', async ({
   await page.addInitScript(() => sessionStorage.setItem('ut112-demo-username', 'instructor'))
   await page.goto('/')
   await page.getByRole('button', { name: 'Библиотека сценариев' }).click()
-  await page.getByRole('button', { name: /Пожар в школе/ }).click()
-  await page.getByRole('button', { name: 'Сгенерировать экземпляр' }).click()
+  await page.getByRole('button', { name: 'Просмотреть' }).click()
+  await page.getByRole('button', { name: 'Создать отдельную карточку' }).click()
   await page.getByLabel('Подходящий объект').selectOption('11')
   await page.getByRole('button', { name: 'Показать предпросмотр' }).click()
   await expect(page.getByText('Пехотная, 1', { exact: true })).toBeVisible()
