@@ -260,6 +260,22 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const aiModelsRequestId = useRef(0)
   const username = user.username
 
+  useEffect(() => {
+    if (!userModal && !groupModal && !deleteModal && !catalogModal && !importModal) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      setUserModal(null)
+      setGroupModal(null)
+      setDeleteModal(null)
+      setCatalogModal(null)
+      setImportModal(null)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [catalogModal, deleteModal, groupModal, importModal, userModal])
+
   const load = useCallback(async () => {
     const requestId = ++loadRequestId.current
     setLoading(true)
@@ -796,7 +812,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </div>
   }
 
-  const renderUserModal = () => userModal && <div className={styles.modalBackdrop} role="presentation">
+  const renderUserModal = () => userModal && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setUserModal(null) }}>
     <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
       <header className={styles.modalHeader}><div><small>{userModal.mode === 'edit' ? 'Редактирование пользователя' : 'Новый пользователь'}</small><h2 id="user-modal-title">{userModal.mode === 'edit' ? userModal.item.full_name : `Добавить: ${roleLabels[userForm.role]}`}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setUserModal(null)}>×</button></header>
       <form className={styles.modalForm} onSubmit={submitUser}>
@@ -810,7 +826,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </section>
   </div>
 
-  const renderGroupModal = () => groupModal && <div className={styles.modalBackdrop} role="presentation">
+  const renderGroupModal = () => groupModal && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setGroupModal(null) }}>
     <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="group-modal-title">
       <header className={styles.modalHeader}><div><small>Учебные группы</small><h2 id="group-modal-title">{groupModal.mode === 'edit' ? 'Изменить группу' : 'Создать группу'}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setGroupModal(null)}>×</button></header>
       <form className={styles.modalForm} onSubmit={submitGroup}>
@@ -821,14 +837,14 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </section>
   </div>
 
-  const renderDeleteModal = () => deleteModal && <div className={styles.modalBackdrop} role="presentation">
+  const renderDeleteModal = () => deleteModal && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleteModal(null) }}>
     <section className={styles.confirmModal} role="alertdialog" aria-modal="true" aria-labelledby="delete-modal-title">
       <header className={styles.modalHeader}><div><small>Подтверждение удаления</small><h2 id="delete-modal-title">Удалить {deleteModal.kind === 'group' ? `группу «${deleteModal.item.name}»` : `пользователя «${deleteModal.item.full_name}»`}?</h2></div><button type="button" aria-label="Закрыть" onClick={() => setDeleteModal(null)}>×</button></header>
       <div className={styles.confirmContent}><p>{deleteModal.kind === 'group' ? 'Пользователи сохранятся и автоматически перейдут в раздел «Без группы».' : 'Учётная запись будет удалена без возможности восстановления. Если с ней связана учебная история, система предложит деактивацию.'}</p><footer className={styles.modalActions}><button type="button" onClick={() => setDeleteModal(null)}>Отмена</button><button type="button" className={styles.dangerPrimaryButton} disabled={loading} onClick={confirmDelete}>Удалить</button></footer></div>
     </section>
   </div>
 
-  const renderCatalogModal = () => catalogModal && <div className={styles.modalBackdrop} role="presentation">
+  const renderCatalogModal = () => catalogModal && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCatalogModal(null) }}>
     <section className={`${styles.modal} ${styles.catalogModal}`} role="dialog" aria-modal="true" aria-labelledby="catalog-modal-title">
       <header className={styles.modalHeader}><div><small>Редактирование справочника</small><h2 id="catalog-modal-title">{{ classifier: 'Правило классификатора', service: 'Служба 112', object: 'Объект Москвы', type: 'Тип объекта' }[catalogModal.kind]}</h2></div><button type="button" aria-label="Закрыть" onClick={() => setCatalogModal(null)}>×</button></header>
       <form className={`${styles.modalForm} ${styles.catalogForm}`} onSubmit={submitCatalog}>
@@ -914,7 +930,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </>
   )
 
-  const renderImportModal = () => importModal && <div className={styles.modalBackdrop} role="presentation">
+  const renderImportModal = () => importModal && <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setImportModal(null) }}>
     <section className={styles.confirmModal} role="dialog" aria-modal="true" aria-labelledby="import-title">
       <header className={styles.modalHeader}><div><small>Проверка перед загрузкой</small><h2 id="import-title">Импортировать данные?</h2></div><button type="button" aria-label="Закрыть" onClick={() => setImportModal(null)}>×</button></header>
       <div className={styles.confirmContent}>

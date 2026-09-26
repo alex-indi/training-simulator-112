@@ -408,8 +408,8 @@
   background: var(--dds-panel-bright);
 }
 
-.tableRow:nth-child(odd) { background: #eef0f0; }
-.tableRow:hover { background: #e2edf2; }
+.tableRow:nth-child(odd) { background: #dfe3e5; }
+.tableRow:hover { background: #e2edf2; box-shadow: inset 4px 0 0 var(--dds-blue); }
 
 .userToolbar {
   padding: 5px;
@@ -609,8 +609,8 @@
 .userDataTable th:nth-child(7) { width: 90px; }
 .userDataTable th:nth-child(8) { width: 115px; }
 .userDataTable th:nth-child(9) { width: 210px; }
-.userDataTable tbody tr:nth-child(even) { background: #edf0f1; }
-.userDataTable tbody tr:hover { background: #dcecf3; }
+.userDataTable tbody tr:nth-child(even) { background: #dfe3e5; }
+.userDataTable tbody tr:hover { background: #dcecf3; box-shadow: inset 4px 0 0 var(--dds-blue); }
 .userDataTable td:first-child { text-align: center; }
 .userDataTable td strong { display: block; font-weight: 600; }
 .userDataTable td small { display: block; margin-top: 2px; color: #657178; font-size: 9px; }
@@ -661,6 +661,21 @@
   .userCreateActions select { width: 100%; }
   .userGroupRecords article > div:first-child { grid-template-columns: 42px 1fr; }
   .userGroupRecords article p { grid-column: 1 / -1; white-space: normal; }
+}
+
+@media (max-width: 620px) {
+  .content { padding: 8px 8px 28px; }
+  .topbar { min-height: 0; align-items: stretch; flex-direction: column; padding: 10px; }
+  .topbar > :last-child { width: 100%; }
+  .cards { grid-template-columns: 1fr; }
+  .modalBackdrop { padding: 8px; }
+  .modal, .confirmModal { max-height: calc(100vh - 16px); }
+  .modalHeader, .modalForm, .confirmContent { padding: 12px; }
+  .modalActions { flex-wrap: wrap; }
+  .exchangeIntro { padding: 12px; }
+  .auditItem > header { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .auditItem > header time { flex-basis: auto; }
+  .auditChanges > div, .details dl, .systemGrid dl, .attributes > dl > div { grid-template-columns: 1fr; }
 }
 
 .shell input[type="checkbox"] {

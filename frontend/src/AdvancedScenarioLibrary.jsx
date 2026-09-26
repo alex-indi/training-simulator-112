@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import styles from './ScenarioLibrary.module.css'
 import { difficultyLabels, renderOriginLabels } from './uiLabels.js'
+import { compactInstanceName, compactObjectName } from './scenarioDisplay.js'
 
 const steps = ['Основное', 'Тип происшествия', 'Тип объекта', 'Службы', 'Карточка и варианты', 'Работа служб', 'Оценивание', 'Предпросмотр']
 const eventTypes = { INITIAL_REPORT: 'Исходное сообщение', ADDITIONAL_INFO: 'Дополнительная информация', RESPONSE_MESSAGE: 'Сообщение группы', SITUATION_CHANGE: 'Изменение обстановки', SYSTEM_EVENT: 'Системное событие' }
@@ -56,7 +57,7 @@ function InstanceReview({ instance, busy, api, perform, onChange, sessions, trai
   </section>
 }
 
-export default function AdvancedScenarioLibrary({ user, requestJson, onBack, embedded = false, startCreate = false, onSaved, onUse }) {
+export default function AdvancedScenarioLibrary({ user, requestJson, embedded = false, startCreate = false, onSaved, onUse, onViewChange }) {
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const [filters, setFilters] = useState({ q: '', status: 'READY', difficulty: '', incident_group: '', incident_type: '', object_type_id: '', district: '', administrative_area: '', service_id: '', created_by: '' })
   const [items, setItems] = useState([])
@@ -100,6 +101,8 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
 
   useEffect(() => { load() }, [load])
   useEffect(() => { api('/api/scenario-templates/catalog').then(setCatalog).catch((cause) => setError(cause.message)) }, [api])
+  useEffect(() => { onViewChange?.(Boolean(selected || generation)) }, [generation, onViewChange, selected])
+  useEffect(() => () => onViewChange?.(false), [onViewChange])
   useEffect(() => {
     if (!ruleSearch.trim()) return
     const timer = setTimeout(() => api(`/api/scenario-templates/catalog?q=${encodeURIComponent(ruleSearch)}`).then((result) => setCatalog((old) => ({ ...old, rules: result.rules }))).catch((cause) => setError(cause.message)), 250)
@@ -206,11 +209,11 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
   const typeName = (id) => catalog.object_types.find((type) => type.id === id)?.name || 'Не выбран'
 
   return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
-    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя / методические материалы</small><h1>Библиотека сценариев</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>}
+    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя / методические материалы</small><h1>Библиотека сценариев</h1></div></header>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     {generation && <div className={styles.content}>
-      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { setGeneration(null); setGenerationPreview(null); setGeneratedInstance(null) }}>← Библиотека</button><h2>Карточка: {generation.name}</h2></div></div>
+      <div className={styles.topline}><div><h2>Карточка: {generation.name}</h2></div></div>
       {!generatedInstance && <section className={styles.panel}>
         <h3>Параметры генерации</h3>
         <div className={styles.fields}>
@@ -226,7 +229,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
       {generatedInstance && <InstanceReview instance={generatedInstance} busy={busy} api={api} perform={perform} onChange={(updated) => { setGeneratedInstance(updated); if (updated.status !== generatedInstance.status) load() }} sessions={sessions} trainingSessionId={generationInput.training_session_id} onSelectSession={(id) => setGenerationInput((old) => ({ ...old, training_session_id: id }))} />}
     </div>}
     {!selected && !generation && <div className={styles.content}>
-      {availableInstances.some((instance) => instance.status === 'DRAFT') && <section className={styles.panel}><h3>Карточки на проверке</h3><div className={styles.cards}>{availableInstances.filter((instance) => instance.status === 'DRAFT').map((instance) => <button className={styles.card} type="button" key={instance.id} onClick={() => openInstance(instance)}><b>{instance.name}</b><small>{instance.object_snapshot.name} · тексты ждут подтверждения</small></button>)}</div></section>}
+      {availableInstances.some((instance) => instance.status === 'DRAFT') && <section className={styles.panel}><h3>Карточки на проверке</h3><div className={styles.reviewQueue}>{availableInstances.filter((instance) => instance.status === 'DRAFT').map((instance) => <button className={styles.reviewQueueRow} type="button" key={instance.id} onClick={() => openInstance(instance)}><b>{compactInstanceName(instance)}</b><small>{compactObjectName(instance.object_snapshot.name)}</small><span>Тексты ждут подтверждения</span></button>)}</div></section>}
       <div className={styles.topline}><div><h2>Сценарии</h2><p>Создавайте сценарии и подготавливайте их для занятий.</p></div><button type="button" onClick={() => { setSelected({ status: 'DRAFT' }); setDraft(blank()); setStep(null); setValidation(null); setDirty(false) }}>+ Создать сценарий</button></div>
       <div className={styles.filters}>
         <label>Поиск<input value={filters.q} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Название" /></label>
@@ -241,16 +244,21 @@ export default function AdvancedScenarioLibrary({ user, requestJson, onBack, emb
         <label>Тип происшествия<input value={filters.incident_type} onChange={(event) => changeFilter('incident_type', event.target.value)} placeholder="Например, пожар в здании" /></label>
       </div>
       <p className={styles.count}>Найдено: {total}</p>
-      {loading ? <p>Загрузка библиотеки…</p> : items.length ? <div className={styles.cards}>{items.map((item) => <article className={styles.card} key={item.id}>
-        <span className={styles.status}>{({ DRAFT: 'Черновик', READY: 'Готов к использованию', ARCHIVED: 'В архиве' })[item.status]}</span><h3>{item.name || 'Без названия'}</h3><p>{item.incident_type || 'Тип происшествия не выбран'}</p><p>{item.description || 'Описание не задано'}</p>
-        <dl><div><dt>Сложность</dt><dd>{difficultyLabels[item.difficulty]}</dd></div><div><dt>Объект</dt><dd>{typeName(item.object_rule?.object_type_id)}</dd></div><div><dt>Служб</dt><dd>{item.services.length}</dd></div></dl>
-        <small>{item.object_rule?.selection_mode === 'OBJECT_BOUND' ? item.object_rule.specific_object_name || 'Конкретный объект' : 'Любой подходящий объект'} · {catalog.authors.find((author) => author.id === item.created_by_user_id)?.name || 'Преподаватель'}</small>
-        <div className={styles.actions}>{item.status === 'DRAFT' && <button type="button" onClick={() => open(item)}>Редактировать</button>}{item.status === 'READY' && <><button type="button" onClick={() => open(item)}>Просмотреть</button><button type="button" onClick={() => onUse?.(item)} disabled={!onUse}>Использовать</button><button type="button" disabled={busy} onClick={() => duplicate(item)}>Изменить</button>{(user.role === 'ADMIN' || item.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => archive(item)}>Архивировать</button>}</>}{item.status === 'ARCHIVED' && <button type="button" onClick={() => open(item)}>Посмотреть</button>}</div>
-      </article>)}</div> : <p>По выбранным фильтрам сценариев нет.</p>}
+      {loading ? <p>Загрузка библиотеки…</p> : items.length ? <div className={styles.scenarioCatalog}>
+        <div className={styles.scenarioCatalogHead}><span>Сценарий</span><span>Статус</span><span>Тип происшествия</span><span>Сложность</span><span>Объект</span><span>Действия</span></div>
+        {items.map((item) => <article className={styles.scenarioCatalogRow} key={item.id}>
+          <div><strong>{item.name || 'Без названия'}</strong><small>{item.description || 'Описание не задано'}</small></div>
+          <span>{({ DRAFT: 'Черновик', READY: 'Готов', ARCHIVED: 'В архиве' })[item.status]}</span>
+          <span>{item.incident_type || 'Не выбран'}</span>
+          <span>{difficultyLabels[item.difficulty] || item.difficulty}</span>
+          <div><strong>{typeName(item.object_rule?.object_type_id)}</strong><small>{item.object_rule?.selection_mode === 'OBJECT_BOUND' ? item.object_rule.specific_object_name || 'Конкретный объект' : 'Любой подходящий объект'} · {item.services.length} служб · {catalog.authors.find((author) => author.id === item.created_by_user_id)?.name || 'Преподаватель'}</small></div>
+          <div className={styles.catalogActions}>{item.status === 'DRAFT' && <button type="button" onClick={() => open(item)}>Редактировать</button>}{item.status === 'READY' && <><button type="button" onClick={() => open(item)}>Просмотреть</button><button type="button" onClick={() => onUse?.(item)} disabled={!onUse}>Использовать</button><button type="button" disabled={busy} onClick={() => duplicate(item)}>Изменить</button>{(user.role === 'ADMIN' || item.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => archive(item)}>Архивировать</button>}</>}{item.status === 'ARCHIVED' && <button type="button" onClick={() => open(item)}>Посмотреть</button>}</div>
+        </article>)}
+      </div> : <p>По выбранным фильтрам сценариев нет.</p>}
       <div className={styles.actions}><button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 24))}>Назад</button><span>{total ? offset + 1 : 0}–{Math.min(total, offset + 24)} из {total}</span><button type="button" disabled={offset + 24 >= total} onClick={() => setOffset(offset + 24)}>Далее</button></div>
     </div>}
     {selected && !generation && <div className={styles.content}>
-      <div className={styles.topline}><div><button type="button" className={styles.link} onClick={() => { if (startCreate) onBack?.(); else { setSelected(null); setValidation(null) } }}>← {startCreate ? 'К выбору сценария' : 'Библиотека'}</button><h2>{selected.id ? draft.name || 'Без названия' : 'Новый сценарий'}</h2><p>{({ DRAFT: 'Черновик', READY: 'Готов к использованию', ARCHIVED: 'В архиве' })[selected.status]}</p></div><div className={styles.actions}>{editable && <button type="button" disabled={busy} onClick={save}>Сохранить черновик</button>}{editable && onSaved && <button type="button" disabled={busy} onClick={saveAndUse}>Сохранить и использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => duplicate()}>Изменить</button>}{selected.status === 'READY' && onUse && <button type="button" onClick={() => onUse(selected)}>Использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => startGeneration(selected)}>Создать отдельную карточку</button>}{selected.status === 'READY' && (user.role === 'ADMIN' || selected.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => archive()}>Архивировать</button>}</div></div>
+      <div className={styles.topline}><div><h2>{selected.id ? draft.name || 'Без названия' : 'Новый сценарий'}</h2><p>{({ DRAFT: 'Черновик', READY: 'Готов к использованию', ARCHIVED: 'В архиве' })[selected.status]}</p></div><div className={styles.actions}>{editable && <button type="button" disabled={busy} onClick={save}>Сохранить черновик</button>}{editable && onSaved && <button type="button" disabled={busy} onClick={saveAndUse}>Сохранить и использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => duplicate()}>Изменить</button>}{selected.status === 'READY' && onUse && <button type="button" onClick={() => onUse(selected)}>Использовать</button>}{selected.status === 'READY' && <button type="button" disabled={busy} onClick={() => startGeneration(selected)}>Создать отдельную карточку</button>}{selected.status === 'READY' && (user.role === 'ADMIN' || selected.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => archive()}>Архивировать</button>}</div></div>
       <nav className={styles.steps} aria-label="Разделы сценария"><button type="button" onClick={() => setStep(null)} className={step === null ? styles.current : ''}>Все разделы</button>{steps.map((label, index) => <button type="button" key={label} onClick={() => setStep(index)} className={step === index ? styles.current : ''}>{label}</button>)}</nav>
       <section className={styles.panel}>
         <h3>{step === null ? 'Параметры сценария' : steps[step]}</h3>

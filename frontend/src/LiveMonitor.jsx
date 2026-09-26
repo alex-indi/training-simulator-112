@@ -83,6 +83,22 @@ function LiveMonitor({ sessionId, user, api }) {
     return () => { active = false }
   }, [api, sessionId, selectedId])
 
+  useEffect(() => {
+    if (!dialog && !selectedId) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      if (dialog) setDialog('')
+      else {
+        setSelectedId(null)
+        setWorkstation(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [dialog, selectedId])
+
   const post = async (path, body) => {
     setBusy(true); setError('')
     try {
@@ -184,7 +200,7 @@ function LiveMonitor({ sessionId, user, api }) {
         <h3>Сигналы</h3>{selected.signals.length ? selected.signals.map((signal, index) => <p className={styles.signal} key={`${signal.kind}-${index}`}>⚠ {signal.text}</p>) : <p>Сигналов нет.</p>}
       </>}
     </aside></div>}
-    {dialog && <div className={styles.dialogBackdrop}><form className={styles.dialog} onSubmit={submitDialog}>
+    {dialog && <div className={styles.dialogBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog('') }}><form className={styles.dialog} onSubmit={submitDialog} role="dialog" aria-modal="true">
       <header><h3>{({ card: 'Отправить карточку', event: 'Добавить событие', finish: 'Завершить занятие', runPause: 'Приостановить АРМ', note: 'Заметка преподавателя' })[dialog]}</h3><button type="button" onClick={() => setDialog('')}>×</button></header>
       {dialog === 'card' && <><label>Подготовленный сценарий<select required value={draft.scenario_id} onChange={(e) => { const item = scenarios.find((entry) => entry.id === Number(e.target.value)); setDraft({ ...draft, scenario_id: e.target.value, target: item?.scenario_instance_id ? item.training_group_id ? 'GROUP' : 'RUN' : 'CLASS', target_id: item?.scenario_instance_id ? String(item.training_group_id || item.training_run_id) : '' }) }}><option value="">Выберите сценарий</option>{scenarios.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>{selectedScenario?.scenario_instance_id ? <p>Подготовлен для {selectedScenario.training_group_id ? `группы #${selectedScenario.training_group_id}` : `АРМ #${selectedScenario.training_run_id}`}</p> : <><label>Получатели<select value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value, target_id: '' })}><option value="CLASS">Весь класс</option><option value="GROUP">Группа</option><option value="RUN">АРМ</option></select></label>{draft.target === 'GROUP' && <label>Группа<select required value={draft.target_id} onChange={(e) => setDraft({ ...draft, target_id: e.target.value })}><option value="">Выберите группу</option>{[...new Set(snapshot.runs.map((run) => run.group_id).filter(Boolean))].map((id) => <option key={id} value={id}>Группа {id}</option>)}</select></label>}{draft.target === 'RUN' && <label>АРМ<select required value={draft.target_id} onChange={(e) => setDraft({ ...draft, target_id: e.target.value })}><option value="">Выберите АРМ</option>{snapshot.runs.map((run) => <option key={run.id} value={run.id}>АРМ {run.workstation_number} · {run.trainee_name}</option>)}</select></label>}</>}</>}
       {dialog === 'event' && <><label>Карточка<select required value={draft.incident_id} onChange={(e) => setDraft({ ...draft, incident_id: e.target.value })}><option value="">Выберите карточку</option>{activeIncidents.map((item) => <option key={item.id} value={item.id}>{item.incident_number} · {item.incident_type}</option>)}</select></label><label>Тип события<select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })}><option value="NEW_INFORMATION">Дополнительная информация</option><option value="SITUATION_CHANGED">Изменилась ситуация</option><option value="REPEAT_CALL">Повторное обращение</option><option value="CASUALTY">Появился пострадавший</option><option value="OBJECT_CLARIFIED">Уточнён объект</option><option value="UNIT_UNAVAILABLE">Группа не отвечает</option><option value="PARTICIPANT_MESSAGE">Сообщение участника</option></select></label><label>Текст<textarea required value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} /></label></>}

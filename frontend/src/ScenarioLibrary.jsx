@@ -23,7 +23,7 @@ function ResponseMessageEditor({ event, instanceId, busy, onChange }) {
   </div>
 }
 
-export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false, listView = false }) {
+export default function ScenarioLibrary({ user, requestJson, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false, listView = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
@@ -165,10 +165,10 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
   const objectTypeName = (id) => catalog.object_types.find((item) => item.id === id)?.name || 'Подходящий объект'
   const visibleTemplates = templates.filter((item) => `${item.name} ${item.incident_type || ''}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
 
-  if (editorOpen) return <AdvancedScenarioLibrary embedded startCreate user={user} requestJson={requestJson} onBack={() => setEditorOpen(false)} onSaved={(saved) => { setEditorOpen(false); setTemplates((current) => [saved, ...current]); setChosen(saved); setCards([]) }} />
+  if (editorOpen) return <AdvancedScenarioLibrary embedded startCreate user={user} requestJson={requestJson} onSaved={(saved) => { setEditorOpen(false); setTemplates((current) => [saved, ...current]); setChosen(saved); setCards([]) }} />
 
   return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
-    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Библиотека сценариев</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>}
+    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Библиотека сценариев</h1></div></header>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     <div className={styles.content}>
@@ -189,7 +189,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
           <dl><div><dt>Сложность</dt><dd>{difficultyLabels[item.difficulty]}</dd></div><div><dt>Объекты</dt><dd>{objectTypeName(item.object_rule?.object_type_id)}</dd></div></dl>
           <small>Службы: {item.services.map((service) => serviceName(service.service_id)).join(', ') || 'По условиям сценария'}</small><strong>Сформировать карточки →</strong>
         </button>)}</div>}{!visibleTemplates.length && <p>Готовых сценариев не найдено.</p>}<div className={styles.actions}><button type="button" onClick={() => setEditorOpen(true)}>+ Создать новый сценарий</button></div></>}
-      {chosen && <><button type="button" className={styles.link} onClick={() => { setChosen(null); setCards([]) }}>← Библиотека</button>
+      {chosen && <>
         <h2>{chosen.name}</h2>
         {!cards.length && <section className={styles.panel}><p>{chosen.description}</p><div className={styles.batchForm}>
           {!picker && <label>Занятие<select value={selectedSessionId} onChange={(event) => { setSelectedSessionId(event.target.value); setTarget('') }}><option value="">Выберите занятие</option>{sessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}

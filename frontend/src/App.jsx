@@ -197,6 +197,17 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!statusEditorOpen) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setStatusEditorOpen(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [statusEditorOpen])
+
+  useEffect(() => {
     if (!currentUser) return
     const target = currentUser.role === 'ADMIN' ? '/admin' : '/'
     if (window.location.pathname !== target) window.history.replaceState(null, '', target)

@@ -212,6 +212,7 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
         instructor_id=item.instructor_id,
         trainee_ids=[user.id for user in item.trainees],
         state=item.state,
+        is_archived=bool(item.is_archived),
         created_at=item.created_at,
         started_at=item.started_at,
         paused_at=item.paused_at,
@@ -355,6 +356,7 @@ async def list_training_sessions(
                 ),
             )
             .where(
+                TrainingSession.is_archived.is_(False),
                 or_(
                     TrainingSession.state.in_(
                         (TrainingSessionState.DRAFT, TrainingSessionState.READY)
@@ -373,6 +375,7 @@ async def list_training_sessions(
                 state=item.state,
                 workstation_count=item.workstation_count,
                 paused_at=item.paused_at,
+                is_archived=bool(item.is_archived),
                 own_run=OwnRunSummary(
                     id=run.id,
                     workstation_number=run.workstation_number,
@@ -385,7 +388,7 @@ async def list_training_sessions(
             )
             for item, run in rows
         ]
-    statement = select(TrainingSession).options(
+    statement = select(TrainingSession).where(TrainingSession.is_archived.is_(False)).options(
         selectinload(TrainingSession.trainees),
         selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
         selectinload(TrainingSession.groups),
@@ -428,6 +431,20 @@ async def update_training_session(
     if item.state == TrainingSessionState.READY:
         item.state = TrainingSessionState.DRAFT
     return await _save(database, item)
+
+
+@router.post("/{training_session_id}/archive", status_code=204)
+async def archive_training_session(
+    training_session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> None:
+    item = await _load_session(database, training_session_id, for_update=True)
+    _ensure_session_owner(item, current_user)
+    if item.state == TrainingSessionState.ACTIVE:
+        raise HTTPException(status_code=409, detail="Сначала завершите активное занятие")
+    item.is_archived = True
+    await database.commit()
 
 
 @router.post("/{training_session_id}/join", response_model=TrainingSessionRead)

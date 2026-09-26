@@ -4,7 +4,7 @@ import styles from './AssessmentWorkspace.module.css'
 
 const summaryLabels = { trainees: 'Обучаемых', cards: 'Карточек', completed: 'Завершено', refusals: 'Отказов', reaction_violations: 'Нарушений норматива', critical_signals: 'Критических сигналов' }
 
-function AssessmentWorkspace({ session, api, onBack, embedded = false }) {
+function AssessmentWorkspace({ session, api, embedded = false }) {
   const [report, setReport] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [reason, setReason] = useState('')
@@ -49,7 +49,6 @@ function AssessmentWorkspace({ session, api, onBack, embedded = false }) {
   const Root = embedded ? 'div' : 'main'
 
   return <Root className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
-    {!embedded && <button type="button" onClick={onBack}>← Все занятия</button>}
     <h1>Разбор · {session.title}</h1>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {!report ? <p>Загружаем результаты…</p> : <>

@@ -1805,6 +1805,38 @@
     gap: 5px;
   }
 
+  .roleScreen {
+    padding: 12px;
+  }
+
+  .roleScreen section {
+    width: min(440px, 100%);
+    box-sizing: border-box;
+    padding: 18px;
+  }
+
+  .registrySearchArea {
+    grid-template-columns: 1fr;
+  }
+
+  .telephonyStrip {
+    grid-template-columns: repeat(6, minmax(150px, 1fr));
+    min-width: 1080px;
+  }
+
+  .incidentWorkspace {
+    overflow-x: auto;
+  }
+
+  .incidentBody,
+  .serviceArea {
+    min-width: 760px;
+  }
+
+  .serviceHistory {
+    width: min(520px, calc(100vw - 24px));
+  }
+
 }
 
 @media (max-height: 720px) {

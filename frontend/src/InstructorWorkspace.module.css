@@ -20,6 +20,25 @@
 .card { display: grid; gap: 5px; align-content: start; min-height: 85px; padding: 14px; border: 1px solid #d8e2ea; border-radius: 9px; background: #f8fbfd; text-align: left; }
 .card span, .card small { color: #63778a; }
 .card button { justify-self: start; margin-top: 6px; }
+.itemList { display: grid; gap: 1px; overflow-x: auto; border: 1px solid #aeb7bb; background: #aeb7bb; }
+.itemRow { min-width: 760px; min-height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 16px; padding: 9px 12px; border: 0; border-left: 4px solid transparent; border-radius: 0; background: #f1f2f2; text-align: left; }
+.itemRow:nth-child(even) { background: #dfe3e5; }
+.itemRow:hover, .itemRow:focus-visible { border-left-color: #1587c3; background: #e2edf2; box-shadow: inset 4px 0 0 #1587c3; }
+.itemRow > strong { flex: 1 1 240px; min-width: 150px; }
+.itemRow > span { flex: 1 1 260px; min-width: 170px; color: #647076; }
+.itemRow > small { flex: 1 1 220px; min-width: 150px; color: #647076; }
+.itemRow > label { flex: 1 1 190px; display: grid; gap: 4px; }
+.itemRow > select { flex: 1 1 240px; }
+.itemRow > button { flex: 0 0 auto; margin-left: auto; }
+.itemRow > .actions { flex: 0 0 auto; margin: 0 0 0 auto; }
+.groupRow { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(180px, 1fr) minmax(100px, .65fr) minmax(220px, 1.35fr) auto; gap: 12px; min-width: 920px; min-height: 42px; padding-block: 4px; }
+.groupRow > strong, .groupRow > span, .groupRow > small { min-width: 0; }
+.groupRow > .actions { display: flex; flex-wrap: nowrap; gap: 8px; margin: 0; }
+.groupRow > .actions button { flex: 0 0 auto; min-height: 32px; padding: 5px 10px; white-space: nowrap; }
+.sessionRow { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(160px, .8fr) minmax(250px, 1fr) auto; gap: 12px; min-width: 940px; min-height: 52px; padding-block: 8px; }
+.sessionRow > strong, .sessionRow > span, .sessionRow > small { min-width: 0; }
+.sessionRow > .actions { display: flex; flex-wrap: nowrap; gap: 8px; margin: 0; }
+.sessionRow > .actions button { flex: 0 0 auto; min-height: 34px; white-space: nowrap; }
 .steps { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; }
 .steps button { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .steps b { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; background: #dceaf2; }
@@ -28,8 +47,11 @@
 .formGrid label, .sidebar label { display: grid; gap: 5px; }
 .shell input:not([type=checkbox]), .shell select { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #acbdc9; border-radius: 6px; background: white; color: #17283b; font: inherit; }
 .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
-.stationGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 9px; }
-.station { display: grid; gap: 4px; min-height: 68px; padding: 10px; border: 1px solid #d4dfe8; border-radius: 8px; background: #f8fafb; }
+.stationGrid { display: grid; gap: 1px; border: 1px solid #d4dfe8; background: #d4dfe8; }
+.station { display: grid; grid-template-columns: 110px minmax(180px, 1fr) 130px minmax(220px, 1fr); align-items: center; gap: 12px; min-height: 54px; padding: 9px 12px; border: 0; border-left: 4px solid transparent; border-radius: 0; background: #f1f2f2; }
+.station:nth-child(even) { background: #dfe3e5; }
+.station:hover, .station:focus-within { background: #e2edf2; box-shadow: inset 4px 0 0 #1587c3; }
+.station label { display: grid; grid-template-columns: auto minmax(150px, 1fr); align-items: center; gap: 8px; }
 .station small { color: #697d8d; }
 .online { border-color: #72b599; background: #ecfaf3; }
 .online small { color: #197350; }
@@ -111,7 +133,7 @@
 .shell input:not([type=checkbox]), .shell select, .shell textarea { min-height: 36px; border-color: #98a3a8; border-radius: 0; background: var(--dds-panel-bright); color: #253036; font: inherit; }
 .shell input:focus, .shell select:focus, .shell textarea:focus { outline: 2px solid rgb(21 135 195 / 30%); outline-offset: -1px; border-color: var(--dds-blue); }
 .station, .run, .sidebar, .summary div, .scenario, .scenarioForm { border: 1px solid var(--dds-border); border-radius: 0; background: var(--dds-panel-bright); }
-.station { border-top: 4px solid var(--dds-dock); }.online { border-color: #4d9a78; border-top-color: #4d9a78; background: #e2f1e9; }
+.station { border-left-color: var(--dds-dock); }.online { border-left-color: #4d9a78; background: #e2f1e9; }
 .sidebar, .scenarioForm { padding: 13px; background: #dfe4e6; }
 .run:hover { background: #e2edf2; }.run small, .scenario small { color: var(--dds-muted); }
 .summary { gap: 7px; }.summary div { border-top: 4px solid var(--dds-dock); padding: 11px; }.summary strong { font-size: 18px; font-weight: 500; }
@@ -195,14 +217,7 @@
 .navigation nav button:hover:not(:disabled) { background: #53616a; color: #fff; }
 .navigation nav button.navigationActive { border-left-color: var(--dds-training); background: var(--dds-blue); color: #fff; }
 
-.navigationLabel {
-  padding: 13px 16px 5px;
-  color: #bfc9cd;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
+.navigationDivider { display: block; height: 1px; margin: 10px 16px; background: #718087; }
 
 .navigation footer {
   margin-top: auto;
@@ -236,8 +251,17 @@
 .groupDialog { display: grid; gap: 12px; width: min(100%, 520px); max-height: calc(100vh - 40px); overflow-y: auto; padding: 22px; border: 1px solid var(--dds-border); background: var(--dds-panel); box-shadow: 0 12px 35px rgb(0 0 0 / 25%); }
 .groupDialog h3 { margin: 0; }
 .groupDialog > label { display: grid; gap: 5px; }
+.memberSearch { position: relative; display: grid; gap: 5px; }
+.memberSearch > label { display: grid; gap: 5px; }
+.memberSuggestions { position: absolute; z-index: 2; top: 100%; right: 0; left: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--dds-border); background: var(--dds-panel-bright); box-shadow: 0 8px 20px rgb(0 0 0 / 18%); }
+.memberSuggestions button { display: grid; gap: 2px; width: 100%; min-height: 42px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--dds-border); background: var(--dds-panel-bright); color: var(--dds-text); text-align: left; }
+.memberSuggestions button:hover:not(:disabled), .memberSuggestions button:focus-visible { background: var(--dds-panel-blue); }
+.memberSuggestions button:disabled { color: var(--dds-muted); cursor: not-allowed; }
+.memberSuggestions small { color: inherit; }
+.noSuggestions { display: block; padding: 11px 12px; color: var(--dds-muted); }
 .memberList { display: grid; gap: 6px; max-height: 230px; overflow-y: auto; }
 .memberList label { display: flex; align-items: center; gap: 8px; padding: 7px; background: var(--dds-panel-bright); }
+.memberList p { margin: 0; color: var(--dds-muted); }
 .header { height: 118px; min-height: 118px; }
 .header > div:first-child {
   border-left: 4px solid #455159;
@@ -250,13 +274,28 @@
   .navigation { position: static; height: auto; }
   .navigation header { height: auto; min-height: 72px; border-bottom-width: 1px; }
   .navigation nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .navigationLabel { grid-column: 1 / -1; }
+  .navigationDivider { grid-column: 1 / -1; margin: 4px 16px; }
   .navigation footer { display: none; }
 }
 
 @media (max-width: 780px) {
   .header { height: auto; }
   .header > :last-child { width: 100%; flex: 0 0 auto; }
+  .station { min-width: 680px; }
+  .content, .embeddedContent { padding: 8px; }
+  .section { padding: 10px; }
+  .stationGrid, .itemList { max-width: 100%; overflow-x: auto; }
+  .groupForm, .formGrid, .scenarioForm { grid-template-columns: 1fr; }
+  .groupFilters { align-items: stretch; flex-direction: column; }
+  .groupFilters input:not([type=checkbox]) { max-width: none; }
+  .modalActions, .actions { gap: 6px; }
+}
+
+@media (max-width: 520px) {
+  .navigation nav { grid-template-columns: 1fr; }
+  .topline { gap: 10px; }
+  .topline > button { width: 100%; }
+  .groupDialog, .pickerDialog, .useDialog { padding: 10px; }
 }
 
 .shell input[type="checkbox"] {

@@ -24,6 +24,12 @@ body {
   overflow-x: auto;
 }
 
+img,
+svg,
+video {
+  max-width: 100%;
+}
+
 button,
 input,
 textarea,
