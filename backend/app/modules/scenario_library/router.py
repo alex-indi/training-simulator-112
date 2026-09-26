@@ -162,6 +162,11 @@ async def resolve_author(database: AsyncSession, user: User, author_id: int | No
     return author.id
 
 
+def can_archive(row: ScenarioTemplate, user: User) -> bool:
+    """READY-сценарий архивирует только его автор или администратор."""
+    return user.role == UserRole.ADMIN or row.created_by_user_id == user.id
+
+
 def serialize(row: ScenarioTemplate) -> dict:
     rule = row.object_rule
     return {
@@ -693,6 +698,11 @@ async def archive_template(
     row = await get_template(database, template_id)
     if row.status != "READY":
         raise HTTPException(status_code=409, detail="Архивируется только READY-сценарий")
+    if not can_archive(row, user):
+        raise HTTPException(
+            status_code=403,
+            detail="Архивировать сценарий может только его автор или администратор",
+        )
     row.status = "ARCHIVED"
     row.archived_at = datetime.now(UTC)
     row.updated_at = row.archived_at
