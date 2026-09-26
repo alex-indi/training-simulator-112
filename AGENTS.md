@@ -213,7 +213,8 @@ Codex поддерживает в нём только:
 - state machine → `docs/state-machines.md`;
 - история решений → `docs/decision-log.md`;
 - ответы заказчика → `docs/questions/customer-questions.md`;
-- будущая подготовка занятия → `docs/instructor-preparation-workflow.md`;
+- действующая подготовка занятия → `docs/current-state.md` и `docs/scenario-library-and-generator.md`;
+- исторический проект подготовки → `docs/instructor-preparation-workflow.md`;
 - проведение занятия и разбор → `docs/instructor-workspace-concept.md`.
 
 ---
@@ -233,7 +234,7 @@ Codex поддерживает в нём только:
 
 Учебные сценарии в коде называются `TrainingScenario`.
 
-При разработке сценариев, генератора и карточек используй [концепцию библиотеки](docs/scenario-library-and-generator.md) как источник требований и [Scenario Engine](docs/scenario-engine.md) как целевую модель исполнения. Для нового процесса подготовки занятия используй [целевой workflow преподавателя](docs/instructor-preparation-workflow.md), не принимая его за уже реализованное поведение.
+При разработке сценариев, генератора и карточек используй [действующую модель MVP](docs/current-state.md) и [библиотеку шаблонов](docs/scenario-library-and-generator.md). [Scenario Engine](docs/scenario-engine.md) — legacy/internal, а [исторический проект подготовки](docs/instructor-preparation-workflow.md) не заменяет фактический UI. Обычный шаблон не программирует сообщения служб, timeline, универсальные действия ДДС или пользовательские критерии оценки; работу бригады 101 выполняет runtime backend.
 
 ---
 
