@@ -1161,6 +1161,55 @@
   font-size: 9px;
 }
 
+.incidentActivity {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid #b9c8cf;
+}
+
+.incidentActivity h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+
+.activityEntry,
+.brigadeActivity {
+  padding: 7px 9px;
+  border: 1px solid #cbd7dd;
+  background: #fff;
+}
+
+.brigadeActivity {
+  border: 2px solid #af611e;
+  background: #fff1dc;
+}
+
+.activityEntry strong,
+.brigadeActivity strong {
+  display: block;
+  font-size: 10px;
+}
+
+.brigadeActivity strong {
+  color: #843e0c;
+  letter-spacing: .06em;
+}
+
+.activityEntry time,
+.brigadeActivity time {
+  display: block;
+  margin-top: 2px;
+  color: #52616a;
+  font-size: 9px;
+}
+
+.incidentActivity article p {
+  margin: 5px 0 0;
+  font-size: 11px;
+}
+
 .classificationColumn {
   padding-bottom: 5px;
   background: #c8ced1;

@@ -11,6 +11,7 @@ from sqlalchemy.orm import aliased, selectinload
 from app.db.dependencies import get_database_session
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
+from app.modules.incidents.activity import record_other_service_reactions
 from app.modules.incidents.models import Incident, IncidentAction
 from app.modules.incidents.schemas import (
     IncidentActionCreate,
@@ -149,6 +150,18 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
             }
             for event in (incident.scenario_events or [])
         ],
+        activities=[
+            {
+                "id": activity.id,
+                "kind": activity.kind,
+                "service_id": activity.service_id,
+                "service_name": activity.service_name,
+                "stage": activity.stage,
+                "body": activity.body,
+                "created_at": activity.created_at,
+            }
+            for activity in incident.activities
+        ],
         created_at=incident.created_at,
         delivered_at=incident.delivered_at,
         opened_at=incident.opened_at,
@@ -219,6 +232,7 @@ async def _load_incident(
             .selectinload(TrainingRun.pauses),
             selectinload(Incident.actions),
             selectinload(Incident.scenario_events),
+            selectinload(Incident.activities),
             selectinload(Incident.training_run),
         )
     )
@@ -340,6 +354,7 @@ async def list_incidents(
         .selectinload(TrainingRun.pauses),
         selectinload(Incident.actions),
         selectinload(Incident.scenario_events),
+        selectinload(Incident.activities),
         selectinload(Incident.training_run),
     )
     if current_user.role == UserRole.INSTRUCTOR:
@@ -527,6 +542,8 @@ async def change_incident_status(
         ) from error
 
     database.add(action)
+    if payload.action.value == "ACCEPT":
+        record_other_service_reactions(incident, action.created_at)
     await database.commit()
     await publish_session_event("incident.updated", incident.training_session_id, incident.id)
     return _to_read_model(incident, current_user)
