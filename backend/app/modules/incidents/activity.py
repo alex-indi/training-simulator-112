@@ -7,8 +7,8 @@ from app.modules.incidents.models import Incident, IncidentActionType, IncidentA
 from app.modules.training.clock import active_seconds
 from app.modules.training.models import TrainingRun, TrainingSession
 
-# Интервалы между сообщениями намеренно больше норматива реакции ДДС (45 с),
-# чтобы каждое сообщение давало полноценное окно для ручной смены статуса.
+# Этапы разнесены так, чтобы у ДДС был полный 45-секундный норматив реакции
+# на каждое сообщение бригады и следующее сообщение не сужало фактическое окно.
 BRIGADE_STAGES = (
     ("EN_ROUTE", 15, "Выехали к месту"),
     ("ARRIVED", 75, "Прибыли к месту"),
@@ -45,7 +45,7 @@ def classifier_services(incident: Incident) -> list[tuple[int | None, str, str]]
 
 
 def record_other_service_reactions(incident: Incident, now: datetime) -> None:
-    """Фиксирует воспроизводимый первичный ответ остальных служб после принятия ДДС 101."""
+    """Моделирует воспроизводимый первичный ответ остальных служб после принятия ДДС 101."""
     if not any(number == "101" for _, _, number in classifier_services(incident)):
         return
     existing = {activity.event_key for activity in incident.activities}
@@ -55,8 +55,9 @@ def record_other_service_reactions(incident: Incident, now: datetime) -> None:
         key = f"other-service:{number}"
         if key in existing:
             continue
-        # В MVP реакции других служб не являются отдельным упражнением и не должны
-        # зависеть от runtime id карточки. Для одного snapshot результат повторяем.
+        # В MVP реакция других служб детерминирована: если служба входит в snapshot
+        # карточки, она принимает карточку. Отказы позже можно задавать явным фактом
+        # сценария, но они не должны зависеть от runtime id происшествия.
         incident.activities.append(
             IncidentActivity(
                 event_key=key,

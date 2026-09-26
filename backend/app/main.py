@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager, suppress
 import socketio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.config import get_settings
 from app.db.session import (
@@ -47,10 +47,54 @@ from app.realtime import publish_session_event
 
 logger = logging.getLogger("uvicorn.error")
 allowed_origins = get_settings().allowed_frontend_origins
+SCHEDULER_ADVISORY_LOCK_ID = 112_2026_01
+SCHEDULER_RETRY_SECONDS = 5
 
 
 async def notify_delivery(session_id: int, incident_id: int) -> None:
     await publish_session_event("incident.delivered", session_id, incident_id)
+
+
+async def scheduler_leader_loop(engine, session_factory) -> None:
+    """Запускает scheduler только в одном backend-процессе на общей PostgreSQL."""
+    if engine.dialect.name != "postgresql":
+        logger.warning(
+            "Advisory lock scheduler недоступен для %s; планировщик запущен без leader election",
+            engine.dialect.name,
+        )
+        await scheduler_loop(session_factory, notify_delivery)
+        return
+
+    while True:
+        try:
+            async with engine.connect() as connection:
+                acquired = bool(
+                    await connection.scalar(
+                        text("SELECT pg_try_advisory_lock(:lock_id)"),
+                        {"lock_id": SCHEDULER_ADVISORY_LOCK_ID},
+                    )
+                )
+                if not acquired:
+                    await asyncio.sleep(SCHEDULER_RETRY_SECONDS)
+                    continue
+
+                logger.info("Этот backend-процесс выбран лидером планировщика")
+                try:
+                    await scheduler_loop(session_factory, notify_delivery)
+                finally:
+                    with suppress(Exception):
+                        await connection.execute(
+                            text("SELECT pg_advisory_unlock(:lock_id)"),
+                            {"lock_id": SCHEDULER_ADVISORY_LOCK_ID},
+                        )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Ошибка leader election планировщика; повтор через %s с",
+                SCHEDULER_RETRY_SECONDS,
+            )
+            await asyncio.sleep(SCHEDULER_RETRY_SECONDS)
 
 
 @sio.event
@@ -111,7 +155,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
         logger.info("Подключение к PostgreSQL установлено")
         scheduler = asyncio.create_task(
-            scheduler_loop(application.state.database_session_factory, notify_delivery)
+            scheduler_leader_loop(engine, application.state.database_session_factory)
         )
         try:
             yield

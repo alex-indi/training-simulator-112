@@ -100,6 +100,7 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
           <button type="button" disabled={busy} onClick={() => perform(`${path}/regenerate-card`, { method: 'POST' }, 'Карточка перегенерирована')}>Перегенерировать карточку</button>
           <button type="button" disabled={busy} onClick={() => perform(path, { method: 'DELETE' }, 'Карточка исключена')}>Исключить</button>
         </div>}
+        <p className={styles.hint}>Ход работы служб формируется тренажёром автоматически во время занятия. Здесь преподаватель проверяет только карточку, которую увидит ДДС.</p>
       </section>}
     </div>}
   </article>

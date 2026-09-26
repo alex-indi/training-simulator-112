@@ -50,19 +50,20 @@ def test_virtual_reactions_and_brigade_stages_preserve_dds_status():
     record_other_service_reactions(incident, accepted_at)
     assert [(item.service_name, item.stage, item.created_at) for item in incident.activities] == [
         ("Служба 102", "ACCEPTED", accepted_at),
-        ("Служба 103", "REJECTED", accepted_at),
+        ("Служба 103", "ACCEPTED", accepted_at),
     ]
 
     session = TrainingSession(id=1)
     run = TrainingRun(id=1)
-    assert not release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=9))
-    assert release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=10))
-    assert release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=70))
-    assert not release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=80))
+    assert not release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=14))
+    assert release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=15))
+    assert release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=75))
+    assert release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=195))
+    assert not release_brigade_stages(incident, session, run, accepted_at + timedelta(seconds=200))
     brigade = [item for item in incident.activities if item.kind == "TRAINING_BRIGADE"]
     assert [item.stage for item in brigade] == ["EN_ROUTE", "ARRIVED", "WORKING", "COMPLETED"]
     assert brigade[-1].body == "Пожар ликвидирован"
-    assert brigade[0].created_at == accepted_at + timedelta(seconds=10)
+    assert brigade[0].created_at == accepted_at + timedelta(seconds=15)
     assert incident.dds_status == DDSResponseStatus.ACCEPTED
     assert incident.finished_at is None
 
