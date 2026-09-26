@@ -5,10 +5,9 @@ import informationIcon from './assets/information.svg'
 import styles from './App.module.css'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
-import TrainingEnrollment from './TrainingEnrollment.jsx'
 import TrainingResults from './TrainingResults.jsx'
 import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels } from './uiLabels.js'
-import { previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
+import { initialOrderNumber, previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -175,6 +174,10 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
+  const [loginSessions, setLoginSessions] = useState([])
+  const [loginSessionId, setLoginSessionId] = useState('')
+  const [loginWorkstation, setLoginWorkstation] = useState('')
+  const [loginSessionsLoading, setLoginSessionsLoading] = useState(false)
   const [incidents, setIncidents] = useState([])
   const [joinedSessionId, setJoinedSessionId] = useState(null)
   const [activeSessionId, setActiveSessionId] = useState(null)
@@ -243,6 +246,38 @@ function App() {
       .finally(() => setLoading(false))
   }, [])
 
+  const loginUser = users.find((user) => user.username === loginUsername)
+  const loginSession = loginSessions.find((item) => String(item.id) === loginSessionId)
+
+  useEffect(() => {
+    if (loginUser?.role !== 'TRAINEE' || currentUser) {
+      setLoginSessions([])
+      setLoginSessionId('')
+      setLoginWorkstation('')
+      setLoginSessionsLoading(false)
+      return undefined
+    }
+
+    let active = true
+    setLoginSessionsLoading(true)
+    requestJson('/api/training/sessions', loginUser.username)
+      .then((items) => {
+        if (!active) return
+        const available = items.filter((item) => ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
+        const preferred = available.find((item) => item.state === 'ACTIVE' && item.own_run)
+          || available.find((item) => item.own_run)
+          || available[0]
+        setLoginSessions(available)
+        setLoginSessionId(preferred ? String(preferred.id) : '')
+        setLoginWorkstation(preferred?.own_run?.workstation_number
+          ? String(preferred.own_run.workstation_number)
+          : '')
+      })
+      .catch((requestError) => { if (active) setError(requestError.message) })
+      .finally(() => { if (active) setLoginSessionsLoading(false) })
+    return () => { active = false }
+  }, [currentUser, loginUser])
+
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
@@ -254,6 +289,8 @@ function App() {
         ])
         if (!active) return
         const currentSession = sessions.find((item) => item.state === 'ACTIVE' && item.own_run)
+        const joinedSession = currentSession
+          || sessions.find((item) => ['DRAFT', 'READY'].includes(item.state) && item.own_run)
         const lastCompleted = sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
         const currentItems = currentSession ? items.filter((item) => item.training_session_id === currentSession.id) : []
         if (activeSessionIdRef.current !== (currentSession?.id || null)) {
@@ -261,6 +298,7 @@ function App() {
           setFilters(emptyFilters)
         }
         setActiveSessionId(currentSession?.id || null)
+        setJoinedSessionId(joinedSession?.id || null)
         setCompletedSessionId(lastCompleted?.id || null)
         setIncidents(currentItems)
         if (selectedIncidentId.current && !currentItems.some((item) => item.id === selectedIncidentId.current)) {
@@ -295,6 +333,18 @@ function App() {
     const fallback = window.setInterval(refresh, 30000)
     refresh()
     return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
+  }, [currentUser])
+
+  useEffect(() => {
+    if (currentUser?.role !== 'TRAINEE' || !joinedSessionId) return undefined
+    const heartbeat = () => requestJson(
+      `/api/training/sessions/${joinedSessionId}/heartbeat`,
+      currentUser.username,
+      { method: 'POST' },
+    ).catch((cause) => setError(cause.message))
+    heartbeat()
+    const timer = window.setInterval(heartbeat, 20000)
+    return () => window.clearInterval(timer)
   }, [currentUser, joinedSessionId])
 
   useEffect(() => {
@@ -351,6 +401,17 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: demoUser.username, password: loginPassword }),
       })
+      if (user.role === 'TRAINEE') {
+        if (!loginSession || !loginWorkstation) {
+          throw new Error('Выберите рабочее место')
+        }
+        await requestJson(`/api/training/sessions/${loginSession.id}/join`, user.username, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workstation_number: Number(loginWorkstation) }),
+        })
+        setJoinedSessionId(loginSession.id)
+      }
       window.sessionStorage.setItem('ut112-demo-username', user.username)
       setCurrentUser(user)
       setLoginPassword('')
@@ -365,6 +426,7 @@ function App() {
     window.sessionStorage.removeItem('ut112-demo-username')
     setCurrentUser(null)
     setIncidents([])
+    setJoinedSessionId(null)
     setActiveSessionId(null)
     activeSessionIdRef.current = null
     setCompletedSessionId(null)
@@ -419,9 +481,12 @@ function App() {
     setError('')
     setLoading(true)
     try {
-      const isSharedReadOnly = incident.training_group_id && !incident.can_edit
+      const claimedIncident = incident.can_claim
+        ? await requestJson(`/api/incidents/${incident.id}/claim`, currentUser.username, { method: 'POST' })
+        : incident
+      const isSharedReadOnly = claimedIncident.training_group_id && !claimedIncident.can_edit
       const openedIncident = await requestJson(
-        `/api/incidents/${incident.id}${isSharedReadOnly ? '' : '/open'}`,
+        `/api/incidents/${claimedIncident.id}${isSharedReadOnly ? '' : '/open'}`,
         currentUser.username,
         isSharedReadOnly ? undefined : { method: 'POST' },
       )
@@ -450,22 +515,6 @@ function App() {
     }
   }
 
-  const claimCard = async () => {
-    if (!selectedIncident?.can_claim) return
-    setError('')
-    setLoading(true)
-    try {
-      const claimed = await requestJson(`/api/incidents/${selectedIncident.id}/claim`, currentUser.username, { method: 'POST' })
-      await openCard(claimed)
-      setIncidents(await requestJson('/api/incidents', currentUser.username))
-    } catch (requestError) {
-      setError(requestError.message)
-      setIncidents(await requestJson('/api/incidents', currentUser.username))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const closeCard = () => {
     setSelectedIncident(null)
     setSelectedService('')
@@ -482,7 +531,7 @@ function App() {
       setSelectedService(service)
       setServiceHistoryOpen(false)
       setSelectedAction('')
-      setActionOrderNumber('')
+      setActionOrderNumber(initialOrderNumber(isPreviewMode ? previewStatuses[service] : selectedIncident?.actions))
       setActionComment('')
       setStatusEditorOpen(true)
       return
@@ -495,9 +544,9 @@ function App() {
     setServiceHistoryOpen(true)
   }
 
-  const openStatusEditor = () => {
+  const openStatusEditor = (service = selectedService) => {
     setSelectedAction('')
-    setActionOrderNumber('')
+    setActionOrderNumber(initialOrderNumber(isPreviewMode ? previewStatuses[service] : selectedIncident?.actions))
     setActionComment('')
     setStatusEditorOpen(true)
   }
@@ -587,25 +636,47 @@ function App() {
           </header>
 
           <form className={styles.loginForm} onSubmit={submitLogin}>
-            <label>
-              <span>Пользователь</span>
-              <div className={styles.loginSelectField}>
-                <select
-                  autoComplete="username"
-                  disabled={loading || !users.length}
-                  onChange={(event) => setLoginUsername(event.target.value)}
-                  value={loginUsername}
-                >
-                  {!users.length && <option value="">Загрузка пользователей…</option>}
-                  {users.map((user) => (
-                    <option key={user.id} value={user.username}>
-                      {user.full_name}
-                    </option>
-                  ))}
-                </select>
-                <span className={styles.chevronIcon} aria-hidden="true" />
-              </div>
-            </label>
+            <div className={styles.loginIdentityRow}>
+              <label>
+                <span>Пользователь</span>
+                <div className={styles.loginSelectField}>
+                  <select
+                    autoComplete="username"
+                    disabled={loading || !users.length}
+                    onChange={(event) => setLoginUsername(event.target.value)}
+                    value={loginUsername}
+                  >
+                    {!users.length && <option value="">Загрузка пользователей…</option>}
+                    {users.map((user) => (
+                      <option key={user.id} value={user.username}>
+                        {user.full_name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={styles.chevronIcon} aria-hidden="true" />
+                </div>
+              </label>
+
+              {loginUser?.role === 'TRAINEE' && <label>
+                <span>Рабочее место</span>
+                <div className={styles.loginSelectField}>
+                  <select
+                    aria-label="Рабочее место"
+                    disabled={loginSessionsLoading || !loginSession}
+                    onChange={(event) => setLoginWorkstation(event.target.value)}
+                    required
+                    value={loginWorkstation}
+                  >
+                    <option value="">{loginSessionsLoading ? 'Загрузка АРМ…' : loginSession ? 'Выберите АРМ' : 'Нет доступного занятия'}</option>
+                    {Array.from({ length: loginSession?.workstation_count || 0 }, (_, index) => index + 1).map((number) => (
+                      <option key={number} value={number}>АРМ {String(number).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <span className={styles.chevronIcon} aria-hidden="true" />
+                </div>
+                {loginSession && <small className={styles.loginSessionName}>{loginSession.title}</small>}
+              </label>}
+            </div>
             <label>
               <span>Пароль</span>
               <div className={styles.passwordField}>
@@ -628,7 +699,7 @@ function App() {
 
             {error && <div className={styles.loginError} role="alert">{error}</div>}
 
-            <button className={styles.loginButton} disabled={loading || !users.length} type="submit">
+            <button className={styles.loginButton} disabled={loading || !users.length || (loginUser?.role === 'TRAINEE' && !loginWorkstation)} type="submit">
               {loading ? 'Подключение…' : 'Войти'}
             </button>
           </form>
@@ -697,7 +768,6 @@ function App() {
 
   return (
     <main className={styles.armShell}>
-      {currentUser?.role === 'TRAINEE' && <TrainingEnrollment user={currentUser} requestJson={requestJson} onJoined={setJoinedSessionId} />}
       {currentUser?.role === 'TRAINEE' && <TrainingResults user={currentUser} requestJson={requestJson} />}
       {error && (
         <div className={styles.errorBanner} role="alert">
@@ -711,15 +781,6 @@ function App() {
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
-          {selectedIncident.training_group_id && (
-            <div className={styles.errorBanner}>
-              {selectedIncident.claimant_name
-                ? `В работе: ${selectedIncident.claimant_name} · АРМ ${selectedIncident.claimant_workstation_number}`
-                : 'Новая карточка общей очереди'}
-              {selectedIncident.can_claim && <button type="button" onClick={claimCard} disabled={loading}>Взять в работу</button>}
-              {!selectedIncident.can_claim && !selectedIncident.available_actions.length && <span> · просмотр без права изменения</span>}
-            </div>
-          )}
           <header className={styles.telephonyStrip}>
             <div className={styles.callState}>
               <span className={styles.headsetIcon}><span className={styles.phoneReceiverIcon} aria-hidden="true" /></span>
@@ -878,7 +939,7 @@ function App() {
                     <small>{getServiceStatus(service) === 'AWAITING_DECISION' ? 'Получена' : ddsStatusLabels[getServiceStatus(service)] || getServiceStatus(service)}</small>
                   </button>
                   {service === ownService && getServiceActions(service).length > 0 && (
-                    <button className={styles.serviceEditButton} type="button" onClick={() => { setSelectedService(service); openStatusEditor() }} aria-label={`Изменить статус службы ${service}`} title="Изменить статус"><span className={styles.serviceEditIcon} aria-hidden="true" /></button>
+                    <button className={styles.serviceEditButton} type="button" onClick={() => { setSelectedService(service); openStatusEditor(service) }} aria-label={`Изменить статус службы ${service}`} title="Изменить статус"><span className={styles.serviceEditIcon} aria-hidden="true" /></button>
                   )}
                 </div>
               ))}

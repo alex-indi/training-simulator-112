@@ -80,6 +80,13 @@
   gap: 22px;
 }
 
+.loginIdentityRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(170px, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
 .loginForm label {
   display: grid;
   gap: 7px;
@@ -138,6 +145,11 @@
   height: 16px;
   color: var(--training-accent);
   pointer-events: none;
+}
+
+.loginSessionName {
+  color: rgb(255 255 255 / 72%);
+  font-size: 11px;
 }
 
 .passwordField {
@@ -1634,6 +1646,11 @@
 }
 
 @media (max-width: 700px) {
+  .loginIdentityRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
   .statusEditor {
     left: 12px;
     right: 12px;
