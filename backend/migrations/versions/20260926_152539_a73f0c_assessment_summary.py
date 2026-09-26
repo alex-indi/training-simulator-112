@@ -17,7 +17,10 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("assessment_results", sa.Column("ai_summary", sa.Text(), nullable=True))
-    op.add_column("assessment_results", sa.Column("ai_summary_provider", sa.String(40), nullable=True))
+    op.add_column(
+        "assessment_results",
+        sa.Column("ai_summary_provider", sa.String(40), nullable=True),
+    )
     op.add_column(
         "assessment_results",
         sa.Column("ai_summary_generated_at", sa.DateTime(timezone=True), nullable=True),
