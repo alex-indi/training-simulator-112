@@ -85,10 +85,12 @@ test('MVP: общий пул, claim, принятие и сообщение бр
     await json(await instructor.post(`/api/training/sessions/${session.id}/prepare`))
     await json(await instructor.post(`/api/training/sessions/${session.id}/start`))
 
-    const queue = await json(await instructor.get(`/api/training/sessions/${session.id}/queue`))
-    const prepared = queue.find((item) => item.scenario_instance_id === cards[0].id)
-    expect(prepared?.incident_id).toBeTruthy()
-    const incidentId = prepared.incident_id
+    let incidentId
+    await expect.poll(async () => {
+      const queue = await json(await instructor.get(`/api/training/sessions/${session.id}/queue`))
+      incidentId = queue.find((item) => item.scenario_instance_id === cards[0].id)?.incident_id
+      return incidentId
+    }).toBeTruthy()
     const number = `СЦ-${cards[0].id}`
 
     await expect(page.getByText(number).first()).toBeVisible()
