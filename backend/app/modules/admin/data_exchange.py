@@ -19,6 +19,7 @@ from app.modules.incident_classifier.models import (
     IncidentRuleFeature,
     IncidentRuleService,
 )
+from app.modules.object_registry.address import normalize_address
 from app.modules.object_registry.models import (
     CityObject,
     ObjectAttribute,
@@ -436,7 +437,7 @@ async def _import_objects(session: AsyncSession, raw: Any) -> dict[str, Any]:
         values = {
             "name": row.name,
             "object_type_id": types[row.object_type_code].id,
-            "address": row.address,
+            "address": normalize_address(row.address),
             "district": row.district,
             "administrative_area": row.administrative_area,
             "latitude": Decimal(str(row.latitude)) if row.latitude is not None else None,

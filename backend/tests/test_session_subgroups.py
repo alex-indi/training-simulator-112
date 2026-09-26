@@ -146,6 +146,24 @@ def test_cross_source_subgroup_assignment_and_restoration():
                     == groups[1]["id"]
                 )
 
+                all_in_subgroup = await client.put(
+                    f"{path}/subgroups/{subgroup['id']}",
+                    json={
+                        **payload,
+                        "member_user_ids": [student.id for student in students],
+                    },
+                )
+                assert all_in_subgroup.status_code == 200, all_in_subgroup.text
+                assert [group["member_count"] for group in all_in_subgroup.json()["groups"]] == [
+                    0, 0, 7
+                ]
+                assert all_in_subgroup.json()["readiness"]["group_count"] == 1
+                assert not any(
+                    group["name"] in warning
+                    for group in all_in_subgroup.json()["groups"][:2]
+                    for warning in all_in_subgroup.json()["readiness"]["warnings"]
+                )
+
                 rule = IncidentClassifierRule(
                     incident_group="Пожар",
                     final_incident_type="Пожар",

@@ -1,5 +1,7 @@
 """Dataset 747: официальные названия и классификация по полям источника."""
 
+from app.modules.object_registry.address import normalize_address
+
 SOURCE = "data.mos.ru:747"
 
 
@@ -45,7 +47,7 @@ def map_education(row: dict) -> dict:
         "external_id": external_id,
         "name": name,
         "object_type_code": type_code,
-        "address": clean(cells.get("yuridich_adress")) or None,
+        "address": normalize_address(cells.get("yuridich_adress"), default_city="г. Москва"),
         "district": None,
         "administrative_area": None,
         "latitude": None,

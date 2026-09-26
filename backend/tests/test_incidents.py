@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from app.modules.admin import models as admin_models  # noqa: F401
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.models import (
     DDSResponseStatus,
@@ -33,6 +34,8 @@ from app.modules.incidents.workflow import (
     mark_incident_opened,
     perform_incident_action,
 )
+from app.modules.response import models as response_models  # noqa: F401
+from app.modules.scenario_library import instance_models as scenario_instance_models  # noqa: F401
 from app.modules.training.models import TrainingRun, TrainingSession, TrainingSessionState
 
 
@@ -97,6 +100,23 @@ def test_delivered_incident_uses_server_time_and_snapshot_copy() -> None:
     assert incident.actions[0].status == DdsServiceEventType.SERVICE_ADDED
     assert incident.actions[0].created_at == server_time
     assert incident.actions[0].is_system is True
+
+
+def test_delivered_incident_removes_postal_index_from_generated_card() -> None:
+    source_snapshot = make_snapshot().model_dump(mode="json")
+    source_snapshot.update(
+        source="SCENARIO_INSTANCE",
+        address="117624, г. Москва, ул. Изюмская, д. 35",
+        description="Задымление: 117624, г. Москва, ул. Изюмская, д. 35.",
+    )
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=source_snapshot,
+    )
+    assert incident.address == "г. Москва, ул. Изюмская, д. 35"
+    assert incident.source_snapshot["address"] == incident.address
+    assert incident.description == "Задымление: г. Москва, ул. Изюмская, д. 35."
+    assert source_snapshot["address"].startswith("117624")
 
 
 def test_generated_reported_time_is_delivery_time() -> None:

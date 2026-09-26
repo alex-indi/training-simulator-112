@@ -2,6 +2,8 @@
 
 from decimal import Decimal, InvalidOperation
 
+from app.modules.object_registry.address import normalize_address
+
 from .education import clean
 
 
@@ -93,7 +95,7 @@ def map_healthcare(rows: list[dict], dataset_id: int, type_code: str) -> tuple[l
                     "external_id": f"{row_id}:{address_id}",
                     "name": name,
                     "object_type_code": type_code,
-                    "address": clean(address.get("Address")) or None,
+                    "address": normalize_address(address.get("Address"), default_city="г. Москва"),
                     "district": clean(address.get("District")) or None,
                     "administrative_area": clean(address.get("AdmArea")) or None,
                     "latitude": latitude,

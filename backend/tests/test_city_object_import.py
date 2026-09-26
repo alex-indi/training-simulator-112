@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
+from app.modules.object_registry.address import normalize_address, normalize_generated_text
 from app.modules.object_registry.models import (
     CityObject,
     ObjectAttribute,
@@ -42,14 +43,46 @@ def test_education_classification_preserves_unknown() -> None:
             "poln_name": "\u00a0Детский сад № 1",
             "tipe_uchrezhden": "Дошкольное образовательное учреждение",
             "vid_uchrezhdeniya": "Детский сад",
-            "yuridich_adress": "Москва, ул. Тестовая, д. 1",
+            "yuridich_adress": "123456, г. Москва, ул. Тестовая, д. 1",
         },
     }
     mapped = map_education(row)
     assert mapped["name"] == "Детский сад № 1"
     assert mapped["external_id"] == "11"
     assert mapped["source_dataset_id"] == "747"
+    assert mapped["address"] == "г. Москва, ул. Тестовая, д. 1"
     assert mapped["tags"] == ["education", "children", "mass_people"]
+
+
+def test_city_object_addresses_start_with_locality() -> None:
+    assert normalize_address(
+        '"127273 г. Москва, ул. Отрадная, д. 5 "Б"', default_city="г. Москва"
+    ) == (
+        'г. Москва, ул. Отрадная, д. 5 "Б"'
+    )
+    assert normalize_address("119 454 г.Москва, ул. Лобачевского, д. 56") == (
+        "г.Москва, ул. Лобачевского, д. 56"
+    )
+    assert normalize_address("109012 109012 г. Москва, ул. Пушечная, д. 4") == (
+        "г. Москва, ул. Пушечная, д. 4"
+    )
+    assert normalize_address(
+        "125057, Ленинградский проспект, д. 75Д", default_city="г. Москва"
+    ) == (
+        "г. Москва, Ленинградский проспект, д. 75Д"
+    )
+    assert normalize_address(
+        "Российская Федерация, город Москва, улица Лескова, дом 6"
+    ) == "город Москва, улица Лескова, дом 6"
+    assert normalize_address("Московская область, г. Пушкино, улица Лермонтовская") == (
+        "г. Пушкино, улица Лермонтовская"
+    )
+    assert normalize_address("0", default_city="г. Москва") is None
+    assert normalize_generated_text(
+        "Задымление: 117624, г. Москва, ул. Изюмская, д. 35.",
+        "117624, г.Москва, ул. Изюмская, д. 35",
+        "г.Москва, ул. Изюмская, д. 35",
+    ) == "Задымление: г. Москва, ул. Изюмская, д. 35."
 
 
 def test_metro_aggregation_keeps_source_ids_and_excludes_outside() -> None:
@@ -88,7 +121,11 @@ def test_healthcare_maps_each_address_and_preserves_source_ids() -> None:
             "Category": "Больница взрослая",
             "CloseFlag": "действует",
             "ObjectAddress": [
-                {"global_id": 7, "Address": "Москва, дом 1", "District": "Район 1"},
+                {
+                    "global_id": 7,
+                    "Address": "Российская Федерация, город Москва, дом 1",
+                    "District": "Район 1",
+                },
                 {"global_id": 8, "Address": "Москва, дом 2", "District": "Район 2"},
             ],
             "WorkingHours": [{"DayWeek": day, "WorkHours": "круглосуточно"} for day in range(7)],
@@ -97,6 +134,7 @@ def test_healthcare_maps_each_address_and_preserves_source_ids() -> None:
     objects, quality = map_healthcare([row], 517, "HOSPITAL")
     assert [item["external_id"] for item in objects] == ["42:7", "42:8"]
     assert [item["district"] for item in objects] == ["Район 1", "Район 2"]
+    assert objects[0]["address"] == "город Москва, дом 1"
     assert objects[0]["source"] == "data.mos.ru:517"
     assert objects[0]["source_dataset_id"] == "517"
     assert objects[0]["attributes"]["source_row_id"] == "42"
