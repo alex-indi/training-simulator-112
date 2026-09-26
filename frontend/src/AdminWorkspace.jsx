@@ -8,11 +8,7 @@ import WorkspaceClock from './WorkspaceClock.jsx'
 const sections = [
   ['overview', 'Обзор'],
   ['users', 'Пользователи'],
-  ['classifier', 'Классификатор'],
   ['services', 'Службы 112'],
-  ['objects', 'Объекты Москвы'],
-  ['types', 'Типы объектов'],
-  ['imports', 'Импорт данных'],
   ['ai', 'AI'],
   ['scenarios', 'Сценарии'],
   ['audit', 'Аудит'],
@@ -142,6 +138,14 @@ function formatDateTime(value) {
   return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value)) : '—'
 }
 
+function serviceDisplayName(item) {
+  const organization = item.organization?.trim()
+  const suffix = organization ? `(${organization})` : ''
+  return suffix && item.official_name.endsWith(suffix)
+    ? item.official_name.slice(0, -suffix.length).trim()
+    : item.official_name
+}
+
 function renderObjectAttributeValue(code, value) {
   if (code === 'working_hours' && Array.isArray(value)) {
     const rows = value
@@ -234,7 +238,13 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({})
   const [selectedObject, setSelectedObject] = useState(null)
-  const [activeUserRole, setActiveUserRole] = useState('ADMIN')
+  const [userQuery, setUserQuery] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL')
+  const [userStatusFilter, setUserStatusFilter] = useState('ALL')
+  const [userGroupFilter, setUserGroupFilter] = useState('ALL')
+  const [userSort, setUserSort] = useState({ field: 'id', direction: 'asc' })
+  const [selectedUserIds, setSelectedUserIds] = useState([])
+  const [newUserRole, setNewUserRole] = useState('TRAINEE')
   const [userForm, setUserForm] = useState({ username: '', full_name: '', password: '', role: 'ADMIN', group_id: null })
   const [userModal, setUserModal] = useState(null)
   const [groupDraft, setGroupDraft] = useState({ name: '', description: '' })
@@ -617,14 +627,6 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
   }
 
   const filteredRows = useMemo(() => Array.isArray(data) ? data : [], [data])
-  const groupedUsers = useMemo(
-    () => userGroups.map(([role, label]) => ({
-      role,
-      label,
-      users: filteredRows.filter((item) => item.role === role),
-    })),
-    [filteredRows],
-  )
   const traineeBuckets = useMemo(() => [
     ...traineeGroups.map((group) => ({
       ...group,
@@ -637,12 +639,94 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
       users: filteredRows.filter((item) => item.role === 'TRAINEE' && item.group_id === null),
     },
   ], [filteredRows, traineeGroups])
+  const userRows = useMemo(() => {
+    const normalizedQuery = userQuery.trim().toLocaleLowerCase('ru-RU')
+    const rows = filteredRows.filter((item) => {
+      if (normalizedQuery && !`${item.id} ${item.username} ${item.full_name}`.toLocaleLowerCase('ru-RU').includes(normalizedQuery)) return false
+      if (userRoleFilter !== 'ALL' && item.role !== userRoleFilter) return false
+      if (userStatusFilter === 'ACTIVE' && !item.is_active) return false
+      if (userStatusFilter === 'INACTIVE' && item.is_active) return false
+      if (userGroupFilter === 'NONE' && item.group_id !== null) return false
+      if (userGroupFilter !== 'ALL' && userGroupFilter !== 'NONE' && item.group_id !== Number(userGroupFilter)) return false
+      return true
+    })
+    const direction = userSort.direction === 'asc' ? 1 : -1
+    return rows.sort((left, right) => {
+      const leftValue = left[userSort.field]
+      const rightValue = right[userSort.field]
+      if (leftValue === rightValue) return left.id - right.id
+      if (leftValue === null || leftValue === undefined) return 1
+      if (rightValue === null || rightValue === undefined) return -1
+      if (typeof leftValue === 'number') return (leftValue - rightValue) * direction
+      return String(leftValue).localeCompare(String(rightValue), 'ru', { numeric: true }) * direction
+    })
+  }, [filteredRows, userGroupFilter, userQuery, userRoleFilter, userSort, userStatusFilter])
+  const selectedUsers = useMemo(
+    () => filteredRows.filter((item) => selectedUserIds.includes(item.id)),
+    [filteredRows, selectedUserIds],
+  )
+  const userRoleCounts = useMemo(
+    () => Object.fromEntries(userGroups.map(([role]) => [role, filteredRows.filter((item) => item.role === role).length])),
+    [filteredRows],
+  )
 
   const updateFilter = (event) => setFilters({ ...filters, [event.target.name]: event.target.value })
 
+  const sortUsersBy = (field) => {
+    setUserSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  const toggleUserSelection = (userId) => {
+    setSelectedUserIds((current) => current.includes(userId)
+      ? current.filter((item) => item !== userId)
+      : [...current, userId])
+  }
+
+  const toggleVisibleUsers = () => {
+    const visibleIds = userRows.map((item) => item.id)
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedUserIds.includes(id))
+    setSelectedUserIds((current) => allSelected
+      ? current.filter((id) => !visibleIds.includes(id))
+      : [...new Set([...current, ...visibleIds])])
+  }
+
+  const bulkSetUsersActive = async (isActive) => {
+    const targets = selectedUsers.filter((item) => item.is_active !== isActive)
+    if (!targets.length) {
+      setNotice('У выбранных пользователей уже установлен этот статус.')
+      return
+    }
+    if (!isActive && targets.some((item) => item.id === user.id)) {
+      setError('Текущую учётную запись нельзя деактивировать массовым действием.')
+      return
+    }
+    setLoading(true)
+    setError('')
+    setNotice('')
+    try {
+      for (const item of targets) {
+        await requestJson(`/api/admin/users/${item.id}`, username, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: isActive }),
+        })
+      }
+      setSelectedUserIds([])
+      await load()
+      setNotice(`${isActive ? 'Активировано' : 'Деактивировано'} пользователей: ${targets.length}.`)
+    } catch (cause) {
+      setError(cause.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const renderFilters = () => {
     if (section === 'classifier') return <><input name="incident_group" placeholder="Группа происшествий" value={filters.incident_group || ''} onChange={updateFilter} /><input name="service" placeholder="Связанная служба" value={filters.service || ''} onChange={updateFilter} /></>
-    if (section === 'services') return <input name="level" placeholder="Уровень службы" value={filters.level || ''} onChange={updateFilter} />
+    if (section === 'services') return null
     if (section === 'objects') return <><input name="object_type_id" type="number" placeholder="ObjectType ID" value={filters.object_type_id || ''} onChange={updateFilter} /><input name="district" placeholder="Район" value={filters.district || ''} onChange={updateFilter} /><input name="administrative_area" placeholder="Округ" value={filters.administrative_area || ''} onChange={updateFilter} /><input name="source" placeholder="Источник" value={filters.source || ''} onChange={updateFilter} /><input name="tag" placeholder="Тег" value={filters.tag || ''} onChange={updateFilter} /></>
     return null
   }
@@ -664,34 +748,51 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </>
   )
 
-  const renderUserTable = (rows) => !rows.length ? <div className={styles.groupEmpty}>Пользователей в группе нет</div> : <div className={styles.table}>
-    <div className={styles.tableHead}><span>ФИО</span><span>Логин</span><span>Роль / группа</span><span>Статус</span><span>Последний вход / пароль</span><span>Действия</span></div>
-    {rows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.full_name}</strong><code>{item.username}</code><span>{roleLabels[item.role]}</span><span className={item.is_active ? styles.ok : styles.muted}>{item.is_active ? 'Активен' : 'Отключён'}</span><span>{formatDateTime(item.last_login_at)}</span><div className={styles.rowActions}><button onClick={() => openEditUser(item)}>Изменить</button><button onClick={() => patchUser(item, { is_active: !item.is_active })}>{item.is_active ? 'Деактивировать' : 'Активировать'}</button><button className={styles.dangerButton} disabled={item.id === user.id} title={item.id === user.id ? 'Нельзя удалить текущую учётную запись' : ''} onClick={() => setDeleteModal({ kind: 'user', item })}>Удалить</button></div></div>)}
-  </div>
+  const renderSortLabel = (field, label) => <button type="button" className={styles.sortButton} onClick={() => sortUsersBy(field)}>
+    {label}<span aria-hidden="true">{userSort.field === field ? (userSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span>
+  </button>
 
   const renderUsers = () => {
-    const currentGroup = groupedUsers.find((group) => group.role === activeUserRole)
-    return <div className={styles.userGroups}>
-      <div className={styles.userToolbar}>
-        <div className={styles.roleTabs} role="tablist" aria-label="Категории пользователей">
-          {groupedUsers.map((group) => <button type="button" role="tab" aria-selected={activeUserRole === group.role} className={activeUserRole === group.role ? styles.roleTabActive : styles.roleTab} key={group.role} onClick={() => setActiveUserRole(group.role)}><span>{group.label}</span><b>{group.users.length}</b></button>)}
-        </div>
-        <div className={styles.toolbarActions}>
-          {activeUserRole === 'TRAINEE' && <button type="button" onClick={openCreateGroup}>Новая группа</button>}
-          <button type="button" className={styles.primaryButton} onClick={() => openCreateUser(activeUserRole)}>Добавить {activeUserRole === 'ADMIN' ? 'администратора' : activeUserRole === 'INSTRUCTOR' ? 'преподавателя' : 'диспетчера'}</button>
-        </div>
+    const allVisibleSelected = userRows.length > 0 && userRows.every((item) => selectedUserIds.includes(item.id))
+    const groupName = (groupId) => traineeGroups.find((group) => group.id === groupId)?.name || 'Без группы'
+    return <div className={styles.userAdminModule}>
+      <section className={styles.userControlPanel} aria-label="Фильтры пользователей">
+        <div className={styles.userSearchField}><span>Поиск в таблице</span><input aria-label="Поиск пользователей" placeholder="ID, логин или ФИО" value={userQuery} onChange={(event) => setUserQuery(event.target.value)} /></div>
+        <label><span>Роль</span><select value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)}><option value="ALL">Все роли ({filteredRows.length})</option>{userGroups.map(([role, label]) => <option key={role} value={role}>{label} ({userRoleCounts[role]})</option>)}</select></label>
+        <label><span>Статус</span><select value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value)}><option value="ALL">Все статусы</option><option value="ACTIVE">Активные</option><option value="INACTIVE">Отключённые</option></select></label>
+        <label><span>Учебная группа</span><select value={userGroupFilter} onChange={(event) => setUserGroupFilter(event.target.value)}><option value="ALL">Все группы</option><option value="NONE">Без группы</option>{traineeGroups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
+        <button type="button" onClick={() => { setUserQuery(''); setUserRoleFilter('ALL'); setUserStatusFilter('ALL'); setUserGroupFilter('ALL') }}>Сбросить</button>
+      </section>
+
+      <section className={styles.userActionBar} aria-label="Действия с пользователями">
+        <div><strong>{selectedUsers.length ? `Выбрано строк: ${selectedUsers.length}` : 'Выберите строки для массового действия'}</strong><span>Показано {userRows.length} из {filteredRows.length}</span></div>
+        <div className={styles.userBulkActions}><button type="button" disabled={!selectedUsers.length || loading} onClick={() => bulkSetUsersActive(true)}>Активировать</button><button type="button" disabled={!selectedUsers.length || loading} onClick={() => bulkSetUsersActive(false)}>Деактивировать</button></div>
+        <div className={styles.userCreateActions}><select aria-label="Роль нового пользователя" value={newUserRole} onChange={(event) => setNewUserRole(event.target.value)}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><button type="button" className={styles.primaryButton} onClick={() => openCreateUser(newUserRole)}>+ Создать пользователя</button></div>
+      </section>
+
+      <div className={styles.userTableViewport}>
+        <table className={styles.userDataTable}>
+          <thead><tr><th><input type="checkbox" aria-label="Выбрать всех показанных пользователей" checked={allVisibleSelected} onChange={toggleVisibleUsers} /></th><th>{renderSortLabel('id', 'ID')}</th><th>{renderSortLabel('username', 'Логин')}</th><th>{renderSortLabel('full_name', 'ФИО')}</th><th>{renderSortLabel('role', 'Роль')}</th><th>Группа</th><th>{renderSortLabel('is_active', 'Статус')}</th><th>{renderSortLabel('last_login_at', 'Последний вход')}</th><th>Действия</th></tr></thead>
+          <tbody>{userRows.map((item) => <tr className={`${!item.is_active ? styles.userRowInactive : ''} ${selectedUserIds.includes(item.id) ? styles.userRowSelected : ''}`} key={item.id}>
+            <td><input type="checkbox" aria-label={`Выбрать ${item.full_name}`} checked={selectedUserIds.includes(item.id)} onChange={() => toggleUserSelection(item.id)} /></td>
+            <td><code>{item.id}</code></td>
+            <td><button type="button" className={styles.userLoginLink} onClick={() => openEditUser(item)}>{item.username}</button></td>
+            <td><strong>{item.full_name}</strong>{item.id === user.id && <small>Текущая запись</small>}</td>
+            <td><span className={`${styles.userRoleBadge} ${styles[`userRole${item.role}`]}`}>{roleLabels[item.role]}</span></td>
+            <td>{item.role === 'TRAINEE' ? groupName(item.group_id) : '—'}</td>
+            <td><span className={item.is_active ? styles.userStatusActive : styles.userStatusInactive}>{item.is_active ? '● Активен' : '○ Отключён'}</span></td>
+            <td><time>{formatDateTime(item.last_login_at)}</time></td>
+            <td><div className={styles.userRowActions}><button type="button" onClick={() => openEditUser(item)}>Изменить</button><button type="button" disabled={loading || (item.id === user.id && item.is_active)} onClick={() => patchUser(item, { is_active: !item.is_active })}>{item.is_active ? 'Отключить' : 'Включить'}</button><button type="button" className={styles.userDeleteAction} disabled={item.id === user.id || loading} title={item.id === user.id ? 'Нельзя удалить текущую учётную запись' : ''} onClick={() => setDeleteModal({ kind: 'user', item })}>Удалить</button></div></td>
+          </tr>)}</tbody>
+        </table>
+        {!userRows.length && <div className={styles.userTableEmpty}>По заданным условиям пользователи не найдены.</div>}
       </div>
-      {activeUserRole !== 'TRAINEE' ? (
-        <section className={styles.userGroup}><header><div><h3>{currentGroup.label}</h3><p>Управление учётными записями и доступом</p></div></header>{renderUserTable(currentGroup.users)}</section>
-      ) : (
-        <section className={styles.userGroup}>
-          <div className={styles.groupIntro}><div><h3>Учебные группы диспетчеров</h3><p>Создавайте группы, назначайте в них обучаемых и меняйте названия в любое время.</p></div></div>
-          <div className={styles.traineeGroups}>{traineeBuckets.map((group) => <article className={styles.traineeGroup} key={`TRAINEE:${group.id ?? 'none'}`}>
-            <header><div><h4>{group.name}</h4><p>{group.description}</p></div><span>{group.users.length}</span><div className={styles.groupActions}>{group.id !== null && <><button type="button" onClick={() => openEditGroup(group)}>Изменить группу</button><button type="button" className={styles.dangerButton} onClick={() => setDeleteModal({ kind: 'group', item: group })}>Удалить группу</button></>}<button type="button" className={styles.primaryButton} onClick={() => openCreateUser('TRAINEE', group.id)}>Добавить диспетчера</button></div></header>
-            {renderUserTable(group.users)}
-          </article>)}</div>
-        </section>
-      )}
+      <footer className={styles.userTableFooter}><span>Строк: {userRows.length}</span><span>Сортировка: {userSort.field} · {userSort.direction === 'asc' ? 'по возрастанию' : 'по убыванию'}</span><span>Изменения выполняются через защищённый Admin API и записываются в аудит.</span></footer>
+
+      <section className={styles.userGroupManager}>
+        <header><div><small>Связанная таблица</small><h3>Учебные группы диспетчеров</h3><p>Группы используются для назначения профиля и подготовки занятия.</p></div><button type="button" className={styles.primaryButton} onClick={openCreateGroup}>+ Новая группа</button></header>
+        <div className={styles.userGroupRecords}>{traineeBuckets.map((group) => <article key={`TRAINEE:${group.id ?? 'none'}`}><div><code>{group.id ?? 'NULL'}</code><strong>{group.name}</strong><p>{group.description}</p></div><b>{group.users.length} чел.</b><div>{group.id !== null && <><button type="button" onClick={() => openEditGroup(group)}>Изменить</button><button type="button" className={styles.dangerButton} onClick={() => setDeleteModal({ kind: 'group', item: group })}>Удалить</button></>}<button type="button" onClick={() => openCreateUser('TRAINEE', group.id)}>Добавить диспетчера</button></div></article>)}</div>
+      </section>
     </div>
   }
 
@@ -772,7 +873,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
 
   const renderClassifier = () => !filteredRows.length ? <Empty>Записи SRC-006 не импортированы</Empty> : <div className={styles.table}><div className={styles.tableHead}><span>Группа</span><span>Признаки</span><span>Тип</span><span>Код</span><span>Службы</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.incident_group}</strong><span>{[item.feature_1, item.feature_2, item.feature_3].filter(Boolean).join(' → ') || '—'}</span><span>{item.incident_type}</span><code>{item.source_code}</code><span>{item.related_services.join(', ') || '—'}</span><button onClick={() => openCatalogEditor('classifier', item)}>Изменить</button></div>)}</div>
 
-  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={`${styles.table} ${styles.serviceTable}`}><div className={styles.tableHead}><span>Официальное название</span><span>Тип</span><span>Уровень</span><span>Организация</span><span>Статус</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{item.official_name}</strong><span>{item.service_type}</span><span>{item.level || '—'}</span><span>{item.organization || '—'}</span><span>{item.data_status}</span><button onClick={() => openCatalogEditor('service', item)}>Изменить</button></div>)}</div>
+  const renderServices = () => !filteredRows.length ? <Empty>Каталог служб ещё не импортирован. Создание служб вручную запрещено.</Empty> : <div className={`${styles.table} ${styles.serviceTable}`}><div className={styles.tableHead}><span>Официальное название</span><span>Организация</span><span>Действия</span></div>{filteredRows.map((item) => <div className={styles.tableRow} key={item.id}><strong>{serviceDisplayName(item)}</strong><span>{item.organization || '—'}</span><button onClick={() => openCatalogEditor('service', item)}>Изменить</button></div>)}</div>
 
   const renderObjects = () => (
     <div className={styles.split}>
@@ -836,7 +937,6 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
         <label>API key<input name="api_key" type="password" autoComplete="new-password" placeholder={data.api_key_configured ? 'Ключ сохранён — введите новый для замены' : 'Введите ключ провайдера'} value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} /></label>
         <label>Timeout, сек.<input name="timeout_seconds" type="number" min="1" max="300" value={aiDraft.timeout_seconds} onChange={(event) => setAiDraft({ ...aiDraft, timeout_seconds: event.target.value })} /></label>
         <label className={styles.checkbox}><input name="enabled" type="checkbox" checked={aiDraft.enabled} onChange={(event) => setAiDraft({ ...aiDraft, enabled: event.target.checked })} /> Активировать модель</label>
-        <div className={styles.secretState}>API key: <b>{data.api_key_configured ? '● configured' : '○ not configured'}</b>. Значение ключа никогда не возвращается.</div>
         <button disabled={loading}>Применить</button>
         <button disabled={loading} type="button" onClick={async () => {
           setLoading(true); setError(''); setAiHealth(null)
@@ -850,7 +950,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
     </>
   )
 
-  const renderScenarios = () => <ScenarioLibrary user={user} requestJson={requestJson} embedded />
+  const renderScenarios = () => <ScenarioLibrary user={user} requestJson={requestJson} embedded listView />
 
   const renderAudit = () => !filteredRows.length ? <Empty>Административных действий ещё нет</Empty> : <div className={styles.auditList}>{filteredRows.map((item) => {
     const changes = auditChanges(item)
@@ -874,7 +974,6 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
           <div className={styles.topbarMain}>
             <div><h1>{title}</h1></div>
             {['classifier', 'services', 'objects'].includes(section) && <form onSubmit={(event) => { event.preventDefault(); load() }}><input aria-label="Поиск" placeholder="Поиск…" value={search} onChange={(event) => setSearch(event.target.value)} />{renderFilters()}<button>Найти</button></form>}
-            {section !== 'scenarios' && <button onClick={load}>Обновить</button>}
           </div>
           <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
         </header>
