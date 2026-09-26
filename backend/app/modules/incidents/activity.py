@@ -7,11 +7,13 @@ from app.modules.incidents.models import Incident, IncidentActionType, IncidentA
 from app.modules.training.clock import active_seconds
 from app.modules.training.models import TrainingRun, TrainingSession
 
+# Интервалы между сообщениями намеренно больше норматива реакции ДДС (45 с),
+# чтобы каждое сообщение давало полноценное окно для ручной смены статуса.
 BRIGADE_STAGES = (
-    ("EN_ROUTE", 10, "Выехали к месту"),
-    ("ARRIVED", 30, "Прибыли к месту"),
-    ("WORKING", 50, "Приступили к работам"),
-    ("COMPLETED", 70, "Работы завершены"),
+    ("EN_ROUTE", 15, "Выехали к месту"),
+    ("ARRIVED", 75, "Прибыли к месту"),
+    ("WORKING", 135, "Приступили к работам"),
+    ("COMPLETED", 195, "Работы завершены"),
 )
 
 
@@ -43,7 +45,7 @@ def classifier_services(incident: Incident) -> list[tuple[int | None, str, str]]
 
 
 def record_other_service_reactions(incident: Incident, now: datetime) -> None:
-    """Моделирует только первичный ответ остальных служб после принятия ДДС 101."""
+    """Фиксирует воспроизводимый первичный ответ остальных служб после принятия ДДС 101."""
     if not any(number == "101" for _, _, number in classifier_services(incident)):
         return
     existing = {activity.event_key for activity in incident.activities}
@@ -53,17 +55,16 @@ def record_other_service_reactions(incident: Incident, now: datetime) -> None:
         key = f"other-service:{number}"
         if key in existing:
             continue
-        # Для MVP 102 принимает всегда; 103 иногда отказывается, чтобы разбор
-        # отражал обе возможные первичные реакции без случайности при повторе.
-        accepted = number == "102" or incident.id % 2 == 1
+        # В MVP реакции других служб не являются отдельным упражнением и не должны
+        # зависеть от runtime id карточки. Для одного snapshot результат повторяем.
         incident.activities.append(
             IncidentActivity(
                 event_key=key,
                 kind="OTHER_SERVICE",
                 service_id=service_id,
                 service_name=name,
-                stage="ACCEPTED" if accepted else "REJECTED",
-                body="Карточка принята" if accepted else "Карточка не принята",
+                stage="ACCEPTED",
+                body="Карточка принята",
                 created_at=now,
             )
         )

@@ -11,7 +11,6 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
   const [selectedForRerender, setSelectedForRerender] = useState([])
   const [text, setText] = useState('')
   const [facts, setFacts] = useState({})
-  const [messages, setMessages] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -26,7 +25,6 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
   useEffect(() => {
     setText(selected?.initial_state_snapshot.render?.rendered_text || '')
     setFacts(selected?.initial_state_snapshot.variant_facts || {})
-    setMessages(Object.fromEntries((selected?.events || []).map((event) => [event.id, event.render?.rendered_text || ''])))
   }, [selected])
 
   const perform = async (path, options, success) => {
@@ -49,8 +47,7 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
   const rerenderSelected = async () => {
     const chosen = drafts.filter((item) => selectedForRerender.includes(item.id))
     if (!chosen.length) return
-    if (chosen.some((item) => item.initial_state_snapshot.render?.render_origin === 'MANUAL'
-      || item.events.some((event) => event.render?.render_origin === 'MANUAL'))
+    if (chosen.some((item) => item.initial_state_snapshot.render?.render_origin === 'MANUAL')
       && !window.confirm('Выбранные карточки содержат ручные правки текста. Заменить их?')) return
     setBusy(true)
     setError('')
@@ -58,9 +55,6 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
     try {
       for (const card of chosen) {
         await api(`/api/scenario-instances/${card.id}/rerender-initial-message`, { method: 'POST' })
-        for (const event of card.events.filter((item) => item.event_type === 'RESPONSE_MESSAGE')) {
-          await api(`/api/scenario-instances/${card.id}/events/${event.id}/rerender`, { method: 'POST' })
-        }
       }
       await refresh()
       setSelectedForRerender([])
@@ -106,15 +100,6 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
           <button type="button" disabled={busy} onClick={() => perform(`${path}/regenerate-card`, { method: 'POST' }, 'Карточка перегенерирована')}>Перегенерировать карточку</button>
           <button type="button" disabled={busy} onClick={() => perform(path, { method: 'DELETE' }, 'Карточка исключена')}>Исключить</button>
         </div>}
-        <h4>Работа служб</h4>
-        {selected.events.filter((event) => event.event_type !== 'RESPONSE_MESSAGE').map((event) => <p key={event.id}><b>{event.title}</b>{event.description ? ` · ${event.description}` : ''}</p>)}
-        {selected.events.filter((event) => event.event_type === 'RESPONSE_MESSAGE').map((event) => <div key={event.id}>
-          <label>{event.payload_snapshot.target_service_name || 'Сообщение службы'}<textarea value={messages[event.id] || ''} readOnly={!canEdit} onChange={(change) => setMessages((current) => ({ ...current, [event.id]: change.target.value }))} /></label>
-          {canEdit && <div className={styles.actions}>
-            <button type="button" disabled={busy || !messages[event.id]?.trim() || messages[event.id] === event.render?.rendered_text} onClick={() => perform(`${path}/events/${event.id}/message`, json('PATCH', { text: messages[event.id] }), 'Сообщение сохранено')}>Сохранить сообщение</button>
-            <button type="button" disabled={busy} onClick={() => perform(`${path}/events/${event.id}/rerender`, { method: 'POST' }, 'Сообщение перегенерировано')}>Перегенерировать сообщение</button>
-          </div>}
-        </div>)}
       </section>}
     </div>}
   </article>
