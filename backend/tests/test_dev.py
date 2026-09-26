@@ -1,8 +1,10 @@
 """Проверки единого сценария локального запуска."""
 
 import argparse
+import subprocess
 
 import dev
+import pytest
 
 
 class FakeProcess:
@@ -20,6 +22,7 @@ def test_keyboard_interrupt_is_successful_shutdown(monkeypatch) -> None:
     processes = [FakeProcess(), FakeProcess()]
 
     monkeypatch.setattr(dev, "resolve_command", lambda name: name)
+    monkeypatch.setattr(dev, "apply_migrations", lambda uv_command: None)
     monkeypatch.setattr(dev, "start_process", lambda command, cwd: processes.pop(0))
     monkeypatch.setattr(
         dev.time,
@@ -42,3 +45,19 @@ def test_keyboard_interrupt_is_successful_shutdown(monkeypatch) -> None:
 
     assert exit_code == 0
     assert len(stopped_processes) == 2
+
+
+def test_migration_failure_prevents_service_start(monkeypatch) -> None:
+    """Не запускает сервисы, если обновление БД завершилось ошибкой."""
+    monkeypatch.setattr(dev, "resolve_command", lambda name: name)
+    monkeypatch.setattr(dev, "apply_migrations", lambda uv_command: (_ for _ in ()).throw(
+        subprocess.CalledProcessError(1, "alembic")
+    ))
+    monkeypatch.setattr(dev, "start_process", lambda command, cwd: (_ for _ in ()).throw(
+        AssertionError("service started before migrations")
+    ))
+
+    with pytest.raises(subprocess.CalledProcessError):
+        dev.run_services(
+            argparse.Namespace(skip_install=True, backend_port=8000, frontend_port=5173)
+        )

@@ -37,8 +37,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--backend-host", default=dev_setting("BACKEND_HOST", "127.0.0.1"))
     parser.add_argument("--frontend-host", default=dev_setting("FRONTEND_HOST", "127.0.0.1"))
-    parser.add_argument("--backend-port", type=int, default=int(dev_setting("BACKEND_PORT", "8000")))
-    parser.add_argument("--frontend-port", type=int, default=int(dev_setting("FRONTEND_PORT", "5173")))
+    parser.add_argument(
+        "--backend-port", type=int, default=int(dev_setting("BACKEND_PORT", "8000"))
+    )
+    parser.add_argument(
+        "--frontend-port", type=int, default=int(dev_setting("FRONTEND_PORT", "5173"))
+    )
     parser.add_argument(
         "--skip-install",
         action="store_true",
@@ -64,6 +68,16 @@ def install_dependencies(uv_command: str, npm_command: str) -> None:
     if not (FRONTEND_DIR / "node_modules").is_dir():
         print("[setup] Устанавливаю зависимости frontend...", flush=True)
         subprocess.run([npm_command, "install"], cwd=FRONTEND_DIR, check=True)
+
+
+def apply_migrations(uv_command: str) -> None:
+    """Обновляет локальную схему до запуска фоновых задач backend."""
+    print("[setup] Проверяю миграции PostgreSQL...", flush=True)
+    subprocess.run(
+        [uv_command, "run", "python", "-m", "app.scripts.prepare_dev_database"],
+        cwd=BACKEND_DIR,
+        check=True,
+    )
 
 
 def start_process(command: list[str], cwd: Path) -> subprocess.Popen[bytes]:
@@ -104,6 +118,8 @@ def run_services(args: argparse.Namespace) -> int:
     if not args.skip_install:
         install_dependencies(uv_command, npm_command)
 
+    apply_migrations(uv_command)
+
     backend_command = [
         uv_command,
         "run",
@@ -126,8 +142,14 @@ def run_services(args: argparse.Namespace) -> int:
         str(args.frontend_port),
     ]
 
-    print(f"[dev] Backend bind:  {getattr(args, 'backend_host', '127.0.0.1')}:{args.backend_port}", flush=True)
-    print(f"[dev] Frontend bind: {getattr(args, 'frontend_host', '127.0.0.1')}:{args.frontend_port}", flush=True)
+    print(
+        f"[dev] Backend bind:  {getattr(args, 'backend_host', '127.0.0.1')}:{args.backend_port}",
+        flush=True,
+    )
+    print(
+        f"[dev] Frontend bind: {getattr(args, 'frontend_host', '127.0.0.1')}:{args.frontend_port}",
+        flush=True,
+    )
     print("[dev] Для остановки нажмите Ctrl+C.\n", flush=True)
 
     backend = start_process(backend_command, BACKEND_DIR)
