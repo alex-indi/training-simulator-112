@@ -90,7 +90,10 @@ async def scheduler_leader_loop(engine, session_factory) -> None:
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("Ошибка leader election планировщика; повтор через %s с", SCHEDULER_RETRY_SECONDS)
+            logger.exception(
+                "Ошибка leader election планировщика; повтор через %s с",
+                SCHEDULER_RETRY_SECONDS,
+            )
             await asyncio.sleep(SCHEDULER_RETRY_SECONDS)
 
 
