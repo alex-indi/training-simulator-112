@@ -161,7 +161,7 @@ function LiveMonitor({ sessionId, user, api }) {
           className={`${styles.tile} ${run.counts.deviations ? styles.warn : ''}`}
         >
           <div className={styles.tileTop}><b>АРМ {String(run.workstation_number || 0).padStart(2, '0')}</b><i className={run.online ? styles.online : styles.offline} title={run.online ? 'Online' : 'Offline'} /></div>
-          <strong>{run.trainee_name}</strong><small>{run.dds_profile}</small>
+          <strong>{run.trainee_name}</strong><small>{run.group_name || 'Не распределён'} · {run.dds_profile}</small>
           <dl><div><dt>Новые</dt><dd>{run.counts.new}</dd></div><div><dt>В работе</dt><dd>{run.counts.working}</dd></div><div><dt>Завершено</dt><dd>{run.counts.completed}</dd></div><div><dt>Отказы</dt><dd>{run.counts.refusals}</dd></div></dl>
           <p className={styles.deviations}>⚠ Отклонения <b>{run.counts.deviations}</b></p>
           <p className={styles.current}>{run.paused_at ? 'АРМ приостановлен' : run.current ? <>Сейчас: <b>{run.current.incident_number}</b><small>{statusLabels[run.current.dds_status]} · {duration(run.current.elapsed_seconds)}</small></> : 'Нет активной карточки'}</p>
@@ -174,7 +174,7 @@ function LiveMonitor({ sessionId, user, api }) {
       </aside>
     </div>
     {selected && <div className={styles.overlay} onMouseDown={() => { setSelectedId(null); setWorkstation(null) }}><aside className={styles.drawer} onMouseDown={(event) => event.stopPropagation()}>
-      <header><div><small>АРМ {String(selected.workstation_number || 0).padStart(2, '0')} · {selected.online ? 'Online' : 'Offline'}</small><h2>{selected.trainee_name}</h2><p>{selected.dds_profile}</p></div><button type="button" onClick={() => { setSelectedId(null); setWorkstation(null) }} aria-label="Закрыть">×</button></header>
+      <header><div><small>АРМ {String(selected.workstation_number || 0).padStart(2, '0')} · {selected.online ? 'Online' : 'Offline'}</small><h2>{selected.trainee_name}</h2><p>{selected.group_name || 'Не распределён'} · {selected.dds_profile}</p></div><button type="button" onClick={() => { setSelectedId(null); setWorkstation(null) }} aria-label="Закрыть">×</button></header>
       <button className={styles.workstationButton} type="button" onClick={() => setWorkstation(workstation ? null : { id: selected.id })}>{workstation ? '← К деталям участника' : 'Открыть рабочее место'}</button>
       <div className={styles.runControls}><button type="button" disabled={busy} onClick={() => selected.paused_at ? post(`/runs/${selected.id}/resume`, {}) : setDialog('runPause')}>{selected.paused_at ? 'Продолжить АРМ' : 'Приостановить АРМ'}</button><button type="button" onClick={() => setDialog('note')}>+ Заметка</button></div>
       {notes.length > 0 && <section><h3>Заметки преподавателя</h3>{notes.map((note) => <p className={styles.event} key={note.id}>{time(note.created_at)} · {note.body}</p>)}</section>}

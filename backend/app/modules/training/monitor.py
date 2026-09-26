@@ -30,6 +30,7 @@ async def _session(database: AsyncSession, session_id: int, user: User) -> Train
         select(TrainingSession)
         .where(TrainingSession.id == session_id)
         .options(selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee))
+        .options(selectinload(TrainingSession.runs).selectinload(TrainingRun.group))
         .options(
             selectinload(TrainingSession.pauses),
             selectinload(TrainingSession.runs).selectinload(TrainingRun.pauses),
@@ -285,6 +286,7 @@ def _run_snapshot(
         "trainee_name": run.trainee.full_name,
         "dds_profile": run.dds_profile,
         "group_id": run.group_id,
+        "group_name": run.group.name if run.group else None,
         "online": online,
         "last_seen_at": run.last_seen_at,
         "paused_at": run.paused_at,

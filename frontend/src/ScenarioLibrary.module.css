@@ -4,6 +4,9 @@
 /* Shared DDS workstation visual language */
 .shell{--dds-blue:#1587c3;--dds-dark:#30373c;--dds-dock:#455159;--dds-divider:#c8ced1;--dds-panel:#f1f2f2;--dds-panel-bright:#f7fafc;--dds-border:#aeb7bb;--dds-muted:#647076;--dds-danger:#ec653b;min-height:100vh;background:var(--dds-divider);color:#253036;font:12px/1.45 var(--app-font-family)}
 .embedded{min-height:0;background:transparent}.embedded .content{padding:0}
+.fields+.fields{margin-top:24px;padding-top:18px;border-top:1px solid var(--dds-border)}
+.fields h4{margin:0;font-size:15px}
+.search{display:grid;gap:6px;max-width:420px;margin:0 0 12px}
 .header{min-height:72px;box-sizing:border-box;padding:12px 18px;border-bottom:5px solid var(--dds-divider);background:var(--dds-panel);color:#253036}.header small{color:var(--dds-muted);font-size:9px;letter-spacing:.08em;text-transform:uppercase}.header h1{font-size:23px;font-weight:500}.header button{background:#eef0f0;color:#303a3f}
 .content{max-width:none;padding:14px 16px 36px}.topline{margin-bottom:8px;padding:12px 14px;border:1px solid var(--dds-border);background:var(--dds-panel)}.topline p,.fields>p,.count,.card p,.card small,.cardList small{color:var(--dds-muted)}
 .shell button{min-height:34px;box-sizing:border-box;border:1px solid var(--dds-border);border-radius:0;padding:7px 11px;background:#eef0f0;color:#303a3f;font:inherit;font-weight:600}.shell button:hover:not(:disabled){border-color:#7c898f;background:#dde2e4}.topline button,.panel>div>button,.validation button{border-color:var(--dds-blue);background:var(--dds-blue);color:#fff}

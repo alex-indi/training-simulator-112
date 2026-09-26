@@ -41,6 +41,7 @@ from app.modules.training.models import TrainingSession, training_session_traine
 from app.modules.training.monitor import router as monitor_router
 from app.modules.training.router import router as training_router
 from app.modules.training.router import template_router
+from app.modules.training.user_groups import router as trainee_groups_router
 from app.realtime import publish_session_event
 
 logger = logging.getLogger("uvicorn.error")
@@ -141,6 +142,7 @@ app.include_router(scenario_generation_router)
 app.include_router(scenario_instance_router)
 app.include_router(session_instances_router)
 app.include_router(training_router)
+app.include_router(trainee_groups_router)
 app.include_router(control_router)
 app.include_router(assessment_router)
 app.include_router(monitor_router)

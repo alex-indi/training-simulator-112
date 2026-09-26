@@ -35,6 +35,7 @@ from app.modules.scenario_library.models import (
     ScenarioTemplateRequiredObjectTag,
     ScenarioTemplateService,
 )
+from app.modules.scenario_library.variants import SCHOOL_FIRE_CODE, SCHOOL_FIRE_OPTIONS
 
 router = APIRouter(prefix="/api/scenario-templates", tags=["scenario-templates"])
 EVENT_TYPES = {
@@ -103,6 +104,7 @@ class TemplateInput(BaseModel):
     initial_title: str = Field(default="", max_length=200)
     initial_description: str = ""
     initial_caller_text: str = ""
+    variant_options: dict[str, list[str | int]] = Field(default_factory=dict)
     events: list[EventInput] = Field(default_factory=list)
     services: list[ServiceInput] = Field(default_factory=list)
     expected_actions: list[ActionInput] = Field(default_factory=list)
@@ -184,6 +186,7 @@ def serialize(row: ScenarioTemplate) -> dict:
         "initial_title": row.initial_title,
         "initial_description": row.initial_description,
         "initial_caller_text": row.initial_caller_text,
+        "variant_options": row.variant_options or {},
         "created_at": row.created_at,
         "updated_at": row.updated_at,
         "archived_at": row.archived_at,
@@ -362,6 +365,7 @@ def populate(row: ScenarioTemplate, data: TemplateInput) -> None:
     row.initial_title = data.initial_title.strip()
     row.initial_description = data.initial_description
     row.initial_caller_text = data.initial_caller_text
+    row.variant_options = data.variant_options
     row.object_rule = (
         None
         if data.object_rule is None
@@ -719,6 +723,8 @@ async def duplicate_template(
     original = await get_template(database, template_id)
     data = as_input(original)
     data.name = f"{original.name} — копия"[:200]
+    if original.seed_code == SCHOOL_FIRE_CODE and not data.variant_options:
+        data.variant_options = {key: list(values) for key, values in SCHOOL_FIRE_OPTIONS.items()}
     row = ScenarioTemplate(created_by_user_id=user.id)
     populate(row, data)
     database.add(row)

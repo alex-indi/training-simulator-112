@@ -60,7 +60,7 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
       .items.find((item) => item.name === 'Пожар в образовательном учреждении')
     expect(template).toBeTruthy()
     const cards = await json(await api.post(`/api/scenario-templates/${template.id}/batch`, {
-      data: { count: 5, seed: 0, training_session_id: session.id, different_objects: true },
+      data: { count: 5, seed: 0, training_session_id: session.id },
     }))
     expect(cards).toHaveLength(5)
     expect(cards[0].object_snapshot.id).not.toBe(cards[1].object_snapshot.id)

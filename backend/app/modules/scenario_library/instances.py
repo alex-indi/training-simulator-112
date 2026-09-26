@@ -34,12 +34,14 @@ from app.modules.scenario_library.variants import (
     SCHOOL_FIRE_OPTIONS,
     card_seeds,
     object_order,
+    render_variant_text,
     variant_facts,
 )
 from app.modules.training.delivery import _editable, _invalidate_readiness, _new_item
 from app.modules.training.models import (
     QueueMode,
     ScenarioQueueItem,
+    TrainingGroup,
     TrainingSession,
     TrainingSessionState,
 )
@@ -68,8 +70,8 @@ class BatchGenerationInput(BaseModel):
     count: int = Field(ge=1, le=50)
     seed: int = Field(default=0, ge=0, le=2147483647)
     training_session_id: int = Field(gt=0)
+    training_group_id: int | None = Field(default=None, gt=0)
     difficulty: int | None = Field(default=None, ge=1, le=5)
-    different_objects: bool = True
 
 
 class MaterializeInput(BaseModel):
@@ -79,13 +81,6 @@ class MaterializeInput(BaseModel):
 
 class BatchConfirmInput(MaterializeInput):
     instance_ids: list[int] = Field(min_length=1, max_length=50)
-
-
-class SchoolFireFactsInput(BaseModel):
-    floor: int
-    room: str
-    observation: str
-    casualties: str
 
 
 @instance_router.post("/{instance_id}/materialize")
@@ -392,7 +387,7 @@ async def _build(
     variation = (
         facts_override
         if facts_override is not None
-        else variant_facts(template.seed_code, data.seed)
+        else variant_facts(template.seed_code, data.seed, template.variant_options)
     )
     medical_needed = variation.get("casualties") != "пострадавших нет"
     services = []
@@ -403,8 +398,7 @@ async def _build(
         ):
             raise HTTPException(status_code=422, detail=f"Служба {link.service_id} не подтверждена")
         if (
-            template.seed_code == SCHOOL_FIRE_CODE
-            and service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
+            service.source_reference == SCHOOL_FIRE_MEDICAL_SOURCE
             and not medical_needed
         ):
             continue
@@ -449,12 +443,19 @@ async def _build(
     )
     if data.training_session_id is not None:
         await _session(database, data.training_session_id, user)
+    initial_title = template.initial_title
     initial_description = template.initial_description
-    if variation:
+    initial_caller_text = template.initial_caller_text
+    if variation and template.seed_code == SCHOOL_FIRE_CODE and not template.variant_options:
         initial_description = (
             f"{variation['observation']} на {variation['floor']} этаже, "
             f"{variation['room']}; {variation['casualties']}."
         )
+        initial_caller_text = ""
+    else:
+        initial_title = render_variant_text(initial_title, variation)
+        initial_description = render_variant_text(initial_description, variation)
+        initial_caller_text = render_variant_text(initial_caller_text, variation)
     selected_service_ids = {service["service_id"] for service in services}
     events = [
         _event_dict(event, services)
@@ -463,12 +464,12 @@ async def _build(
     ]
     if variation:
         for event in events:
-            if event["event_type"] == "RESPONSE_MESSAGE":
-                description = event["description"]
-                for key, value in variation.items():
-                    description = description.replace("{" + key + "}", str(value))
-                event["description"] = description
-                event["payload_snapshot"]["description"] = event["description"]
+            description = render_variant_text(event["description"], variation)
+            title = render_variant_text(event["title"], variation)
+            event["title"] = title
+            event["description"] = description
+            event["payload_snapshot"]["title"] = title
+            event["payload_snapshot"]["description"] = description
     return {
         "scenario_template_id": template.id,
         "training_session_id": data.training_session_id,
@@ -493,9 +494,9 @@ async def _build(
         "matching_object_count": len(objects),
         "service_snapshot": services,
         "initial_state_snapshot": {
-            "title": template.initial_title,
+            "title": initial_title,
             "description": initial_description,
-            "caller_text": "" if variation else template.initial_caller_text,
+            "caller_text": initial_caller_text,
             "variant_facts": variation,
         },
         "events": events,
@@ -524,7 +525,7 @@ async def _build(
             "version": template.version,
             "name": template.name,
             "description": template.description,
-            "variant_options": (
+            "variant_options": template.variant_options or (
                 SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
             ),
             "object_rule": {
@@ -553,6 +554,7 @@ def _serialize(row: ScenarioInstance) -> dict:
         "id": row.id,
         "scenario_template_id": row.scenario_template_id,
         "training_session_id": row.training_session_id,
+        "training_group_id": row.training_group_id,
         "created_by_user_id": row.created_by_user_id,
         "name": row.name,
         "difficulty": row.difficulty,
@@ -597,10 +599,13 @@ async def generate(
     return await read_instance(row.id, user, database)
 
 
-def _instance_from_content(template_id: int, content: dict, user: User) -> ScenarioInstance:
+def _instance_from_content(
+    template_id: int, content: dict, user: User, group_id: int | None = None,
+) -> ScenarioInstance:
     return ScenarioInstance(
         scenario_template_id=template_id,
         training_session_id=content["training_session_id"],
+        training_group_id=group_id,
         created_by_user_id=user.id,
         name=content["name"],
         difficulty=content["difficulty"],
@@ -626,25 +631,43 @@ async def generate_batch(
 ) -> list[dict]:
     """Prepare a set of distinct, reviewable drafts in one transaction."""
     await _session(database, data.training_session_id, user)
+    group = None
+    if data.training_group_id is not None:
+        group = await database.scalar(
+            select(TrainingGroup).where(
+                TrainingGroup.id == data.training_group_id,
+                TrainingGroup.training_session_id == data.training_session_id,
+            )
+        )
+        if group is None:
+            raise HTTPException(422, "Группа не принадлежит занятию")
     template = await get_template(database, template_id)
     objects = await _matching_objects(database, template)
     if not objects:
         raise HTTPException(status_code=422, detail="Нет подходящих объектов")
-    if template.seed_code != "DEMO_EDUCATION_FIRE_001" and len(objects) < data.count:
-        raise HTTPException(422, "Для этого сценария недостаточно разных объектов")
+    if len(objects) < data.count:
+        raise HTTPException(
+            422,
+            f"Для {data.count} карточек нужно столько же разных подходящих объектов; "
+            f"найдено {len(objects)}",
+        )
+    group_difficulty = {
+        "Начальная": 1, "Низкая": 1, "Ниже средней": 2,
+        "Средняя": 3, "Высокая": 4, "Экспертная": 5,
+    }.get(group.difficulty) if group is not None else None
     ordered_ids = object_order([item.id for item in objects], data.seed)
     rows = []
     seen = set()
     seeds = card_seeds(data.seed, data.count * 10)
     for index in range(data.count):
-        object_id = ordered_ids[index % len(ordered_ids)] if data.different_objects else None
+        object_id = ordered_ids[index]
         for candidate in seeds[index * 10 : (index + 1) * 10]:
             content = await _build(
                 database,
                 template_id,
                 GenerationInput(
                     object_id=object_id,
-                    difficulty=data.difficulty,
+                    difficulty=group_difficulty or data.difficulty,
                     seed=candidate,
                     variant_mode="RANDOM",
                     training_session_id=data.training_session_id,
@@ -663,7 +686,7 @@ async def generate_batch(
         content["template_snapshot"]["batch_seed"] = data.seed
         content["template_snapshot"]["batch_position"] = index + 1
         await _render_content(content, database)
-        row = _instance_from_content(template_id, content, user)
+        row = _instance_from_content(template_id, content, user, data.training_group_id)
         database.add(row)
         rows.append(row)
     await database.commit()
@@ -764,19 +787,24 @@ async def regenerate_card(
 @instance_router.patch("/{instance_id}/variant-facts")
 async def edit_variant_facts(
     instance_id: int,
-    data: SchoolFireFactsInput,
+    data: dict[str, str | int],
     user: Annotated[User, Depends(require_editor)],
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
-    """Change only allowed school-fire facts in a draft, then prepare all affected texts."""
+    """Change only facts allowed by the template, then prepare affected texts."""
     row = await _editable_instance(instance_id, user, database)
     template = await get_template(database, row.scenario_template_id)
-    if template.seed_code != SCHOOL_FIRE_CODE:
+    choices_by_key = template.variant_options or (
+        SCHOOL_FIRE_OPTIONS if template.seed_code == SCHOOL_FIRE_CODE else {}
+    )
+    if not choices_by_key:
         raise HTTPException(422, "Для этого сценария изменение условий недоступно")
     if template.version != row.template_snapshot.get("version"):
         raise HTTPException(409, "Шаблон изменился; пересоздайте карточку перед правкой условий")
-    facts = data.model_dump()
-    for key, choices in SCHOOL_FIRE_OPTIONS.items():
+    facts = data
+    if set(facts) != set(choices_by_key):
+        raise HTTPException(422, "Укажите все условия сценария")
+    for key, choices in choices_by_key.items():
         if facts[key] not in choices:
             raise HTTPException(422, f"Недопустимое условие: {key}")
     content = await _build(
@@ -965,6 +993,46 @@ async def confirm_batch(
     result = {"count": len(items), "queue_item_ids": [item.id for item in items]}
     await database.commit()
     return result
+
+
+@session_router.post("/{session_id}/groups/{group_id}/cards/approve")
+async def approve_group_cards(
+    session_id: int,
+    group_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    """Approve the group's complete master set without creating runtime queues."""
+    session = await _load_session(database, session_id, for_update=True)
+    _editable(session, user)
+    if group_id not in {group.id for group in session.groups}:
+        raise HTTPException(404, "Группа занятия не найдена")
+    rows = (
+        await database.scalars(
+            select(ScenarioInstance)
+            .where(
+                ScenarioInstance.training_session_id == session_id,
+                ScenarioInstance.training_group_id == group_id,
+            )
+            .options(selectinload(ScenarioInstance.events))
+            .with_for_update()
+        )
+    ).all()
+    if not rows:
+        raise HTTPException(409, "Сначала добавьте карточки группы")
+    for row in rows:
+        if row.status not in {"DRAFT", "CONFIRMED"}:
+            raise HTTPException(409, "Недопустимое состояние карточки")
+        if not row.initial_state_snapshot.get("render", {}).get("rendered_text") or any(
+            event.event_type == "RESPONSE_MESSAGE"
+            and not event.payload_snapshot.get("render", {}).get("rendered_text")
+            for event in row.events
+        ):
+            raise HTTPException(409, "Сначала подготовьте все тексты набора")
+    for row in rows:
+        row.status = "CONFIRMED"
+    await database.commit()
+    return {"group_id": group_id, "count": len(rows), "approved": True}
 
 
 @instance_router.get("")

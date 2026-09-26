@@ -31,6 +31,9 @@ class ScenarioInstance(Base):
     training_session_id: Mapped[int | None] = mapped_column(
         ForeignKey("training_sessions.id", ondelete="RESTRICT"), index=True
     )
+    training_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("training_groups.id", ondelete="RESTRICT"), index=True
+    )
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
