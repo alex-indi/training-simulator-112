@@ -58,3 +58,80 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  e2e-mvp:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: training_simulator_112_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d training_simulator_112_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/training_simulator_112_e2e
+      E2E_BASE_URL: http://127.0.0.1:5173
+      E2E_API_URL: http://127.0.0.1:8000
+      VITE_API_URL: http://127.0.0.1:8000
+      FRONTEND_ORIGINS: http://127.0.0.1:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --frozen
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Prepare isolated E2E database
+        working-directory: backend
+        run: |
+          uv run python -m app.scripts.bootstrap_demo
+          uv run python -m app.scripts.seed_all
+          E2E_SEED=1 uv run python -m tests.e2e_seed
+      - name: Run simplified MVP smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd backend && uv run uvicorn app.main:socket_app --host 127.0.0.1 --port 8000 > ../backend-e2e.log 2>&1) &
+          BACKEND_PID=$!
+          (cd frontend && npm run dev -- --host 127.0.0.1 --port 5173 > ../frontend-e2e.log 2>&1) &
+          FRONTEND_PID=$!
+          cleanup() {
+            kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+          }
+          dump_logs() {
+            echo "===== backend-e2e.log ====="
+            cat backend-e2e.log || true
+            echo "===== frontend-e2e.log ====="
+            cat frontend-e2e.log || true
+          }
+          trap cleanup EXIT
+          for attempt in {1..60}; do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null; then break; fi
+            sleep 1
+            if [ "$attempt" -eq 60 ]; then dump_logs; exit 1; fi
+          done
+          for attempt in {1..60}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then break; fi
+            sleep 1
+            if [ "$attempt" -eq 60 ]; then dump_logs; exit 1; fi
+          done
+          if ! (cd frontend && npm run test:e2e:mvp); then
+            dump_logs
+            exit 1
+          fi
