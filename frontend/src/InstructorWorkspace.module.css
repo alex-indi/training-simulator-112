@@ -258,6 +258,15 @@
   .header { height: auto; }
   .header > :last-child { width: 100%; flex: 0 0 auto; }
 }
+
+.shell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  accent-color: var(--dds-blue);
+}
 .pickerOverlay{position:fixed;inset:0;z-index:100;background:#132b38b8;display:grid;place-items:center;padding:20px;box-sizing:border-box}
 .pickerDialog,.useDialog{width:min(100%,1100px);max-height:calc(100vh - 40px);overflow:auto;background:#f0f2f2;border:1px solid #82939c;padding:16px;box-sizing:border-box;box-shadow:0 12px 35px #10232e55}
 .useDialog{width:min(100%,520px);display:grid;gap:12px}
