@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -106,6 +106,5 @@ class UserGroup(Base):
     )
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     description: Mapped[str] = mapped_column(Text, default="", server_default="")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    members = relationship("User", primaryjoin="UserGroup.id == User.group_id", viewonly=True)
