@@ -281,9 +281,13 @@ async def _matching_objects(database: AsyncSession, template) -> list:
     )
     if type_code is None:
         return []
-    query = select(CityObject.id, CityObject.name, CityObject.address, CityObject.district).where(
-        CityObject.object_type_id.in_(descendant_type_ids(type_code))
-    )
+    query = select(
+        CityObject.id,
+        CityObject.name,
+        CityObject.address,
+        CityObject.district,
+        CityObject.source,
+    ).where(CityObject.object_type_id.in_(descendant_type_ids(type_code)))
     if rule.selection_mode == "OBJECT_BOUND":
         query = query.where(CityObject.id == rule.specific_object_id)
     for item in rule.required_tags:
