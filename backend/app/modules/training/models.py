@@ -203,7 +203,8 @@ class TrainingGroup(Base):
     __table_args__ = (
         UniqueConstraint("training_session_id", "name"),
         UniqueConstraint(
-            "training_session_id", "source_user_group_id",
+            "training_session_id",
+            "source_user_group_id",
             name="uq_training_groups_session_source",
         ),
     )
@@ -215,6 +216,7 @@ class TrainingGroup(Base):
     source_user_group_id: Mapped[int | None] = mapped_column(
         ForeignKey("user_groups.id", ondelete="RESTRICT"), index=True
     )
+    is_subgroup: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     name: Mapped[str] = mapped_column(String(160))
     dds_profile: Mapped[str | None] = mapped_column(String(120))
     difficulty: Mapped[str | None] = mapped_column(String(40))
@@ -226,6 +228,31 @@ class TrainingGroup(Base):
 
     training_session: Mapped[TrainingSession] = relationship(back_populates="groups")
     runs: Mapped[list[TrainingRun]] = relationship(back_populates="group")
+    source_group = relationship("UserGroup", foreign_keys=[source_user_group_id])
+    subgroup_memberships: Mapped[list[TrainingSubgroupMember]] = relationship(
+        back_populates="group", cascade="all, delete-orphan"
+    )
+
+
+class TrainingSubgroupMember(Base):
+    """Явное временное назначение обучаемого в подгруппу одного занятия."""
+
+    __tablename__ = "training_subgroup_members"
+    __table_args__ = (
+        UniqueConstraint("training_session_id", "user_id", name="uq_subgroup_session_user"),
+        UniqueConstraint("training_group_id", "user_id", name="uq_subgroup_group_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    training_session_id: Mapped[int] = mapped_column(
+        ForeignKey("training_sessions.id", ondelete="CASCADE"), index=True
+    )
+    training_group_id: Mapped[int] = mapped_column(
+        ForeignKey("training_groups.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    group: Mapped[TrainingGroup] = relationship(back_populates="subgroup_memberships")
+    user: Mapped[User] = relationship()
 
 
 class TrainingTemplate(Base):

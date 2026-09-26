@@ -46,26 +46,33 @@ def classifier_services(incident: Incident) -> list[tuple[int | None, str, str]]
 
 def record_other_service_reactions(incident: Incident, now: datetime) -> None:
     """Моделирует воспроизводимый первичный ответ остальных служб после принятия ДДС 101."""
-    if not any(number == "101" for _, _, number in classifier_services(incident)):
+    services = classifier_services(incident)
+    if not any(number == "101" for _, _, number in services):
         return
+    explicit_reactions = {}
+    for row in incident.source_snapshot.get("scenario_services") or []:
+        reaction = row.get("initial_reaction")
+        if reaction in {"ACCEPTED", "REJECTED"}:
+            name = row.get("name") or ""
+            fallback = row.get("service_id") or sha1(name.encode()).hexdigest()[:12]
+            key = _service_number(name) or str(fallback)
+            explicit_reactions.setdefault(key, reaction)
     existing = {activity.event_key for activity in incident.activities}
-    for service_id, name, number in classifier_services(incident):
+    for service_id, name, number in services:
         if number == "101":
             continue
         key = f"other-service:{number}"
         if key in existing:
             continue
-        # В MVP реакция других служб детерминирована: если служба входит в snapshot
-        # карточки, она принимает карточку. Отказы позже можно задавать явным фактом
-        # сценария, но они не должны зависеть от runtime id происшествия.
+        reaction = explicit_reactions.get(number, "ACCEPTED")
         incident.activities.append(
             IncidentActivity(
                 event_key=key,
                 kind="OTHER_SERVICE",
                 service_id=service_id,
                 service_name=name,
-                stage="ACCEPTED",
-                body="Карточка принята",
+                stage=reaction,
+                body="Карточка принята" if reaction == "ACCEPTED" else "Карточка не принята",
                 created_at=now,
             )
         )

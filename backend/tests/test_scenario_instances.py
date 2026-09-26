@@ -58,8 +58,15 @@ from app.services.text_generation.renderer import (
 
 def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
     async def fake_generate(self, request, prompt):
+        if request.context and request.context.get("previous_text"):
+            assert "Сформулируй новую запись заметно иначе" in prompt
+            assert "Используй только факты из facts" in prompt
         return TextGenerationResult(
-            text="Подготовленный локальный текст",
+            text=(
+                "Новая оперативная формулировка"
+                if request.context and request.context.get("previous_text")
+                else "Подготовленный локальный текст"
+            ),
             provider=self.name,
             model=self.model,
             input_tokens=7,
@@ -442,6 +449,12 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 first_card = f"/api/scenario-instances/{cards[0]['id']}"
                 rerendered = await client.post(f"{first_card}/rerender-initial-message")
                 assert rerendered.status_code == 200, rerendered.text
+                old_text = cards[0]["initial_state_snapshot"]["render"]["rendered_text"]
+                new_text = rerendered.json()["initial_state_snapshot"]["render"]["rendered_text"]
+                assert new_text != old_text
+                unchanged = await client.post(f"{first_card}/rerender-initial-message")
+                assert unchanged.status_code == 409
+                assert "Текст карточки не изменился" in unchanged.json()["detail"]
                 assert (
                     rerendered.json()["initial_state_snapshot"]["variant_facts"]
                     == cards[0]["initial_state_snapshot"]["variant_facts"]

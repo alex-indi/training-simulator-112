@@ -41,6 +41,8 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   const [cardsOpen, setCardsOpen] = useState(false)
   const [groupsOpen, setGroupsOpen] = useState(false)
   const [userGroups, setUserGroups] = useState([])
+  const [subgroupDraft, setSubgroupDraft] = useState(null)
+  const [subgroupEditingId, setSubgroupEditingId] = useState(null)
   const [pickerGroupId, setPickerGroupId] = useState(null)
   const [pickerTemplate, setPickerTemplate] = useState(null)
   const [pickerKind, setPickerKind] = useState('template')
@@ -175,6 +177,30 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
       method === 'DELETE' ? { method } : jsonOptions(method, group))
     setSession(item)
   })
+
+  const editSubgroup = (group = null) => {
+    setError('')
+    setSubgroupEditingId(group?.id || null)
+    setSubgroupDraft({
+      name: group?.name || `Подгруппа ${session.groups.filter((item) => item.is_subgroup).length + 1}`,
+      member_user_ids: group?.members.map((member) => member.id) || [],
+      difficulty: group?.difficulty || 'Средняя',
+      queue_mode: group?.queue_mode || 'SHARED_QUEUE',
+    })
+  }
+  const saveSubgroup = () => runAction(async () => {
+    const path = `/api/training/sessions/${session.id}/subgroups${subgroupEditingId ? `/${subgroupEditingId}` : ''}`
+    const item = await api(path, jsonOptions(subgroupEditingId ? 'PUT' : 'POST', subgroupDraft))
+    setSession(item)
+    setSubgroupDraft(null)
+    setSubgroupEditingId(null)
+  })
+  const toggleSubgroupMember = (id) => setSubgroupDraft((current) => ({
+    ...current,
+    member_user_ids: current.member_user_ids.includes(id)
+      ? current.member_user_ids.filter((memberId) => memberId !== id)
+      : [...current.member_user_ids, id],
+  }))
 
   const start = () => runAction(async () => {
     if (session.state === 'DRAFT') {
@@ -363,36 +389,48 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
       </div><div className={styles.actions}>{editable && <button type="button" disabled={busy || !settings.title.trim()} onClick={session.id ? saveSettings : createSession}>{session.id ? 'Сохранить и продолжить' : 'Создать занятие'}</button>}{session.id && <button type="button" onClick={() => setStep(1)}>Далее →</button>}</div></section>}
       {step === 1 && <>
         <section className={styles.section}><h3>Выберите группы для занятия</h3>
-          <p>Постоянные группы можно добавить до подключения обучаемых.</p>
+          <p>Выберите постоянные группы. Их состав в этом разделе не меняется.</p>
           <div className={styles.cards}>{userGroups.filter((group) => !group.is_archived).map((source) => {
             const selectedGroup = session.groups.find((group) => group.source_user_group_id === source.id)
             return <article key={source.id} className={styles.card}>
-              <strong>{source.code || source.name}</strong><span>{source.name}</span><small>{source.member_count} человек</small>
-              <button type="button" disabled={!editable || busy} onClick={() => selectedGroup ? changeGroup(selectedGroup, 'DELETE') : addUserGroup(source)}>
-                {selectedGroup ? '✓ В занятии · убрать' : 'Добавить в занятие'}
-              </button>
+              <label><input type="checkbox" checked={!!selectedGroup} disabled={!editable || busy} onChange={() => selectedGroup ? changeGroup(selectedGroup, 'DELETE') : addUserGroup(source)} /> {source.code || source.name}</label>
+              <span>{source.name}</span><small>{source.member_count} человек</small>
             </article>
           })}</div>
-          {!userGroups.some((group) => !group.is_archived) && <p>Создайте первую группу.</p>}
+          {!userGroups.some((group) => !group.is_archived) && <p>Постоянные группы создаются в разделе «Группы обучающихся».</p>}
         </section>
-        {editable && <InstructorGroups api={api} compact onChanged={setUserGroups} onCreated={addUserGroup} />}
-        {session.groups.length > 0 && <section className={styles.section}><h3>Группы этого занятия</h3>
+        {session.groups.length > 0 && <section className={styles.section}><h3>Рабочий состав занятия</h3>
           <div className={styles.cards}>{session.groups.map((group) => <article key={group.id} className={styles.card}>
-            <strong>{group.name}</strong>
+            <strong>{group.name}</strong><small>{group.member_count} человек</small>
+            {group.is_subgroup && <p>{group.members.map((member) => member.full_name).join(', ')}</p>}
             <label>Сложность<select value={group.difficulty || 'Средняя'} disabled={!editable || busy} onChange={(event) => updateSessionGroup(group, { difficulty: event.target.value })}>
               <option>Начальная</option><option>Средняя</option><option>Высокая</option>
             </select></label>
             <label>Карточки<select value={group.queue_mode} disabled={!editable || busy} onChange={(event) => updateSessionGroup(group, { queue_mode: event.target.value })}>
               <option value="SHARED_QUEUE">Общий пул</option><option value="INDIVIDUAL_QUEUE">Личный пул</option>
             </select></label>
-            <small>{userGroups.find((source) => source.id === group.source_user_group_id)?.member_count ?? group.run_ids.length} человек</small>
+            {group.is_subgroup && editable && <div className={styles.actions}><button type="button" disabled={busy} onClick={() => editSubgroup(group)}>Редактировать</button><button type="button" disabled={busy} onClick={() => { if (window.confirm(`Удалить ${group.name} и подготовленные для неё карточки из занятия?`)) changeGroup(group, 'DELETE') }}>Удалить</button></div>}
           </article>)}</div>
+          {editable && session.groups.some((group) => group.source_user_group_id != null) && <button type="button" disabled={busy} onClick={() => editSubgroup()}>+ Создать подгруппу</button>}
         </section>}
+        {subgroupDraft && <div className={styles.groupOverlay} role="presentation"><section className={styles.groupDialog} role="dialog" aria-modal="true" aria-label={subgroupEditingId ? 'Изменить подгруппу' : 'Создать подгруппу'}>
+          <h3>{subgroupEditingId ? 'Изменить подгруппу' : 'Создать подгруппу'}</h3>
+          {error && <p className={styles.error} role="alert">{error}</p>}
+          <label>Название<input value={subgroupDraft.name} maxLength={160} onChange={(event) => setSubgroupDraft((current) => ({ ...current, name: event.target.value }))} /></label>
+          <h4>Участники</h4>
+          <div className={styles.memberList}>{userGroups.filter((source) => session.groups.some((group) => group.source_user_group_id === source.id)).map((source) => <div key={source.id}>
+            <strong>{source.code || source.name}</strong>
+            {source.members.filter((member) => !session.groups.some((group) => group.is_subgroup && group.id !== subgroupEditingId && group.members.some((assigned) => assigned.id === member.id))).map((member) => <label key={member.id}><input type="checkbox" checked={subgroupDraft.member_user_ids.includes(member.id)} disabled={busy} onChange={() => toggleSubgroupMember(member.id)} />{member.full_name}</label>)}
+          </div>)}</div>
+          <label>Сложность<select value={subgroupDraft.difficulty} onChange={(event) => setSubgroupDraft((current) => ({ ...current, difficulty: event.target.value }))}><option>Начальная</option><option>Средняя</option><option>Высокая</option></select></label>
+          <label>Карточки<select value={subgroupDraft.queue_mode} onChange={(event) => setSubgroupDraft((current) => ({ ...current, queue_mode: event.target.value }))}><option value="SHARED_QUEUE">Общий пул</option><option value="INDIVIDUAL_QUEUE">Личный пул</option></select></label>
+          <div className={styles.actions}><button type="button" disabled={busy || !subgroupDraft.name.trim() || !subgroupDraft.member_user_ids.length} onClick={saveSubgroup}>Сохранить</button><button type="button" onClick={() => setSubgroupDraft(null)}>Отмена</button></div>
+        </section></div>}
         <div className={styles.actions}><button type="button" disabled={!session.groups.length} onClick={() => setStep(2)}>К карточкам →</button></div>
       </>}
       {step === 3 && <section className={styles.section}>
         <h3>Подключение и запуск</h3>
-        <p>Подключённые обучаемые автоматически получают группу по постоянному составу. Здесь можно изменить группу только для этого занятия.</p>
+        <p>При подключении применяется состав подгрупп занятия. Здесь можно изменить рабочую группу без изменения постоянного состава.</p>
         <div className={styles.stationGrid}>{session.runs.map((run) => <div className={`${styles.station} ${run.online ? styles.online : ''}`} key={run.id}>
           <b>АРМ {String(run.workstation_number).padStart(2, '0')}</b><span>{run.trainee_name}</span>
           <small>{run.online ? '● Подключён' : '○ Не в сети'}</small>

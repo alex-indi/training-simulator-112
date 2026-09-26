@@ -68,7 +68,7 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
 
   return <article className={styles.card}>
     <h3>{group.name}</h3>
-    <p>{group.difficulty || 'Без сложности'} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</p>
+    <p>{group.member_count} человек · {group.difficulty || 'Без сложности'} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</p>
     <p>Подготовлено {instances.length} карточек</p>
     {Object.entries(counts).map(([name, count]) => <p key={name}>{name} · {count}</p>)}
     {error && <p className={styles.error} role="alert">{error}</p>}
