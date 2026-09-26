@@ -29,6 +29,7 @@ from app.modules.identity.models import User
 
 if TYPE_CHECKING:
     from app.modules.incidents.models import Incident
+    from app.modules.scenario_library.instance_models import ScenarioInstance
 
 
 class TrainingSessionState(StrEnum):
@@ -147,6 +148,9 @@ class TrainingSession(Base):
     groups: Mapped[list[TrainingGroup]] = relationship(
         back_populates="training_session", cascade="all, delete-orphan"
     )
+    master_instances: Mapped[list[ScenarioInstance]] = relationship(
+        foreign_keys="ScenarioInstance.training_session_id", viewonly=True
+    )
     queue_items: Mapped[list[ScenarioQueueItem]] = relationship(
         back_populates="training_session", cascade="all, delete-orphan"
     )
@@ -198,7 +202,10 @@ class TrainingGroup(Base):
     __tablename__ = "training_groups"
     __table_args__ = (
         UniqueConstraint("training_session_id", "name"),
-        UniqueConstraint("training_session_id", "source_user_group_id", name="uq_training_groups_session_source"),
+        UniqueConstraint(
+            "training_session_id", "source_user_group_id",
+            name="uq_training_groups_session_source",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

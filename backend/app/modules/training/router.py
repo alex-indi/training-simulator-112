@@ -73,6 +73,45 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
     assigned = sum(bool(run.dds_profile and run.dds_profile != "ДДС") for run in runs)
     stationed = sum(bool(run.workstation_number) for run in runs)
     warnings = []
+    if any(group.source_user_group_id is not None for group in item.groups):
+        masters = [row for row in item.master_instances if row.training_group_id is not None]
+        assigned_runs = [run for run in runs if run.group_id is not None]
+        unassigned = len(runs) - len(assigned_runs)
+        required = (
+            math.ceil(item.duration_minutes * 60 / item.delivery_interval_seconds)
+            if item.mode == TrainingMode.FLOW
+            and item.duration_minutes and item.delivery_interval_seconds
+            else 1
+        )
+        if not runs:
+            warnings.append("Нет подключённых участников")
+        if unassigned:
+            warnings.append(f"Не распределены: {unassigned}; карточки им не выдаются")
+        if online < len(runs):
+            warnings.append(f"Offline: {len(runs) - online}")
+        for group in item.groups:
+            cards = [row for row in masters if row.training_group_id == group.id]
+            if len(cards) < required:
+                warnings.append(
+                    f"Группа «{group.name}»: нужно не менее {required} карточек"
+                )
+            elif any(row.status != "CONFIRMED" for row in cards):
+                warnings.append(f"Группа «{group.name}»: набор не утверждён")
+        prepared = len(masters)
+        approved = sum(row.status == "CONFIRMED" for row in masters)
+        return ReadinessRead(
+            participant_count=len(runs), workstation_count=item.workstation_count,
+            group_count=len(item.groups), profiles_assigned=len(assigned_runs),
+            online_count=online, offline_count=len(runs) - online,
+            warnings=warnings,
+            can_start=bool(assigned_runs) and bool(item.groups)
+            and all(
+                sum(row.training_group_id == group.id for row in masters) >= required
+                for group in item.groups
+            )
+            and prepared == approved,
+            prepared_count=prepared, approved_count=approved,
+        )
     if not runs:
         warnings.append("Нет подключённых участников")
     if assigned != len(runs):
@@ -221,6 +260,7 @@ async def _load_session(
             selectinload(TrainingSession.trainees),
             selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
             selectinload(TrainingSession.groups),
+            selectinload(TrainingSession.master_instances).selectinload(ScenarioInstance.events),
             selectinload(TrainingSession.queue_items),
         )
     )
@@ -349,6 +389,7 @@ async def list_training_sessions(
         selectinload(TrainingSession.trainees),
         selectinload(TrainingSession.runs).selectinload(TrainingRun.trainee),
         selectinload(TrainingSession.groups),
+        selectinload(TrainingSession.master_instances).selectinload(ScenarioInstance.events),
         selectinload(TrainingSession.queue_items),
     )
     if current_user.role == UserRole.INSTRUCTOR:
@@ -425,6 +466,17 @@ async def join_training_session(
         existing = TrainingRun(
             trainee_id=current_user.id, workstation_number=payload.workstation_number
         )
+        group = next(
+            (group for group in item.groups
+             if group.source_user_group_id is not None
+             and group.source_user_group_id == current_user.group_id),
+            None,
+        )
+        if group is not None:
+            existing.group_id = group.id
+            existing.dds_profile = group.dds_profile or "ДДС"
+            existing.difficulty = group.difficulty
+            existing.queue_mode = group.queue_mode
         item.runs.append(existing)
         if not any(trainee.id == current_user.id for trainee in item.trainees):
             item.trainees.append(current_user)
@@ -628,7 +680,9 @@ async def start_session(
     except InvalidTrainingSessionTransitionError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     from app.modules.training.delivery import finalize_order
+    from app.modules.training.prepared_pools import materialize_group_pools
 
+    await materialize_group_pools(database, item)
     finalize_order(item)
     item.delivery_elapsed_seconds = 0
     item.delivery_checked_at = item.started_at
