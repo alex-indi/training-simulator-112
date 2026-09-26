@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:e2e": "playwright test",
+    "test:e2e:mvp": "playwright test e2e/mvp.spec.js",
     "preview": "vite preview"
   },
   "dependencies": {
