@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.dependencies import get_database_session
+from app.modules.admin.models import UserGroup
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
 from app.modules.training.models import (
@@ -197,6 +198,7 @@ def _to_read_model(item: TrainingSession) -> TrainingSessionRead:
             GroupRead(
                 id=group.id,
                 name=group.name,
+                source_user_group_id=group.source_user_group_id,
                 dds_profile=group.dds_profile,
                 difficulty=group.difficulty,
                 queue_mode=group.queue_mode,
@@ -466,6 +468,14 @@ async def create_group(
     item = await _load_session(database, training_session_id, for_update=True)
     _ensure_session_owner(item, current_user)
     _editable(item)
+    if payload.source_user_group_id is not None:
+        source = await database.get(UserGroup, payload.source_user_group_id)
+        if (source is None or source.is_archived or
+            (current_user.role != UserRole.ADMIN and source.created_by_user_id != current_user.id)):
+            raise HTTPException(status_code=404, detail="Постоянная группа не найдена")
+        if any(group.source_user_group_id == source.id for group in item.groups):
+            raise HTTPException(status_code=409, detail="Группа уже добавлена в занятие")
+        payload = payload.model_copy(update={"name": source.name})
     if any(group.name == payload.name for group in item.groups):
         raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
     item.groups.append(TrainingGroup(**payload.model_dump()))
@@ -487,6 +497,10 @@ async def update_group(
     group = next((group for group in item.groups if group.id == group_id), None)
     if group is None:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+    if payload.source_user_group_id != group.source_user_group_id:
+        raise HTTPException(status_code=409, detail="Источник группы нельзя изменить")
+    if group.source_user_group_id is not None:
+        payload = payload.model_copy(update={"name": group.name})
     if any(other.name == payload.name and other.id != group_id for other in item.groups):
         raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
     for key, value in payload.model_dump().items():

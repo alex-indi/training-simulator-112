@@ -222,6 +222,16 @@
 
 .navigation footer small { color: #cfd8dc; }
 .navigation footer button { background: transparent; color: #fff; }
+
+.groupFilters { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
+.groupFilters input:not([type=checkbox]) { max-width: 320px; }
+.groupFilters label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.groupOverlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgb(20 31 38 / 60%); }
+.groupDialog { display: grid; gap: 12px; width: min(100%, 520px); max-height: calc(100vh - 40px); overflow-y: auto; padding: 22px; border: 1px solid var(--dds-border); background: var(--dds-panel); box-shadow: 0 12px 35px rgb(0 0 0 / 25%); }
+.groupDialog h3 { margin: 0; }
+.groupDialog > label { display: grid; gap: 5px; }
+.memberList { display: grid; gap: 6px; max-height: 230px; overflow-y: auto; }
+.memberList label { display: flex; align-items: center; gap: 8px; padding: 7px; background: var(--dds-panel-bright); }
 .header { height: 118px; min-height: 118px; }
 .header > div:first-child {
   border-left: 4px solid #455159;

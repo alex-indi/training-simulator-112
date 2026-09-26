@@ -412,6 +412,7 @@ def test_deleting_group_keeps_members_and_writes_audit() -> None:
     session = AsyncMock()
     session.add = MagicMock()
     session.get.return_value = group
+    session.scalar.return_value = None
 
     asyncio.run(delete_user_group(group_id=group.id, session=session, admin=admin))
 
@@ -420,6 +421,22 @@ def test_deleting_group_keeps_members_and_writes_audit() -> None:
     audit = session.add.call_args.args[0]
     assert audit.action == "USER_GROUP_DELETED"
     assert audit.before["name"] == "Группа ДДС-24"
+    session.commit.assert_awaited_once()
+
+
+def test_used_group_is_archived_instead_of_deleted() -> None:
+    admin = make_user(1, UserRole.ADMIN)
+    group = UserGroup(id=7, name="Группа ДДС-24", description="Вечерний поток")
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.get.return_value = group
+    session.scalar.return_value = 12
+
+    asyncio.run(delete_user_group(group_id=group.id, session=session, admin=admin))
+
+    assert group.is_archived is True
+    session.delete.assert_not_awaited()
+    session.execute.assert_not_awaited()
     session.commit.assert_awaited_once()
 
 

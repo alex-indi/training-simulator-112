@@ -86,7 +86,8 @@ class TrainingSessionSummary(BaseModel):
 
 
 class GroupWrite(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=160)
+    source_user_group_id: int | None = None
     dds_profile: str | None = Field(default=None, max_length=120)
     difficulty: str | None = Field(default=None, max_length=40)
     queue_mode: QueueMode = QueueMode.INDIVIDUAL_QUEUE

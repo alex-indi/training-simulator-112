@@ -265,6 +265,16 @@ async def update_user_group(
 async def delete_user_group(group_id: int, session: Database, admin: Admin) -> None:
     group: UserGroup = await _one_or_404(session, UserGroup, group_id)
     before = {"name": group.name, "description": group.description}
+    from app.modules.training.models import TrainingGroup
+
+    used = await session.scalar(
+        select(TrainingGroup.id).where(TrainingGroup.source_user_group_id == group.id)
+    )
+    if used is not None:
+        group.is_archived = True
+        session.add(_audit(admin, "USER_GROUP_ARCHIVED", "USER_GROUP", group.id, before=before))
+        await session.commit()
+        return
     await session.execute(sql_update(User).where(User.group_id == group.id).values(group_id=None))
     await session.delete(group)
     session.add(_audit(admin, "USER_GROUP_DELETED", "USER_GROUP", group.id, before=before))
