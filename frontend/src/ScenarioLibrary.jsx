@@ -7,7 +7,7 @@ import IncidentTemplates from './IncidentTemplates.jsx'
 const options = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const variantFactLabels = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
 
-export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
+export default function ScenarioLibrary({ user, requestJson, sessionId, groupId, groupDifficulty, initialTemplate = null, onCompleted, embedded = false, picker = false }) {
   const api = useCallback((path, init) => requestJson(path, user.username, init), [requestJson, user.username])
   const [templates, setTemplates] = useState([])
   const [sessions, setSessions] = useState([])
@@ -185,7 +185,7 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
   }} />
 
   return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
-    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Шаблоны инцидентов</h1></div><button type="button" onClick={onBack}>← К занятиям</button></header>}
+    {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Шаблоны инцидентов</h1></div></header>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     <div className={styles.content}>
@@ -204,7 +204,6 @@ export default function ScenarioLibrary({ user, requestJson, onBack, sessionId, 
       </>}
 
       {chosen && <>
-        <button type="button" className={styles.link} onClick={() => { setChosen(null); setCards([]) }}>← Библиотека</button>
         <h2>{chosen.name}</h2>
         {!cards.length && <section className={styles.panel}>
           <p>{chosen.description}</p>

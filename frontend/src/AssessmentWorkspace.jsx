@@ -10,7 +10,7 @@ const severityNames = { CRITICAL: 'Критическая', MAJOR: 'Основн
 const primaryNames = { ACCEPT: 'Принята', REJECT: 'Не принята' }
 const dateTime = (value) => value ? new Date(value).toLocaleString('ru-RU') : '—'
 
-function AssessmentWorkspace({ session, api, onBack, embedded = false }) {
+function AssessmentWorkspace({ session, api, embedded = false }) {
   const [report, setReport] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [comment, setComment] = useState('')
@@ -37,7 +37,7 @@ function AssessmentWorkspace({ session, api, onBack, embedded = false }) {
       .then(() => { if (active) refresh() })
       .catch((cause) => { if (active) setError(cause.message) })
     return () => { active = false }
-  }, [api, refresh, selectedId, selected?.ai_summary_generated_at, session.id])
+  }, [api, refresh, selected, selectedId, session.id])
 
   const submit = async (path, body) => {
     setBusy(true)
@@ -53,7 +53,6 @@ function AssessmentWorkspace({ session, api, onBack, embedded = false }) {
   const Root = embedded ? 'div' : 'main'
 
   return <Root className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
-    {!embedded && <button type="button" onClick={onBack}>← Все занятия</button>}
     <h1>Результаты занятия · {session.title}</h1>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {!report ? <p>Загружаем результаты…</p> : <>

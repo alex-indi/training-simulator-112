@@ -12,7 +12,7 @@ const choices = {
 const empty = () => ({ name: '', classifier_rule_id: '', object_type_id: '', difficulty: 3, variant_options: {} })
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
-export default function IncidentTemplates({ user, requestJson, onUse, onSaved, startCreate = false }) {
+export default function IncidentTemplates({ user, requestJson, onUse, onSaved, onViewChange, startCreate = false }) {
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const [items, setItems] = useState([])
   const [catalog, setCatalog] = useState({ rules: [], object_types: [] })
@@ -26,6 +26,8 @@ export default function IncidentTemplates({ user, requestJson, onUse, onSaved, s
 
   const reload = useCallback(async () => setItems(await api('/api/scenario-templates/simple')), [api])
   useEffect(() => { reload().catch((cause) => setError(cause.message)) }, [reload])
+  useEffect(() => { onViewChange?.(Boolean(editing)) }, [editing, onViewChange])
+  useEffect(() => () => onViewChange?.(false), [onViewChange])
   useEffect(() => { api(`/api/scenario-templates/catalog?q=${encodeURIComponent(query)}`).then(setCatalog).catch((cause) => setError(cause.message)) }, [api, query])
   useEffect(() => {
     if (!draft.classifier_rule_id) { setServices([]); return }
@@ -72,7 +74,7 @@ export default function IncidentTemplates({ user, requestJson, onUse, onSaved, s
     {notice && <p className={styles.notice} role="status">{notice}</p>}
     <div className={styles.content}>
       {editing ? <section className={styles.panel}>
-        <div className={styles.topline}><h2>{editing.id ? 'Редактировать шаблон' : 'Создать шаблон'}</h2><button type="button" onClick={() => setEditing(null)}>← К шаблонам</button></div>
+        <div className={styles.topline}><h2>{editing.id ? 'Редактировать шаблон' : 'Создать шаблон'}</h2></div>
         <label>Название<input value={draft.name} disabled={!canEdit} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
         <label>Поиск типа происшествия<input value={query} disabled={!canEdit} onChange={(event) => setQuery(event.target.value)} placeholder="Например, пожар" /></label>
         <label>Тип происшествия<select value={draft.classifier_rule_id} disabled={!canEdit} onChange={(event) => setDraft((current) => ({ ...current, classifier_rule_id: event.target.value }))}><option value="">Выберите тип</option>{catalog.rules.map((rule) => <option key={rule.id} value={rule.id}>{rule.group} · {rule.type}</option>)}{draft.classifier_rule_id && !catalog.rules.some((rule) => rule.id === Number(draft.classifier_rule_id)) && <option value={draft.classifier_rule_id}>Выбранный тип #{draft.classifier_rule_id}</option>}</select></label>
@@ -84,7 +86,7 @@ export default function IncidentTemplates({ user, requestJson, onUse, onSaved, s
         {canEdit && <div className={styles.actions}><button type="button" disabled={busy || !draft.name.trim() || !draft.classifier_rule_id || !draft.object_type_id} onClick={save}>Сохранить</button></div>}
       </section> : <>
         <div className={styles.topline}><div><h2>Шаблоны инцидентов</h2><p>Создавайте правила и сразу формируйте карточки происшествий.</p></div><button type="button" onClick={create}>+ Создать шаблон</button></div>
-        <div className={styles.cards}>{items.map((item) => <article className={styles.card} key={item.id}><h3>{item.name}</h3><p>{item.incident_type || 'Укажите тип происшествия'}</p><p>{typeName(item.object_rule?.object_type_id)} · {difficultyLabels[item.difficulty]}</p><div className={styles.actions}><button type="button" onClick={() => open(item)}>Открыть</button>{(user.role === 'ADMIN' || item.created_by_user_id === user.id) && <button type="button" onClick={() => open(item)}>Редактировать</button>}{onUse && <button type="button" disabled={!item.usable} onClick={() => onUse(item)}>Создать карточки</button>}{(user.role === 'ADMIN' || item.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => remove(item)}>Удалить</button>}</div></article>)}</div>
+        <div className={styles.templateList}>{items.map((item) => <article className={styles.templateListRow} key={item.id}><div><h3>{item.name}</h3><small>{item.incident_type || 'Укажите тип происшествия'}</small></div><span>{typeName(item.object_rule?.object_type_id)}</span><span>{difficultyLabels[item.difficulty]}</span><div className={styles.catalogActions}><button type="button" onClick={() => open(item)}>Открыть</button>{(user.role === 'ADMIN' || item.created_by_user_id === user.id) && <button type="button" onClick={() => open(item)}>Редактировать</button>}{onUse && <button type="button" disabled={!item.usable} onClick={() => onUse(item)}>Создать карточки</button>}{(user.role === 'ADMIN' || item.created_by_user_id === user.id) && <button type="button" disabled={busy} onClick={() => remove(item)}>Удалить</button>}</div></article>)}</div>
         {!items.length && <p>Шаблонов пока нет.</p>}
       </>}
     </div>

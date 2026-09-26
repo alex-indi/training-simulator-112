@@ -118,7 +118,7 @@ def test_seed_is_deterministic_and_valid() -> None:
         + first["metro"]["station_count"]
         + sum(item["objects"] for item in first["healthcare"].values())
     )
-    objects = json.loads((SEED_DIR / "city_objects.json").read_text())
+    objects = json.loads((SEED_DIR / "city_objects.json").read_text(encoding="utf-8"))
     assert all(row["source"] and row["source_dataset_id"] and row["external_id"] for row in objects)
 
 
@@ -257,11 +257,12 @@ def test_manual_dataset_fetch_keeps_source_and_refuses_overwrite(tmp_path, monke
         "rows": 1,
         "caption": "Hospitals",
     }
-    assert json.loads((tmp_path / "hospitals_dataset_info.json").read_text()) == {
+    assert json.loads((tmp_path / "hospitals_dataset_info.json").read_text(encoding="utf-8")) == {
         "Id": 1234,
         "Caption": "Hospitals",
     }
-    assert json.loads((tmp_path / "hospitals_raw_rows.json").read_text())[0]["global_id"] == 1
+    rows = json.loads((tmp_path / "hospitals_raw_rows.json").read_text(encoding="utf-8"))
+    assert rows[0]["global_id"] == 1
     assert calls == [("datasets/1234", "test-key", (5, 11), None)]
     with pytest.raises(FileExistsError):
         mos_api_client.fetch_dataset(1234, "hospitals", output_dir=tmp_path)

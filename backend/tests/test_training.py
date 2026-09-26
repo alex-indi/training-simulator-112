@@ -20,6 +20,7 @@ from app.modules.training.models import (
 )
 from app.modules.training.router import (
     _readiness,
+    archive_training_session,
     assign_runs,
     create_group,
     create_training_session,
@@ -175,6 +176,48 @@ def test_instructor_start_command_persists_active_session() -> None:
     assert response.started_at is not None
     assert response.started_at.tzinfo is not None
     database.commit.assert_awaited_once()
+
+
+def test_instructor_can_archive_inactive_session() -> None:
+    instructor = User(
+        id=2,
+        username="instructor",
+        full_name="Преподаватель",
+        role=UserRole.INSTRUCTOR,
+    )
+    training_session = make_training_session()
+    scalar_result = MagicMock()
+    scalar_result.one_or_none.return_value = training_session
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=scalar_result)
+    database.commit = AsyncMock()
+
+    asyncio.run(archive_training_session(training_session.id, instructor, database))
+
+    assert training_session.is_archived is True
+    database.commit.assert_awaited_once()
+
+
+def test_active_session_cannot_be_archived() -> None:
+    instructor = User(
+        id=2,
+        username="instructor",
+        full_name="Преподаватель",
+        role=UserRole.INSTRUCTOR,
+    )
+    training_session = make_training_session()
+    training_session.state = TrainingSessionState.ACTIVE
+    scalar_result = MagicMock()
+    scalar_result.one_or_none.return_value = training_session
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=scalar_result)
+    database.commit = AsyncMock()
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(archive_training_session(training_session.id, instructor, database))
+
+    assert error.value.status_code == 409
+    database.commit.assert_not_awaited()
 
 
 def test_offline_participant_warns_without_blocking_start() -> None:

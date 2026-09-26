@@ -83,6 +83,7 @@ class TrainingSessionSummary(BaseModel):
     workstation_count: int
     own_run: OwnRunSummary | None = None
     paused_at: datetime | None = None
+    is_archived: bool = False
 
 
 class GroupWrite(BaseModel):
@@ -161,6 +162,7 @@ class TrainingSessionRead(SessionSettings):
     instructor_id: int
     trainee_ids: list[int]
     state: TrainingSessionState
+    is_archived: bool = False
     created_at: datetime
     started_at: datetime | None
     paused_at: datetime | None = None
