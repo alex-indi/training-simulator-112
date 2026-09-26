@@ -20,11 +20,13 @@ logger = logging.getLogger(__name__)
 class TextGenerationTask(StrEnum):
     INCIDENT_REPORT = "INCIDENT_REPORT"
     RESPONSE_MESSAGE = "RESPONSE_MESSAGE"
+    ASSESSMENT_SUMMARY = "ASSESSMENT_SUMMARY"
 
 
 PROMPT_VERSIONS = {
     TextGenerationTask.INCIDENT_REPORT: "incident_operator_entry_v2",
     TextGenerationTask.RESPONSE_MESSAGE: "response_crew_message_v2",
+    TextGenerationTask.ASSESSMENT_SUMMARY: "assessment_summary_v1",
 }
 
 
@@ -115,6 +117,16 @@ class TemplateTextGenerationProvider:
 
 
 def prompt_for(task: TextGenerationTask) -> str:
+    if task == TextGenerationTask.ASSESSMENT_SUMMARY:
+        return (
+            "Составь короткое профессиональное резюме учебной тренировки диспетчера ДДС 101 "
+            "только по предоставленным системой фактам и отклонениям. Не придумывай события, "
+            "ошибки и времена; не меняй severity. Отдельно и кратко назови критические, "
+            "основные и дополнительные замечания, а также своевременные действия. "
+            "Если категория пуста, прямо укажи это. Комментарий преподавателя используй "
+            "только как контекст формулировки, не как источник новых фактов. "
+            "Не выставляй итоговую оценку и не решай, пройдено ли занятие."
+        )
     return (
         "Напиши короткое сообщение бригады для оперативного чата, как рабочую запись. "
         "Сохрани все переданные факты и числа. Не добавляй людей, адресов, служб, "
