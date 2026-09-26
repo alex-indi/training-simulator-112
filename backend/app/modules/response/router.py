@@ -260,7 +260,7 @@ async def mark_response_message_read(
     assignment = await _load_visible_assignment(
         database, message.response_assignment_id, current_user
     )
-    _ensure_owner(assignment, current_user)
+    _ensure_owner_active(assignment, current_user)
     if message.sender_type == ResponseMessageSender.RESPONSE_UNIT and message.read_at is None:
         message.read_at = datetime.now(UTC)
         await database.commit()

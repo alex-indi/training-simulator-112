@@ -239,6 +239,27 @@
   box-shadow: 0 4px 14px rgb(0 0 0 / 22%);
 }
 
+.sessionCompletedNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #a2c4d5;
+  background: #e5f3fa;
+  color: #16394d;
+  font-size: 14px;
+}
+
+.sessionCompletedNotice button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: #1476a8;
+  color: white;
+  cursor: pointer;
+}
+
 .registryWorkspace,
 .incidentWorkspace {
   min-height: 100vh;

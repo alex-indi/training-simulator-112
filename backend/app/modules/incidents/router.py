@@ -342,7 +342,7 @@ async def list_incidents(
     current_user: Annotated[User, Depends(get_current_user)],
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> list[IncidentRead]:
-    """Возвращает карточки только из доступных пользователю учебных сессий."""
+    """Возвращает реестр активного АРМ; преподавателю оставляет историю занятий."""
     statement = select(Incident).options(
         selectinload(Incident.training_session).selectinload(TrainingSession.trainees),
         selectinload(Incident.training_session).selectinload(TrainingSession.pauses),
@@ -368,14 +368,12 @@ async def list_incidents(
             .join(training_session_trainees)
             .outerjoin(TrainingRun, Incident.training_run_id == TrainingRun.id)
             .where(
+                TrainingSession.state == TrainingSessionState.ACTIVE,
                 training_session_trainees.c.trainee_id == current_user.id,
                 or_(
                     and_(
                         Incident.training_group_id.is_(None),
-                        or_(
-                            Incident.training_run_id.is_(None),
-                            TrainingRun.trainee_id == current_user.id,
-                        ),
+                        TrainingRun.trainee_id == current_user.id,
                     ),
                     Incident.training_group_id.in_(
                         select(member_run.group_id)

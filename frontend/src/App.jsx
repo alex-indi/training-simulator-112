@@ -177,8 +177,12 @@ function App() {
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [incidents, setIncidents] = useState([])
   const [joinedSessionId, setJoinedSessionId] = useState(null)
+  const [activeSessionId, setActiveSessionId] = useState(null)
+  const [completedSessionId, setCompletedSessionId] = useState(null)
+  const [dismissedCompletedId, setDismissedCompletedId] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
   const selectedIncidentId = useRef(null)
+  const activeSessionIdRef = useRef(null)
   const [selectedService, setSelectedService] = useState('')
   const [serviceHistoryOpen, setServiceHistoryOpen] = useState(false)
   const [statusEditorOpen, setStatusEditorOpen] = useState(false)
@@ -229,50 +233,45 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (currentUser?.role !== 'TRAINEE') {
-      setIncidents([])
-      return
-    }
-
-    let isCurrent = true
-    setLoading(true)
-    setError('')
-    requestJson('/api/incidents', currentUser.username)
-      .then((items) => {
-        if (isCurrent) setIncidents(items)
-      })
-      .catch((requestError) => {
-        if (isCurrent) setError(requestError.message)
-      })
-      .finally(() => {
-        if (isCurrent) setLoading(false)
-      })
-
-    return () => {
-      isCurrent = false
-    }
-  }, [currentUser])
-
-  useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
     const refresh = async () => {
       try {
-        const items = await requestJson('/api/incidents', currentUser.username)
+        const [sessions, items] = await Promise.all([
+          requestJson('/api/training/sessions', currentUser.username),
+          requestJson('/api/incidents', currentUser.username),
+        ])
         if (!active) return
-        setIncidents(items)
-        if (selectedIncidentId.current) {
-          const fresh = await requestJson(`/api/incidents/${selectedIncidentId.current}`, currentUser.username)
-          if (active) setSelectedIncident(fresh)
+        const currentSession = sessions.find((item) => item.state === 'ACTIVE' && item.own_run)
+        const lastCompleted = sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
+        const currentItems = currentSession ? items.filter((item) => item.training_session_id === currentSession.id) : []
+        if (activeSessionIdRef.current !== (currentSession?.id || null)) {
+          activeSessionIdRef.current = currentSession?.id || null
+          setFilters(emptyFilters)
         }
-      } catch (cause) { if (active) setError(cause.message) }
+        setActiveSessionId(currentSession?.id || null)
+        setCompletedSessionId(lastCompleted?.id || null)
+        setIncidents(currentItems)
+        if (selectedIncidentId.current && !currentItems.some((item) => item.id === selectedIncidentId.current)) {
+          setSelectedIncident(null)
+          setSelectedService('')
+          setServiceHistoryOpen(false)
+          setStatusEditorOpen(false)
+          setSelectedAction('')
+          setActionOrderNumber('')
+          setActionComment('')
+          setPreviewStatuses({})
+        } else if (selectedIncidentId.current) {
+          setSelectedIncident(currentItems.find((item) => item.id === selectedIncidentId.current))
+        }
+      } catch (cause) { if (active) setError(cause.message) } finally { if (active) setLoading(false) }
     }
     const socket = io(apiUrl, { auth: { username: currentUser.username } })
     socket.on('connect', async () => {
       try {
         const sessions = await requestJson('/api/training/sessions', currentUser.username)
         if (!active) return
-        sessions.filter((item) => item.own_run)
+        sessions.filter((item) => item.state === 'ACTIVE' && item.own_run)
           .forEach((item) => socket.emit('subscribe', { session_id: item.id }))
         refresh()
       } catch (cause) { if (active) setError(cause.message) }
@@ -283,6 +282,7 @@ function App() {
     socket.on('incident.updated', refresh)
     socket.on('training.control_changed', refresh)
     const fallback = window.setInterval(refresh, 30000)
+    refresh()
     return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
   }, [currentUser, joinedSessionId])
 
@@ -354,6 +354,10 @@ function App() {
     window.sessionStorage.removeItem('ut112-demo-username')
     setCurrentUser(null)
     setIncidents([])
+    setActiveSessionId(null)
+    activeSessionIdRef.current = null
+    setCompletedSessionId(null)
+    setDismissedCompletedId(null)
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
@@ -374,6 +378,11 @@ function App() {
   const selectUser = async (event) => {
     const demoUsername = event.target.value
     setError('')
+    setIncidents([])
+    setActiveSessionId(null)
+    activeSessionIdRef.current = null
+    setCompletedSessionId(null)
+    setDismissedCompletedId(null)
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
@@ -672,6 +681,7 @@ function App() {
     ...(selectedIncident.activities || []).map((item) => ({ key: `activity-${item.id}`, kind: item.kind, title: item.kind === 'TRAINING_BRIGADE' ? 'ТРЕНАЖЁР · БРИГАДА 101' : item.service_name, body: item.body, created_at: item.created_at })),
   ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) : []
   const filtersActive = Object.values(filters).some(Boolean)
+  const showCompletedNotice = !activeSessionId && completedSessionId && dismissedCompletedId !== completedSessionId
   const [clockHours, clockMinutes, clockSeconds] = formatTime(now).split(':')
 
   return (
@@ -683,6 +693,10 @@ function App() {
           <strong>Ошибка:</strong> {error}
         </div>
       )}
+      {showCompletedNotice && <section className={styles.sessionCompletedNotice} role="status">
+        <strong>Занятие завершено преподавателем</strong>
+        <button type="button" onClick={() => setDismissedCompletedId(completedSessionId)}>Вернуться</button>
+      </section>}
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
@@ -968,7 +982,7 @@ function App() {
                   <small><b>Описание:</b><time>{formatDateTime(incident.reported_at)}</time><span>УМЦ О.п.</span><strong>{incident.description}</strong></small>
                 </button>
               }) : (
-                <div className={styles.registryEmpty}>{filtersActive ? 'Происшествия не найдены' : 'Происшествий нет'}</div>
+                <div className={styles.registryEmpty}>{!activeSessionId ? 'Нет активного занятия' : filtersActive ? 'Происшествия не найдены' : 'Происшествий нет'}</div>
               )}
             </div>
 

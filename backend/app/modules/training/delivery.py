@@ -415,25 +415,6 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         item.delivered_at = now
         item.incident_id = incident.id
         incident_ids.append(incident.id)
-    released_ids, messages, response_state_ids = await release_due_events(database, session, now)
-    brigade_ids = []
-    active_incidents = (
-        await database.scalars(
-            select(Incident)
-            .where(
-                Incident.training_session_id == session.id,
-                Incident.primary_status_at.is_not(None),
-            )
-            .options(selectinload(Incident.actions), selectinload(Incident.activities))
-        )
-    ).all()
-    runs_by_id = {run.id: run for run in session.runs}
-    for incident in active_incidents:
-        run = runs_by_id.get(incident.training_run_id or incident.claimed_by_training_run_id)
-        if run and run.paused_at:
-            continue
-        if release_brigade_stages(incident, session, run, now):
-            brigade_ids.append(incident.id)
     if session.finish_mode == "GRACEFUL":
         states = (
             await database.execute(
@@ -458,6 +439,28 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         ):
             session.state = TrainingSessionState.COMPLETED
             session.completed_at = now
+            await database.commit()
+            await publish_session_event("training.control_changed", session.id, None)
+            return incident_ids
+    released_ids, messages, response_state_ids = await release_due_events(database, session, now)
+    brigade_ids = []
+    active_incidents = (
+        await database.scalars(
+            select(Incident)
+            .where(
+                Incident.training_session_id == session.id,
+                Incident.primary_status_at.is_not(None),
+            )
+            .options(selectinload(Incident.actions), selectinload(Incident.activities))
+        )
+    ).all()
+    runs_by_id = {run.id: run for run in session.runs}
+    for incident in active_incidents:
+        run = runs_by_id.get(incident.training_run_id or incident.claimed_by_training_run_id)
+        if run and run.paused_at:
+            continue
+        if release_brigade_stages(incident, session, run, now):
+            brigade_ids.append(incident.id)
     await database.commit()
     for incident_id in released_ids:
         await publish_session_event("incident.updated", session.id, incident_id)
