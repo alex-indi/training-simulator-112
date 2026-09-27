@@ -1,0 +1,14 @@
+[
+  {
+    "seed_code": "DEMO_PACKAGE_START",
+    "name": "Первые решения ДДС",
+    "description": "Задымление и пожар в школе: карточки для вводного занятия.",
+    "cards": ["DEMO_CARD_SCHOOL_01", "DEMO_CARD_METRO_SMOKE_01", "DEMO_CARD_SCHOOL_02"]
+  },
+  {
+    "seed_code": "DEMO_PACKAGE_COMPLEX",
+    "name": "Объекты с массовым пребыванием людей",
+    "description": "Поликлиника и метро: карточки для занятия повышенной сложности.",
+    "cards": ["DEMO_CARD_POLYCLINIC_01", "DEMO_CARD_METRO_FIRE_01", "DEMO_CARD_POLYCLINIC_02", "DEMO_CARD_METRO_FIRE_02"]
+  }
+]

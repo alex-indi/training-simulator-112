@@ -71,6 +71,7 @@ async def import_seed() -> dict[str, int]:
                 data = TemplateInput.model_validate(
                     {
                         "name": entry["name"],
+                        "created_by_user_id": instructor.id,
                         "description": entry["description"],
                         "difficulty": entry["difficulty"],
                         "classifier_rule_id": rule_id,
