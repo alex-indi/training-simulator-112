@@ -45,7 +45,7 @@ function AssessmentWorkspace({ session, api, embedded = false }) {
   const Root = embedded ? 'div' : 'main'
 
   return <Root className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
-    <h1>Результаты занятия · {session.title}</h1>
+    <h1 className={styles.completedHeader}>Результаты занятия · {session.title}</h1>
     <StatusMessage message={error} tone="error" />
     {!report ? <p>Загружаем результаты…</p> : <>
       <div className={styles.summary}>
