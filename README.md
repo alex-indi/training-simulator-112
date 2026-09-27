@@ -111,7 +111,7 @@ uv run uvicorn app.main:socket_app \
 
 ## Запуск через Docker
 
-Нужны Docker Desktop либо Docker Engine с Compose. Python, Node.js, `uv` и PostgreSQL на компьютере устанавливать не требуется. Для обычного запуска на macOS дважды щёлкните `start-demo.command`, на Windows — `start-demo.cmd`. На Linux выполните из корня репозитория:
+Для запуска нужны Docker Engine и Compose. Python, Node.js, `uv` и PostgreSQL на компьютере устанавливать не требуется. На macOS дважды щёлкните `start-demo.command`, на Windows — `start-demo.cmd`. Скрипты проверяют Docker и Compose до запуска стенда. Если компонентов нет, они спросят согласие на установку: macOS использует Homebrew, Colima и Docker CLI без Docker Desktop; Windows при необходимости устанавливает Docker Desktop. Если рабочий Docker уже есть, повторная установка не выполняется. После установки Docker Desktop на Windows завершите первоначальную настройку в его окне. На Linux установите Docker Engine с Compose и выполните из корня репозитория:
 
 ```bash
 sh ./start-demo.command

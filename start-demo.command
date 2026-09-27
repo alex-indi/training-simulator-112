@@ -4,22 +4,90 @@ set -eu
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$project_root"
 
-if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
-    echo "Установите Docker Desktop (или Docker Engine с Compose) и запустите файл снова." >&2
-    exit 1
-fi
+docker_ready() {
+    command -v docker >/dev/null 2>&1 &&
+        docker compose version >/dev/null 2>&1 &&
+        docker info >/dev/null 2>&1
+}
 
-if ! docker info >/dev/null 2>&1 && [ "$(uname -s)" = Darwin ]; then
-    echo "Запускаю Docker Desktop..."
-    open -a Docker >/dev/null 2>&1 || true
+ask_install_mac() {
+    printf 'Для запуска нужны Docker CLI, Compose и среда контейнеров Colima. Установить недостающее через Homebrew? [д/Н]: '
+    IFS= read -r answer || answer=
+    case "$answer" in
+        д|Д|да|ДА|y|Y|yes|YES) ;;
+        *) echo "Установка отменена. Файлы и данные стенда не изменены."; exit 1 ;;
+    esac
+}
+
+ensure_homebrew() {
+    if command -v brew >/dev/null 2>&1; then return; fi
+    echo "Устанавливаю Homebrew с официального сайта..."
+    (
+        installer=$(mktemp "${TMPDIR:-/tmp}/ut112-homebrew.XXXXXX")
+        trap 'rm -f "$installer"' EXIT
+        curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$installer"
+        NONINTERACTIVE=1 /bin/bash "$installer"
+    )
+    for brew_dir in /opt/homebrew/bin /usr/local/bin; do
+        if [ -x "$brew_dir/brew" ]; then
+            PATH="$brew_dir:$PATH"
+            export PATH
+            return
+        fi
+    done
+    echo "Homebrew установлен, но команда brew недоступна. Откройте новый терминал и повторите запуск." >&2
+    exit 1
+}
+
+install_missing_mac_tools() {
+    set --
+    if ! command -v docker >/dev/null 2>&1; then set -- "$@" docker; fi
+    if ! docker compose version >/dev/null 2>&1; then set -- "$@" docker-compose; fi
+    if ! docker buildx version >/dev/null 2>&1; then set -- "$@" docker-buildx; fi
+    if ! docker info >/dev/null 2>&1 && [ ! -d /Applications/Docker.app ] && ! command -v colima >/dev/null 2>&1; then
+        set -- "$@" colima
+    fi
+    if [ "$#" -gt 0 ]; then brew install "$@"; fi
+    plugin_dir="$HOME/.docker/cli-plugins"
+    brew_prefix=$(brew --prefix)
+    mkdir -p "$plugin_dir"
+    for plugin in docker-compose docker-buildx; do
+        if [ ! -e "$plugin_dir/$plugin" ] && [ ! -L "$plugin_dir/$plugin" ] &&
+            [ -x "$brew_prefix/opt/$plugin/bin/$plugin" ]; then
+            ln -s "$brew_prefix/opt/$plugin/bin/$plugin" "$plugin_dir/$plugin"
+        fi
+    done
+}
+
+if [ "$(uname -s)" = Darwin ]; then
+    if [ -d /Applications/Docker.app ]; then
+        PATH="/Applications/Docker.app/Contents/Resources/bin:$HOME/.docker/bin:$PATH"
+        export PATH
+    fi
+    if ! docker_ready; then
+        if [ -d /Applications/Docker.app ] &&
+            command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+            echo "Запускаю Docker Desktop..."
+            open -a Docker >/dev/null 2>&1 || true
+        else
+            ask_install_mac
+            ensure_homebrew
+            install_missing_mac_tools
+        fi
+    fi
+    if ! docker info >/dev/null 2>&1 && command -v colima >/dev/null 2>&1 &&
+        [ ! -d /Applications/Docker.app ]; then
+        echo "Запускаю Colima..."
+        colima start --runtime docker
+    fi
     attempt=0
-    while ! docker info >/dev/null 2>&1 && [ "$attempt" -lt 60 ]; do
+    while ! docker_ready && [ "$attempt" -lt 60 ]; do
         sleep 2
         attempt=$((attempt + 1))
     done
 fi
-if ! docker info >/dev/null 2>&1; then
-    echo "Docker daemon недоступен. Запустите Docker Desktop и повторите попытку." >&2
+if ! docker_ready; then
+    echo "Docker Engine и Compose недоступны. Проверьте запуск Colima или Docker Desktop и повторите попытку." >&2
     exit 1
 fi
 

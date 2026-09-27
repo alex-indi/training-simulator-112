@@ -3,32 +3,60 @@ $projectRoot = $PSScriptRoot
 $envFile = Join-Path $projectRoot '.env.docker'
 
 function Test-DockerReady {
-    $ErrorActionPreference = 'Continue'
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
+    docker compose version *> $null
+    if ($LASTEXITCODE -ne 0) { return $false }
     docker info *> $null
     return $LASTEXITCODE -eq 0
 }
 
 Push-Location $projectRoot
 try {
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        throw 'Установите Docker Desktop и запустите файл снова.'
-    }
-    docker compose version | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Docker Compose недоступен.' }
-
     $isWindowsHost = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
     if (-not (Test-DockerReady) -and $isWindowsHost) {
-        $desktop = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
-        if (Test-Path $desktop) {
-            Write-Output 'Запускаю Docker Desktop...'
+        $desktopCandidates = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\DockerDesktop\Docker Desktop.exe'),
+            (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe')
+        )
+        $desktop = $desktopCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if (-not $desktop) {
+            $answer = Read-Host 'Docker Engine и Compose не найдены. Установить Docker Desktop с docker.com? [д/Н]'
+            if ($answer -notmatch '^(д|да|y|yes)$') {
+                throw 'Установка отменена. Файлы и данные стенда не изменены.'
+            }
+            $architecture = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+            $installerUrl = "https://desktop.docker.com/win/main/$architecture/Docker%20Desktop%20Installer.exe"
+            $installerDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ut112-docker-" + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $installerDir | Out-Null
+            try {
+                $installer = Join-Path $installerDir 'Docker Desktop Installer.exe'
+                Write-Output 'Скачиваю официальный установщик Docker Desktop...'
+                Invoke-WebRequest -Uri $installerUrl -UseBasicParsing -OutFile $installer
+                $signature = Get-AuthenticodeSignature -FilePath $installer
+                if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Docker') {
+                    throw 'Не удалось проверить подпись установщика Docker Desktop.'
+                }
+                $process = Start-Process -FilePath $installer -ArgumentList @('install', '--user') -Wait -PassThru
+                if ($process.ExitCode -ne 0) { throw "Установщик Docker Desktop завершился с кодом $($process.ExitCode)." }
+            }
+            finally {
+                Remove-Item -LiteralPath $installerDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $desktop = $desktopCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $desktop) { throw 'Docker Desktop не найден после установки. Завершите его настройку и повторите запуск.' }
+        }
+        $dockerBin = Join-Path (Split-Path $desktop -Parent) 'resources\bin'
+        if (Test-Path $dockerBin) { $env:PATH = "$dockerBin;$env:PATH" }
+        if (-not (Test-DockerReady)) {
+            Write-Output 'Запускаю Docker Desktop. Завершите первоначальную настройку в его окне.'
             Start-Process $desktop
-            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            for ($attempt = 0; $attempt -lt 180; $attempt++) {
                 Start-Sleep -Seconds 2
                 if (Test-DockerReady) { break }
             }
         }
     }
-    if (-not (Test-DockerReady)) { throw 'Docker daemon недоступен. Запустите Docker Desktop.' }
+    if (-not (Test-DockerReady)) { throw 'Docker Engine и Compose недоступны. Проверьте настройку Docker и повторите запуск.' }
 
     if (-not (Test-Path $envFile)) {
         $template = [System.IO.File]::ReadAllText((Join-Path $projectRoot '.env.docker.example'))
