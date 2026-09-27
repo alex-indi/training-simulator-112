@@ -596,6 +596,20 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 )
                 assert simple_card.status_code == 201, simple_card.text
                 simple_card_id = simple_card.json()["id"]
+                additional = await client.patch(
+                    f"/api/incident-cards/{simple_card_id}/additional-conditions",
+                    json={"conditions": ["Запах дыма на лестнице"]},
+                )
+                assert additional.status_code == 200, additional.text
+                assert additional.json()["initial_state_snapshot"]["additional_conditions"] == [
+                    "Запах дыма на лестнице"
+                ]
+                assert (
+                    await client.patch(
+                        f"/api/incident-cards/{simple_card_id}/additional-conditions",
+                        json={"conditions": [" "]},
+                    )
+                ).status_code == 422
                 changed_facts = await client.patch(
                     f"/api/incident-cards/{simple_card_id}/facts",
                     json={"facts": {"floor": 2}},

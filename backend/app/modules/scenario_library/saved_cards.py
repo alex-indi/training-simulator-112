@@ -19,7 +19,12 @@ from app.modules.scenario_library.instance_models import (
     ScenarioInstance,
     ScenarioInstanceEvent,
 )
-from app.modules.scenario_library.instances import _initial_request, _record_usage, read_instance
+from app.modules.scenario_library.instances import (
+    AdditionalConditionsInput,
+    _initial_request,
+    _record_usage,
+    read_instance,
+)
 from app.modules.scenario_library.router import require_editor
 from app.modules.training.models import TrainingGroup, TrainingSession, TrainingSessionState
 from app.services.text_generation.renderer import TextGenerationRequest, renderer_for_database
@@ -333,6 +338,28 @@ async def rerender_card_text(
         raise HTTPException(409, "Новая формулировка не получена. Текст карточки не изменился")
     initial["render"] = render
     content["initial_state_snapshot"] = initial
+    card.snapshot = content
+    await database.commit()
+    return serialize(card)
+
+
+@router.patch("/{card_id}/additional-conditions")
+async def edit_card_additional_conditions(
+    card_id: int,
+    data: AdditionalConditionsInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    card = await get_card(database, card_id)
+    if user.role != UserRole.ADMIN and card.created_by_user_id != user.id:
+        raise HTTPException(403, "Редактировать карточку может только автор или администратор")
+    content = dict(card.snapshot)
+    initial = dict(content["initial_state_snapshot"])
+    initial["additional_conditions"] = data.conditions
+    content["initial_state_snapshot"] = initial
+    render = await (await renderer_for_database(database)).render(_initial_request(content))
+    await _record_usage(database, [render])
+    initial["render"] = render
     card.snapshot = content
     await database.commit()
     return serialize(card)
