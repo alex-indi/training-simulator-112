@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import styles from './ScenarioLibrary.module.css'
 import { difficultyLabels, renderOriginLabels } from './uiLabels.js'
 import { compactInstanceName, compactObjectName } from './scenarioDisplay.js'
+import StatusMessage from './StatusMessage.jsx'
 
 const steps = ['Основное', 'Тип происшествия', 'Тип объекта', 'Службы', 'Карточка и варианты', 'Работа служб', 'Оценивание', 'Предпросмотр']
 const eventTypes = { INITIAL_REPORT: 'Исходное сообщение', ADDITIONAL_INFO: 'Дополнительная информация', RESPONSE_MESSAGE: 'Сообщение группы', SITUATION_CHANGE: 'Изменение обстановки', SYSTEM_EVENT: 'Системное событие' }
@@ -211,9 +212,9 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
 
   return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
     {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя / методические материалы</small><h1>Библиотека сценариев</h1></div></header>}
-    {error && <p className={styles.error} role="alert">{error}</p>}
-    {notice && <p className={styles.notice} role="status">{notice}</p>}
-    {generationStatus && <p className={`${styles.generationStatus} ${styles.floatingGenerationStatus}`} role="status">{generationStatus}</p>}
+    <StatusMessage message={error} tone="error" />
+    <StatusMessage message={notice} tone="success" />
+    <StatusMessage message={generationStatus} />
     {generation && <div className={styles.content}>
       <div className={styles.topline}><div><h2>Карточка: {generation.name}</h2></div></div>
       {!generatedInstance && <section className={styles.panel}>

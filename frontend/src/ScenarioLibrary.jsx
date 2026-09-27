@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import styles from './ScenarioLibrary.module.css'
 import { difficultyLabels, renderOriginLabels } from './uiLabels.js'
 import IncidentTemplates from './IncidentTemplates.jsx'
+import StatusMessage from './StatusMessage.jsx'
 
 const options = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const variantFactLabels = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
@@ -188,8 +189,8 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
 
   return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
     {!embedded && <header className={styles.header}><div><small>Кабинет преподавателя</small><h1>Шаблоны инцидентов</h1></div></header>}
-    {error && <p className={styles.error} role="alert">{error}</p>}
-    {notice && <p className={styles.notice} role="status">{notice}</p>}
+    <StatusMessage message={error} tone="error" />
+    <StatusMessage message={notice} tone="success" />
     <div className={styles.content}>
       {!chosen && <>
         <div className={styles.topline}><div><h2>Выберите шаблон инцидента</h2><p>Карточки для занятия формируются из шаблона.</p></div></div>
@@ -216,7 +217,7 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
           </div>
           {!picker && session && !targets.length && <p>Сначала создайте общую группу или назначьте АРМ в занятии.</p>}
           <button type="button" disabled={busy || (!picker && (!session || !targets.length)) || Number(count) < 1 || Number(count) > 50} onClick={createBatch}>Сформировать</button>
-          {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
+          <StatusMessage message={generationStatus} />
         </section>}
 
         {!!cards.length && <>
@@ -231,7 +232,7 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
               <button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button>
               <button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button>
             </div>
-            {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
+            <StatusMessage message={generationStatus} />
           </section>
           <div className={styles.reviewLayout}>
             <nav className={styles.cardList} aria-label="Карточки набора">{cards.map((card, index) => {

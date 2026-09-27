@@ -44,6 +44,17 @@
 .generateForm .countField{flex:0 0 140px}
 .generateForm .inlineCheck{min-height:36px;margin:0}
 .shell input[type="checkbox"]{width:16px;height:16px;min-width:16px;min-height:16px;padding:0;accent-color:var(--dds-blue)}
+.panel .variantsHeading{margin:24px 0 8px}
+.variantsDescription{margin:0 0 16px}
+.shell .variantGroup{margin:0 0 12px;padding:12px 16px 14px}
+.variantGroupTitle{margin:0 0 8px;font-weight:700}
+.panel label:not(.variantChoice){margin-bottom:14px}
+.panel .variantChoice{display:flex;align-items:center;gap:8px;width:max-content;max-width:100%;margin:6px 0;font-weight:400;cursor:pointer}
+.variantChoice input{flex:0 0 auto;margin:0}
+.panel .variantsHeading{margin:24px 0 8px}
+.variantsDescription{margin:0 0 16px}
+.shell .variantGroup{margin:0 0 12px;padding:12px 16px 14px}
+.variantGroupTitle{margin:0 0 8px;font-weight:700}
 .cardList{gap:6px;padding-right:2px}
 .cardListItem{min-width:0;border:1px solid var(--dds-border);border-left:4px solid transparent;background:var(--dds-panel-bright)}
 .cardListItem:nth-child(even){background:#e6eaeb}

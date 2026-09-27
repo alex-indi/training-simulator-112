@@ -4,6 +4,7 @@ import PropTypes from 'prop-types'
 
 import styles from './App.module.css'
 import { responseSenderLabels } from './uiLabels.js'
+import StatusMessage from './StatusMessage.jsx'
 
 function ResponseChat({ assignment, incidentNumber, username, apiUrl, requestJson, formatDateTime }) {
   const [messages, setMessages] = useState([])
@@ -106,7 +107,7 @@ function ResponseChat({ assignment, incidentNumber, username, apiUrl, requestJso
             ))}
             <div ref={endRef} />
           </div>
-          {error && <p className={styles.chatError} role="alert">{error}</p>}
+          <StatusMessage message={error} tone="error" />
           <button type="button" onClick={requestState} disabled={busy}>Запросить состояние</button>
           <form className={styles.chatComposer} onSubmit={submit}>
             <input

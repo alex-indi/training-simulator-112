@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useState } from 'react'
 import styles from './AssessmentWorkspace.module.css'
+import StatusMessage from './StatusMessage.jsx'
 
 const actionNames = {
   START_RESPONSE: 'Начало реагирования', MARK_ARRIVAL: 'Прибытие',
@@ -45,7 +46,7 @@ function AssessmentWorkspace({ session, api, embedded = false }) {
 
   return <Root className={`${styles.shell} ${embedded ? styles.embedded : ''}`}>
     <h1>Результаты занятия · {session.title}</h1>
-    {error && <p role="alert" className={styles.error}>{error}</p>}
+    <StatusMessage message={error} tone="error" />
     {!report ? <p>Загружаем результаты…</p> : <>
       <div className={styles.summary}>
         <div><span>Обучаемых</span><strong>{report.summary.trainees}</strong></div>
