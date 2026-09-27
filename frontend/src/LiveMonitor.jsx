@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
+import { apiUrl } from './apiUrl.js'
 import styles from './LiveMonitor.module.css'
 import { ddsStatusLabels } from './uiLabels.js'
 import StatusMessage from './StatusMessage.jsx'
@@ -53,7 +54,7 @@ function LiveMonitor({ sessionId, user, api }) {
 
   useEffect(() => {
     refresh()
-    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+    const socket = io(apiUrl, {
       auth: { username: user.username },
     })
     socket.on('connect', () => { socket.emit('subscribe', { session_id: sessionId }); refresh() })

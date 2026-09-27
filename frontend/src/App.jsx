@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 
+import { apiUrl } from './apiUrl.js'
 import informationIcon from './assets/information.svg'
 import styles from './App.module.css'
 import AdminWorkspace from './AdminWorkspace.jsx'
@@ -10,7 +11,6 @@ import StatusMessage from './StatusMessage.jsx'
 import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels } from './uiLabels.js'
 import { initialOrderNumber, previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
-const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 const workstationLimit = 100
 
 const roleLabels = {

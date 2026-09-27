@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
+import { apiUrl } from './apiUrl.js'
 import styles from './TrainingEnrollment.module.css'
 import StatusMessage from './StatusMessage.jsx'
 
@@ -32,7 +33,7 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
   useEffect(() => {
     if (!selectedId || !ownRunId) return undefined
     let active = true
-    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+    const socket = io(apiUrl, {
       auth: { username: user.username },
     })
     const refresh = () => api('/api/training/sessions')

@@ -84,6 +84,61 @@ FRONTEND_ORIGINS=http://192.168.1.25:5173
 
 Для MVP запускайте один backend worker/process. Планировщик доставки дополнительно защищён PostgreSQL advisory lock, но это не режим работы нескольких backend-процессов для учебного стенда.
 
+## Production build
+
+Соберите frontend без `VITE_API_URL`, чтобы REST и Socket.IO обращались к тому же origin, с которого открыта страница:
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+Готовые статические файлы находятся в `frontend/dist/`; Node.js для их раздачи не нужен. При раздаче настройте SPA fallback на `index.html` для прямого открытия `/admin`, а `/api/*` и `/socket.io/*` направьте на backend без изменения пути. `GET /health` остаётся проверкой доступности backend.
+
+Запуск backend из отдельного терминала после настройки окружения и базы данных:
+
+```bash
+cd backend
+uv sync --frozen
+uv run uvicorn app.main:socket_app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --workers 1
+```
+
+Поддерживаемая конфигурация стенда — один backend container и один Uvicorn worker. `dev.py` предназначен для локальной разработки и не является production launcher. Для разработки с разными портами сохраните `VITE_API_URL=http://localhost:8000` в корневом `.env`.
+
+## Запуск через Docker
+
+Для запуска нужны Docker Engine и Compose. Python, Node.js, `uv` и PostgreSQL на компьютере устанавливать не требуется. На macOS дважды щёлкните `start-demo.command`, на Windows — `start-demo.cmd`. Скрипты проверяют Docker и Compose до запуска стенда. Если компонентов нет, они спросят согласие на установку: macOS использует Homebrew, Colima и Docker CLI без Docker Desktop; Windows при необходимости устанавливает Docker Desktop. Если рабочий Docker уже есть, повторная установка не выполняется. После установки Docker Desktop на Windows завершите первоначальную настройку в его окне. На Linux установите Docker Engine с Compose и выполните из корня репозитория:
+
+```bash
+sh ./start-demo.command
+```
+
+Файл сам создаёт `.env.docker` со случайным паролем, собирает и запускает контейнеры, ждёт их готовности и один раз загружает demo-данные в пустую базу. Пароль сохраняется между запусками и не попадает в Git. На macOS после запуска откроется браузер. Если `.env.docker` уже существует, файл сохранит его настройки. Для ручного запуска остаются команды:
+
+```bash
+cp .env.docker.example .env.docker
+# При ручном запуске замените POSTGRES_PASSWORD в .env.docker.
+docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker run --rm backend python -m app.scripts.bootstrap_demo
+```
+
+Откройте `http://localhost:8080` или `http://localhost:8080/admin`. `bootstrap_demo` нужен один раз после создания чистой базы: он сам применяет миграции и загружает справочники и demo-данные. Повторно запускать `seed_all` не требуется. Обычный старт backend применяет только миграции, без seed. По умолчанию AI выключен и используется локальный fallback; после загрузки и сборки образов стенд работает без внешних API и интернета. Для другого порта измените `APP_PORT`, а для внешнего origin — `FRONTEND_ORIGINS` в `.env.docker`.
+
+Для последующих запусков, просмотра состояния и логов, остановки:
+
+```bash
+docker compose --env-file .env.docker up -d
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker down
+```
+
+Данные PostgreSQL хранятся в именованном volume `postgres_data` и сохраняются после `down`. Сделайте резервную копию этого volume перед переносом или обновлением стенда. Команда `docker compose down -v` удаляет volume и **все данные занятий и результаты**. Для осознанного полного сброса используйте `sh scripts/docker-reset-demo.sh` (PowerShell: `scripts/docker-reset-demo.ps1`): скрипт запросит ввод `RESET`, удалит volume, поднимет стенд и выполнит bootstrap заново.
+
 ## Рабочий путь преподавателя
 
 Подготовка занятия состоит из четырёх шагов:
