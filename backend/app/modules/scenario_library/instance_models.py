@@ -73,6 +73,22 @@ class SavedIncidentCard(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class SavedIncidentCardPackage(Base):
+    """Instructor-curated ordered set of reusable library cards."""
+
+    __tablename__ = "saved_incident_card_packages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    card_ids: Mapped[list[int]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ScenarioInstanceEvent(Base):
     __tablename__ = "scenario_instance_events"
     __table_args__ = (CheckConstraint("offset_seconds >= 0", name="ck_instance_event_offset"),)
