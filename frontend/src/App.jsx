@@ -175,8 +175,7 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
-  const [loginSessions, setLoginSessions] = useState([])
-  const [loginSessionId, setLoginSessionId] = useState('')
+  const [loginSession, setLoginSession] = useState(null)
   const [loginWorkstation, setLoginWorkstation] = useState('')
   const [loginSessionsLoading, setLoginSessionsLoading] = useState(false)
   const [incidents, setIncidents] = useState([])
@@ -254,12 +253,9 @@ function App() {
   }, [])
 
   const loginUser = users.find((user) => user.username === loginUsername)
-  const loginSession = loginSessions.find((item) => String(item.id) === loginSessionId)
-
   useEffect(() => {
     if (loginUser?.role !== 'TRAINEE' || currentUser) {
-      setLoginSessions([])
-      setLoginSessionId('')
+      setLoginSession(null)
       setLoginWorkstation('')
       setLoginSessionsLoading(false)
       return undefined
@@ -276,8 +272,7 @@ function App() {
           || available.find((item) => item.state === 'ACTIVE' && item.own_run)
           || available.find((item) => item.own_run)
           || available[0]
-        setLoginSessions(available)
-        setLoginSessionId(preferred ? String(preferred.id) : '')
+        setLoginSession(preferred || null)
         setLoginWorkstation(preferred?.own_run?.workstation_number
           ? String(preferred.own_run.workstation_number)
           : '')
@@ -718,22 +713,6 @@ function App() {
                   <span className={styles.chevronIcon} aria-hidden="true" />
                 </div>
               </label>
-
-              {loginUser?.role === 'TRAINEE' && <label>
-                <span>Занятие</span>
-                <div className={styles.loginSelectField}>
-                  <select aria-label="Занятие" disabled={loginSessionsLoading || !loginSessions.length}
-                    onChange={(event) => {
-                      setLoginSessionId(event.target.value)
-                      const item = loginSessions.find((entry) => String(entry.id) === event.target.value)
-                      setLoginWorkstation(item?.own_run?.workstation_number ? String(item.own_run.workstation_number) : '')
-                    }} value={loginSessionId}>
-                    <option value="">Выберите занятие</option>
-                    {loginSessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-                  </select>
-                  <span className={styles.chevronIcon} aria-hidden="true" />
-                </div>
-              </label>}
 
               {loginUser?.role === 'TRAINEE' && <label>
                 <span>Рабочее место</span>
