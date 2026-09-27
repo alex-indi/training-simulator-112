@@ -136,6 +136,10 @@ class JoinRequest(BaseModel):
     workstation_number: int = Field(ge=1, le=100)
 
 
+class ConnectWorkstationRequest(BaseModel):
+    trainee_id: int
+
+
 class BulkAssignment(BaseModel):
     run_ids: list[int] = Field(min_length=1)
     dds_profile: str | None = Field(default=None, max_length=120)

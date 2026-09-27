@@ -13,7 +13,12 @@ async function login(page, username) {
   const currentUser = page.getByRole('combobox', { name: 'Текущий пользователь' })
   await expect(password.or(currentUser).first()).toBeVisible()
   if (await password.isVisible()) {
-    await page.getByLabel('Пользователь').selectOption(username)
+    if (['admin', 'instructor', 'trainee'].includes(username)) {
+      await page.getByLabel('Пользователь').selectOption(username)
+    } else {
+      await page.getByRole('button', { name: 'Ввести логин другого пользователя' }).click()
+      await page.getByLabel('Пользователь').fill(username)
+    }
     await password.fill('учебный')
     await page.getByRole('button', { name: 'Войти' }).click()
   } else {
@@ -57,7 +62,7 @@ test('shared scenario is claimed once and crew chat stays on its incident', asyn
       data: { run_ids: grouped.runs.map((run) => run.id), group_id: group.id },
     }))
     const template = (await json(await api.get('/api/scenario-templates?status=READY')))
-      .items.find((item) => item.name === 'Пожар в образовательном учреждении')
+      .items.find((item) => item.seed_code === 'DEMO_EDUCATION_FIRE_001')
     expect(template).toBeTruthy()
     const cards = await json(await api.post(`/api/scenario-templates/${template.id}/batch`, {
       data: { count: 5, seed: 0, training_session_id: session.id },

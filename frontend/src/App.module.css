@@ -147,9 +147,15 @@
   pointer-events: none;
 }
 
-.loginSessionName {
-  color: rgb(255 255 255 / 72%);
+.loginModeButton {
+  align-self: flex-start;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--training-accent);
+  cursor: pointer;
   font-size: 11px;
+  text-align: left;
 }
 
 .passwordField {
@@ -238,6 +244,16 @@
   color: #172026;
   font-size: 11px;
 }
+.sessionReconnect {
+  margin: 18px auto;
+  width: min(760px, calc(100% - 40px));
+  padding: 18px 22px;
+  border: 1px solid #aeb7bb;
+  background: #f7fafc;
+  box-shadow: 0 8px 24px rgb(29 43 51 / 18%);
+}
+.sessionReconnect h2 { margin: 0 0 6px; font-size: 20px; }
+.sessionReconnect p { margin: 0 0 14px; color: #52616a; }
 .errorBanner {
   position: fixed;
   z-index: 30;
@@ -1180,67 +1196,55 @@
 
 .reportPanel {
   min-height: 380px;
-  padding: 12px 9px;
+  padding: 5px 9px;
   background: #f7fafc;
-}
-
-.reportPanel p {
-  margin: 3px 0 9px;
-  font-size: 11px;
-}
-
-.reportPanel span {
-  color: #69757a;
-  font-size: 9px;
 }
 
 .incidentActivity {
   display: grid;
-  gap: 7px;
-  margin-top: 18px;
-  padding-top: 10px;
-  border-top: 1px solid #b9c8cf;
-}
-
-.incidentActivity h2 {
-  margin: 0 0 2px;
-  font-size: 13px;
+  gap: 1px;
+  align-content: start;
 }
 
 .activityEntry,
 .brigadeActivity {
-  padding: 7px 9px;
-  border: 1px solid #cbd7dd;
-  background: #fff;
+  padding: 4px 3px 5px;
+  overflow-wrap: anywhere;
 }
 
 .brigadeActivity {
-  border: 2px solid #af611e;
-  background: #fff1dc;
+  padding-left: 8px;
+  border-left: 3px solid #ac5a16;
+  background: #fff0d9;
 }
 
-.activityEntry strong,
-.brigadeActivity strong {
-  display: block;
+.activityMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+  line-height: 1.35;
+}
+
+.activityMeta strong {
   font-size: 10px;
 }
 
-.brigadeActivity strong {
-  color: #843e0c;
-  letter-spacing: .06em;
+.brigadeActivity .activityMeta strong {
+  color: #8b440d;
 }
 
-.activityEntry time,
-.brigadeActivity time {
-  display: block;
-  margin-top: 2px;
-  color: #52616a;
-  font-size: 9px;
+.activityMeta time {
+  color: #25333a;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .incidentActivity article p {
-  margin: 5px 0 0;
+  margin: 1px 0 0;
   font-size: 11px;
+  line-height: 1.35;
 }
 
 .classificationColumn {

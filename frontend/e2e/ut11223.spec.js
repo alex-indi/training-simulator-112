@@ -21,7 +21,12 @@ async function login(page, username) {
   const currentUser = page.getByRole('combobox', { name: 'Текущий пользователь' })
   await expect(password.or(currentUser).first()).toBeVisible()
   if (await password.isVisible()) {
-    await page.getByLabel('Пользователь').selectOption(username)
+    if (['admin', 'instructor', 'trainee'].includes(username)) {
+      await page.getByLabel('Пользователь').selectOption(username)
+    } else {
+      await page.getByRole('button', { name: 'Ввести логин другого пользователя' }).click()
+      await page.getByLabel('Пользователь').fill(username)
+    }
     await password.fill('учебный')
     await page.getByRole('button', { name: 'Войти' }).click()
   } else {

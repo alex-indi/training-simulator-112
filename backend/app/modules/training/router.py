@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,8 @@ from app.db.dependencies import get_database_session
 from app.modules.admin.models import UserGroup
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
+from app.modules.identity.router import WORKSTATION_ONLINE_WINDOW
+from app.modules.incidents.models import Incident
 from app.modules.scenario_library.instance_models import ScenarioInstance
 from app.modules.training.models import (
     QueueMode,
@@ -28,6 +31,7 @@ from app.modules.training.models import (
 )
 from app.modules.training.schemas import (
     BulkAssignment,
+    ConnectWorkstationRequest,
     GroupMemberRead,
     GroupRead,
     GroupWrite,
@@ -49,6 +53,7 @@ from app.modules.training.workflow import (
     prepare_training_session,
     start_training_session,
 )
+from app.realtime import publish_session_event
 
 router = APIRouter(prefix="/api/training/sessions", tags=["training sessions"])
 template_router = APIRouter(prefix="/api/training/templates", tags=["training templates"])
@@ -593,6 +598,34 @@ async def join_training_session(
         raise HTTPException(status_code=409, detail="Рабочее место уже занято") from error
 
 
+@router.post("/{training_session_id}/connect-workstation", response_model=TrainingSessionRead)
+async def connect_workstation(
+    training_session_id: int,
+    payload: ConnectWorkstationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> TrainingSessionRead:
+    item = await _load_session(database, training_session_id, for_update=True)
+    _ensure_session_owner(item, current_user)
+    trainee = await database.get(User, payload.trainee_id)
+    now = datetime.now(UTC)
+    if (
+        trainee is None
+        or trainee.role != UserRole.TRAINEE
+        or not trainee.is_active
+        or trainee.workstation_number is None
+        or trainee.workstation_last_seen_at is None
+        or now - trainee.workstation_last_seen_at >= WORKSTATION_ONLINE_WINDOW
+    ):
+        raise HTTPException(status_code=409, detail="Обучаемый не подключён к АРМ")
+    return await join_training_session(
+        training_session_id,
+        JoinRequest(workstation_number=trainee.workstation_number),
+        trainee,
+        database,
+    )
+
+
 @router.post("/{training_session_id}/heartbeat", status_code=204)
 async def heartbeat(
     training_session_id: int,
@@ -612,6 +645,53 @@ async def heartbeat(
     if result.rowcount != 1:
         raise HTTPException(status_code=404, detail="Участие не найдено")
     await database.commit()
+
+
+class WorkstationView(BaseModel):
+    incident_id: int | None = None
+
+
+@router.put("/{training_session_id}/workstation-view", status_code=204)
+async def set_workstation_view(
+    training_session_id: int,
+    payload: WorkstationView,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> None:
+    """Share only the selected card with the instructor; opening it has no side effects."""
+    if current_user.role != UserRole.TRAINEE:
+        raise HTTPException(status_code=404, detail="Участие не найдено")
+    run = await database.scalar(
+        select(TrainingRun).where(
+            TrainingRun.training_session_id == training_session_id,
+            TrainingRun.trainee_id == current_user.id,
+        )
+    )
+    if run is None:
+        raise HTTPException(status_code=404, detail="Участие не найдено")
+    if payload.incident_id is not None:
+        incident = await database.scalar(
+            select(Incident).where(
+                Incident.id == payload.incident_id,
+                Incident.training_session_id == training_session_id,
+            )
+        )
+        if incident is None or not (
+            incident.claimed_by_training_run_id == run.id
+            or incident.training_run_id == run.id
+            or (
+                incident.training_group_id is not None
+                and incident.training_group_id == run.group_id
+                and run.queue_mode == QueueMode.SHARED_QUEUE
+            )
+        ):
+            raise HTTPException(status_code=404, detail="Карточка не найдена")
+    if run.open_incident_id != payload.incident_id:
+        run.open_incident_id = payload.incident_id
+        await database.commit()
+        await publish_session_event(
+            "training.workstation_view_changed", training_session_id, payload.incident_id
+        )
 
 
 @router.post("/{training_session_id}/groups", response_model=TrainingSessionRead)

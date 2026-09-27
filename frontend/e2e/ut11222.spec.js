@@ -45,7 +45,10 @@ test('instructor confirms result before trainee can see it', async ({ browser })
     await instructor.getByRole('button', { name: 'Подтвердить итог' }).click()
     await expect(instructor.getByText(`История корректировок (${count + 1})`)).toBeVisible()
 
-    await trainee.addInitScript(() => sessionStorage.setItem('ut112-demo-username', 'trainee'))
+    await trainee.addInitScript(() => {
+      sessionStorage.setItem('ut112-demo-username', 'trainee')
+      sessionStorage.setItem('ut112-workstation-number', '1')
+    })
     await trainee.goto('/')
     const history = trainee.getByText(/Результаты завершённых занятий/)
     await expect(history).toBeVisible()

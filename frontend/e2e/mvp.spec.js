@@ -7,23 +7,6 @@ async function json(response) {
   return response.json()
 }
 
-async function login(page, username, workstation = 1) {
-  await page.goto('/')
-  const password = page.locator('input[type="password"]')
-  const currentUser = page.getByRole('combobox', { name: 'Текущий пользователь' })
-  await expect(password.or(currentUser).first()).toBeVisible()
-  if (await password.isVisible()) {
-    await page.getByLabel('Пользователь').selectOption(username)
-    await password.fill('учебный')
-    const workstationSelect = page.getByLabel('Рабочее место')
-    await expect(workstationSelect).toBeEnabled()
-    await workstationSelect.selectOption(String(workstation))
-    await page.getByRole('button', { name: 'Войти' }).click()
-  } else {
-    await currentUser.selectOption(username)
-  }
-}
-
 test('MVP: общий пул, claim, принятие и сообщение бригады 101', async ({ page }) => {
   test.setTimeout(70000)
   const instructor = await apiRequest.newContext({
@@ -41,7 +24,16 @@ test('MVP: общий пул, claim, принятие и сообщение бр
       data: { title, mode: 'FIXED_SET', workstation_count: 1 },
     }))
 
-    await login(page, 'trainee', 1)
+    await json(await trainee.post(`/api/training/sessions/${session.id}/join`, {
+      data: { workstation_number: 1 },
+    }))
+    await page.addInitScript((id) => {
+      sessionStorage.setItem('ut112-demo-username', 'trainee')
+      sessionStorage.setItem('ut112-trainee-session-id', String(id))
+      sessionStorage.setItem('ut112-workstation-number', '1')
+    }, session.id)
+    await page.goto('/')
+    await expect(page.getByRole('combobox', { name: 'Текущий пользователь' })).toHaveValue('trainee')
     await expect.poll(async () => {
       const sessions = await json(await trainee.get('/api/training/sessions'))
       return sessions.find((item) => item.id === session.id)?.own_run?.id
@@ -62,7 +54,7 @@ test('MVP: общий пул, claim, принятие и сообщение бр
     expect(assigned.runs[0].group_id).toBe(group.id)
 
     const templates = await json(await instructor.get('/api/scenario-templates/simple'))
-    const template = templates.find((item) => item.name === 'Пожар в образовательном учреждении')
+    const template = templates.find((item) => item.seed_code === 'DEMO_EDUCATION_FIRE_001')
     expect(template).toBeTruthy()
 
     const cards = await json(await instructor.post(`/api/scenario-templates/${template.id}/batch`, {

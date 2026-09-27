@@ -1,0 +1,10 @@
+[
+  {"seed_code": "DEMO_CARD_SCHOOL_01", "template": "DEMO_EDUCATION_FIRE_001", "seed": 101, "object_index": 0, "narrative": "Дежурный сотрудник организует выход людей из здания. Уточняется, все ли помещения проверены; подъезд пожарной техники свободен."},
+  {"seed_code": "DEMO_CARD_SCHOOL_02", "template": "DEMO_EDUCATION_FIRE_001", "seed": 205, "object_index": 1, "narrative": "Сотрудники школы начали эвакуацию. Заявитель остаётся у главного входа и готов встретить прибывшую группу; сведения об очаге уточняются."},
+  {"seed_code": "DEMO_CARD_METRO_SMOKE_01", "template": "DEMO_METRO_SMOKE_001", "seed": 310, "object_index": 0, "narrative": "Дежурный станции ограничил проход в указанную зону и направляет пассажиров к выходу. Источник дыма пока не установлен."},
+  {"seed_code": "DEMO_CARD_METRO_SMOKE_02", "template": "DEMO_METRO_SMOKE_001", "seed": 411, "object_index": 1, "narrative": "Сотрудник станции сообщает о скоплении пассажиров у выхода. Требуется уточнить безопасный маршрут для группы реагирования."},
+  {"seed_code": "DEMO_CARD_POLYCLINIC_01", "template": "DEMO_POLYCLINIC_FIRE_001", "seed": 512, "object_index": 0, "narrative": "Администратор выводит посетителей из ближайших кабинетов. Доступ к очагу возможен через служебный вход; наличие людей в смежных помещениях уточняется."},
+  {"seed_code": "DEMO_CARD_POLYCLINIC_02", "template": "DEMO_POLYCLINIC_FIRE_001", "seed": 613, "object_index": 1, "narrative": "Персонал поликлиники сообщает о задымлении и проверяет соседние помещения. У главного входа ожидает сотрудник для встречи бригады."},
+  {"seed_code": "DEMO_CARD_METRO_FIRE_01", "template": "DEMO_METRO_FIRE_001", "seed": 714, "object_index": 2, "narrative": "Дежурный станции ограничил доступ к месту происшествия. Пассажиропоток переводят к запасному выходу; схему прохода к очагу уточняют."},
+  {"seed_code": "DEMO_CARD_METRO_FIRE_02", "template": "DEMO_METRO_FIRE_001", "seed": 815, "object_index": 3, "narrative": "Станционный персонал сообщает о дыме в технической зоне и временно перекрывает вход. После ликвидации очага требуется отдельно подтвердить завершение работ в карточке."}
+]

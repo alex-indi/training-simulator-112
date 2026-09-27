@@ -44,6 +44,12 @@ def test_demo_seed_is_idempotent_updates_records_and_preserves_runtime() -> None
                         WHERE seed_code = 'DEMO_DDS_UNIT_01'
                     """)
                 )
+                await connection.execute(
+                    text(
+                        "UPDATE users SET password_hash = 'temporary' "
+                        "WHERE username = 'instructor'"
+                    )
+                )
 
             first = await seed_demo()
             second = await seed_demo()
@@ -57,6 +63,9 @@ def test_demo_seed_is_idempotent_updates_records_and_preserves_runtime() -> None
                     text("SELECT count(*) FROM training_sessions WHERE id = :id"),
                     {"id": session_id},
                 ) == 1
+                assert await connection.scalar(
+                    text("SELECT password_hash FROM users WHERE username = 'instructor'")
+                ) is None
         finally:
             if session_id is not None:
                 async with engine.begin() as connection:

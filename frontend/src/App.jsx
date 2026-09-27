@@ -11,6 +11,7 @@ import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels } from './
 import { initialOrderNumber, previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+const workstationLimit = 100
 
 const roleLabels = {
   ADMIN: 'Администратор',
@@ -173,14 +174,15 @@ function App() {
   const [users, setUsers] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [loginUsername, setLoginUsername] = useState('')
+  const [manualLogin, setManualLogin] = useState(false)
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
-  const [loginSessions, setLoginSessions] = useState([])
-  const [loginSessionId, setLoginSessionId] = useState('')
   const [loginWorkstation, setLoginWorkstation] = useState('')
-  const [loginSessionsLoading, setLoginSessionsLoading] = useState(false)
+  const [workstationNumber, setWorkstationNumber] = useState(() => Number(window.sessionStorage.getItem('ut112-workstation-number')) || null)
   const [incidents, setIncidents] = useState([])
+  const [trainingSessionId, setTrainingSessionId] = useState(() => Number(window.sessionStorage.getItem('ut112-trainee-session-id')) || null)
   const [joinedSessionId, setJoinedSessionId] = useState(null)
+  const [activeTrainingSession, setActiveTrainingSession] = useState(null)
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [completedSessionId, setCompletedSessionId] = useState(null)
   const [dismissedCompletedId, setDismissedCompletedId] = useState(null)
@@ -223,6 +225,20 @@ function App() {
   }, [currentUser])
 
   useEffect(() => {
+    if (currentUser?.role !== 'TRAINEE' || !workstationNumber) return undefined
+    let active = true
+    requestJson('/api/users/workstation', currentUser.username, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workstation_number: workstationNumber }),
+    }).catch((cause) => { if (active) setError(cause.message) })
+    const heartbeat = () => requestJson('/api/users/workstation/heartbeat', currentUser.username, {
+      method: 'POST',
+    }).catch((cause) => { if (active) setError(cause.message) })
+    const timer = window.setInterval(heartbeat, 20000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [currentUser, workstationNumber])
+
+  useEffect(() => {
     const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
     requestJson('/api/users/demo')
       .then(async (demoUsers) => {
@@ -236,6 +252,10 @@ function App() {
         if (preferredUsername) {
           try {
             const selected = await requestJson('/api/users/me', preferredUsername)
+            if (selected.role === 'TRAINEE' && !Number(window.sessionStorage.getItem('ut112-workstation-number'))) {
+              window.sessionStorage.removeItem('ut112-demo-username')
+              return
+            }
             window.sessionStorage.setItem('ut112-demo-username', selected.username)
             setCurrentUser(selected)
           } catch {
@@ -247,38 +267,12 @@ function App() {
       .finally(() => setLoading(false))
   }, [])
 
-  const loginUser = users.find((user) => user.username === loginUsername)
-  const loginSession = loginSessions.find((item) => String(item.id) === loginSessionId)
-
-  useEffect(() => {
-    if (loginUser?.role !== 'TRAINEE' || currentUser) {
-      setLoginSessions([])
-      setLoginSessionId('')
-      setLoginWorkstation('')
-      setLoginSessionsLoading(false)
-      return undefined
-    }
-
-    let active = true
-    setLoginSessionsLoading(true)
-    requestJson('/api/training/sessions', loginUser.username)
-      .then((items) => {
-        if (!active) return
-        const available = items.filter((item) => ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
-        const preferred = available.find((item) => item.state === 'ACTIVE' && item.own_run)
-          || available.find((item) => item.own_run)
-          || available[0]
-        setLoginSessions(available)
-        setLoginSessionId(preferred ? String(preferred.id) : '')
-        setLoginWorkstation(preferred?.own_run?.workstation_number
-          ? String(preferred.own_run.workstation_number)
-          : '')
-      })
-      .catch((requestError) => { if (active) setError(requestError.message) })
-      .finally(() => { if (active) setLoginSessionsLoading(false) })
-    return () => { active = false }
-  }, [currentUser, loginUser])
-
+  const loginUser = users.find((user) =>
+    user.username.toLocaleLowerCase('ru-RU') === loginUsername.trim().toLocaleLowerCase('ru-RU'),
+  )
+  const quickLoginUsers = users.filter((user) =>
+    ['admin', 'instructor', 'trainee'].includes(user.username),
+  )
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
@@ -289,16 +283,27 @@ function App() {
           requestJson('/api/incidents', currentUser.username),
         ])
         if (!active) return
-        const currentSession = sessions.find((item) => item.state === 'ACTIVE' && item.own_run)
-        const joinedSession = currentSession
-          || sessions.find((item) => ['DRAFT', 'READY'].includes(item.state) && item.own_run)
-        const lastCompleted = sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
+        const preferred = sessions.find((item) => item.id === trainingSessionId && item.own_run)
+        const nextRunSession = sessions.find((item) => item.own_run
+          && (!preferred || item.id > preferred.id)
+          && ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
+        const joinedSession = preferred?.state === 'COMPLETED'
+          ? nextRunSession || preferred
+          : preferred || nextRunSession
+        const currentSession = joinedSession?.state === 'ACTIVE' ? joinedSession : null
+        const lastCompleted = preferred?.state === 'COMPLETED' ? preferred
+          : sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
+        if (joinedSession && joinedSession.id !== trainingSessionId) {
+          window.sessionStorage.setItem('ut112-trainee-session-id', String(joinedSession.id))
+          setTrainingSessionId(joinedSession.id)
+        }
         const currentItems = currentSession ? items.filter((item) => item.training_session_id === currentSession.id) : []
         if (activeSessionIdRef.current !== (currentSession?.id || null)) {
           activeSessionIdRef.current = currentSession?.id || null
           setFilters(emptyFilters)
         }
         setActiveSessionId(currentSession?.id || null)
+        setActiveTrainingSession(currentSession || null)
         setJoinedSessionId(joinedSession?.id || null)
         setCompletedSessionId(lastCompleted?.id || null)
         setIncidents(currentItems)
@@ -331,10 +336,10 @@ function App() {
     socket.on('incident.claimed', refresh)
     socket.on('incident.updated', refresh)
     socket.on('training.control_changed', refresh)
-    const fallback = window.setInterval(refresh, 30000)
+    const fallback = window.setInterval(refresh, 5000)
     refresh()
     return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
-  }, [currentUser])
+  }, [currentUser, trainingSessionId])
 
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE' || !joinedSessionId) return undefined
@@ -351,6 +356,14 @@ function App() {
   useEffect(() => {
     selectedIncidentId.current = selectedIncident?.id || null
   }, [selectedIncident?.id])
+
+  useEffect(() => {
+    if (!activeSessionId || currentUser?.role !== 'TRAINEE') return
+    requestJson(`/api/training/sessions/${activeSessionId}/workstation-view`, currentUser.username, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ incident_id: null }),
+    }).catch((cause) => setError(cause.message))
+  }, [activeSessionId, currentUser])
 
   useEffect(() => {
     if (!selectedIncident) return
@@ -403,15 +416,18 @@ function App() {
         body: JSON.stringify({ username: demoUser.username, password: loginPassword }),
       })
       if (user.role === 'TRAINEE') {
-        if (!loginSession || !loginWorkstation) {
+        if (!loginWorkstation) {
           throw new Error('Выберите рабочее место')
         }
-        await requestJson(`/api/training/sessions/${loginSession.id}/join`, user.username, {
-          method: 'POST',
+        await requestJson('/api/users/workstation', user.username, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ workstation_number: Number(loginWorkstation) }),
         })
-        setJoinedSessionId(loginSession.id)
+        window.sessionStorage.setItem('ut112-workstation-number', loginWorkstation)
+        window.sessionStorage.removeItem('ut112-trainee-session-id')
+        setWorkstationNumber(Number(loginWorkstation))
+        setTrainingSessionId(null)
       }
       window.sessionStorage.setItem('ut112-demo-username', user.username)
       setCurrentUser(user)
@@ -424,11 +440,19 @@ function App() {
   }
 
   const logout = () => {
+    if (currentUser?.role === 'TRAINEE' && workstationNumber) {
+      requestJson('/api/users/workstation', currentUser.username, { method: 'DELETE' }).catch(() => {})
+    }
     window.sessionStorage.removeItem('ut112-demo-username')
+    window.sessionStorage.removeItem('ut112-trainee-session-id')
+    window.sessionStorage.removeItem('ut112-workstation-number')
     setCurrentUser(null)
+    setWorkstationNumber(null)
+    setTrainingSessionId(null)
     setIncidents([])
     setJoinedSessionId(null)
     setActiveSessionId(null)
+    setActiveTrainingSession(null)
     activeSessionIdRef.current = null
     setCompletedSessionId(null)
     setDismissedCompletedId(null)
@@ -451,9 +475,18 @@ function App() {
 
   const selectUser = async (event) => {
     const demoUsername = event.target.value
+    if (currentUser?.role === 'TRAINEE' && workstationNumber) {
+      requestJson('/api/users/workstation', currentUser.username, { method: 'DELETE' }).catch(() => {})
+    }
     setError('')
     setIncidents([])
+    window.sessionStorage.removeItem('ut112-trainee-session-id')
+    window.sessionStorage.removeItem('ut112-workstation-number')
+    setWorkstationNumber(null)
+    setTrainingSessionId(null)
+    setJoinedSessionId(null)
     setActiveSessionId(null)
+    setActiveTrainingSession(null)
     activeSessionIdRef.current = null
     setCompletedSessionId(null)
     setDismissedCompletedId(null)
@@ -470,6 +503,13 @@ function App() {
 
     try {
       const selected = await requestJson('/api/users/me', demoUsername)
+      if (selected.role === 'TRAINEE') {
+        window.sessionStorage.removeItem('ut112-demo-username')
+        setCurrentUser(null)
+        setLoginUsername(selected.username)
+        setLoading(false)
+        return
+      }
       window.sessionStorage.setItem('ut112-demo-username', selected.username)
       setCurrentUser(selected)
     } catch (requestError) {
@@ -497,6 +537,10 @@ function App() {
       ].filter((service) => service && service.trim().toUpperCase() !== 'ДДС'))]
       const own = services.includes('Служба 101') ? 'Служба 101' : cardServiceName(openedIncident.viewer_dds_profile)
       setSelectedIncident(openedIncident)
+      await requestJson(`/api/training/sessions/${openedIncident.training_session_id}/workstation-view`, currentUser.username, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incident_id: openedIncident.id }),
+      }).catch((cause) => setError(cause.message))
       setPreviewStatuses({})
       setSelectedService(openedIncident.can_edit && openedIncident.viewer_dds_profile === 'ДДС' && !services.includes('Служба 101')
         ? 'Служба 102'
@@ -517,6 +561,10 @@ function App() {
   }
 
   const closeCard = () => {
+    if (selectedIncident) requestJson(`/api/training/sessions/${selectedIncident.training_session_id}/workstation-view`, currentUser.username, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ incident_id: null }),
+    }).catch((cause) => setError(cause.message))
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)
@@ -640,22 +688,38 @@ function App() {
             <div className={styles.loginIdentityRow}>
               <label>
                 <span>Пользователь</span>
-                <div className={styles.loginSelectField}>
+                {manualLogin ? <input
+                  autoComplete="username"
+                  disabled={loading}
+                  onChange={(event) => { setLoginUsername(event.target.value); setLoginWorkstation('') }}
+                  placeholder="Введите логин пользователя"
+                  value={loginUsername}
+                /> : <div className={styles.loginSelectField}>
                   <select
                     autoComplete="username"
-                    disabled={loading || !users.length}
-                    onChange={(event) => setLoginUsername(event.target.value)}
+                    disabled={loading || !quickLoginUsers.length}
+                    onChange={(event) => { setLoginUsername(event.target.value); setLoginWorkstation('') }}
                     value={loginUsername}
                   >
-                    {!users.length && <option value="">Загрузка пользователей…</option>}
-                    {users.map((user) => (
+                    {!quickLoginUsers.length && <option value="">Загрузка пользователей…</option>}
+                    {quickLoginUsers.map((user) => (
                       <option key={user.id} value={user.username}>
                         {user.full_name}
                       </option>
                     ))}
                   </select>
                   <span className={styles.chevronIcon} aria-hidden="true" />
-                </div>
+                </div>}
+                <button
+                  className={styles.loginModeButton}
+                  onClick={() => {
+                    setManualLogin((current) => !current)
+                    setLoginUsername(manualLogin ? quickLoginUsers.find((user) => user.role === 'TRAINEE')?.username || quickLoginUsers[0]?.username || '' : '')
+                    setLoginWorkstation('')
+                    setError('')
+                  }}
+                  type="button"
+                >{manualLogin ? 'Выбрать из списка' : 'Ввести логин другого пользователя'}</button>
               </label>
 
               {loginUser?.role === 'TRAINEE' && <label>
@@ -663,19 +727,17 @@ function App() {
                 <div className={styles.loginSelectField}>
                   <select
                     aria-label="Рабочее место"
-                    disabled={loginSessionsLoading || !loginSession}
                     onChange={(event) => setLoginWorkstation(event.target.value)}
                     required
                     value={loginWorkstation}
                   >
-                    <option value="">{loginSessionsLoading ? 'Загрузка АРМ…' : loginSession ? 'Выберите АРМ' : 'Нет доступного занятия'}</option>
-                    {Array.from({ length: loginSession?.workstation_count || 0 }, (_, index) => index + 1).map((number) => (
+                    <option value="">Выберите АРМ</option>
+                    {Array.from({ length: workstationLimit }, (_, index) => index + 1).map((number) => (
                       <option key={number} value={number}>АРМ {String(number).padStart(2, '0')}</option>
                     ))}
                   </select>
                   <span className={styles.chevronIcon} aria-hidden="true" />
                 </div>
-                {loginSession && <small className={styles.loginSessionName}>{loginSession.title}</small>}
               </label>}
             </div>
             <label>
@@ -706,7 +768,7 @@ function App() {
           </form>
 
           <footer className={styles.loginFooter}>
-            <div><span>Локальный demo-доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
+            <div><span>Учебный доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
             <p>Интерфейс имитирует рабочее место ДДС. Не используйте реальные учётные данные.</p>
           </footer>
         </section>
@@ -758,6 +820,7 @@ function App() {
     : selectedIncident?.actions || []
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const incidentFeed = selectedIncident ? [
+    { key: 'report', kind: 'REPORT', title: incidentSourceLabels[selectedIncident.source] || selectedIncident.source, body: selectedIncident.description, created_at: selectedIncident.reported_at },
     { key: 'delivered', kind: 'SYSTEM', title: 'Система-112', body: 'Карточка поступила', created_at: selectedIncident.delivered_at },
     ...(selectedIncident.opened_at ? [{ key: 'opened', kind: 'SYSTEM', title: 'Система-112', body: 'Карточка открыта', created_at: selectedIncident.opened_at }] : []),
     ...(selectedIncident.scenario_events || []).map((item) => ({ key: `scenario-${item.id}`, kind: 'SYSTEM', title: 'Новая вводная', body: item.body, created_at: item.created_at })),
@@ -770,11 +833,18 @@ function App() {
   return (
     <main className={styles.armShell}>
       <StatusMessage message={error ? `Ошибка: ${error}` : ''} tone="error" />
+      <StatusMessage message={activeTrainingSession?.paused_at ? 'ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" duration={86_400_000} />
+      <StatusMessage message={!activeTrainingSession?.paused_at && activeTrainingSession?.own_run?.paused_at ? 'ВАШЕ РАБОЧЕЕ МЕСТО ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" duration={86_400_000} />
       <StatusMessage
-        message={showCompletedNotice ? 'Занятие завершено преподавателем' : ''}
+        message={showCompletedNotice ? 'Занятие завершено' : ''}
         tone="success"
         onDismiss={() => setDismissedCompletedId(completedSessionId)}
       />
+
+      {!activeSessionId && <section className={styles.sessionReconnect} aria-label="Подключение к занятию">
+        <h2>АРМ {String(workstationNumber).padStart(2, '0')} подключён</h2>
+        <p>Ожидайте, пока преподаватель подключит рабочее место к занятию.</p>
+      </section>}
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
@@ -828,13 +898,10 @@ function App() {
                 <button type="button" disabled title="Открыть точку происшествия на карте">⌖</button>
               </div>
               <div className={styles.reportPanel}>
-                <strong>{formatDateTime(selectedIncident.reported_at)}</strong>
-                <p>{selectedIncident.description}</p>
-                <span>Источник: {incidentSourceLabels[selectedIncident.source] || selectedIncident.source}</span>
                 <section className={styles.incidentActivity} aria-label="Информация по происшествию">
-                  <h2>Информация по происшествию</h2>
                   {incidentFeed.map((item) => <article key={item.key} className={item.kind === 'TRAINING_BRIGADE' ? styles.brigadeActivity : styles.activityEntry}>
-                    <strong>{item.title}</strong><time>{formatDateTime(item.created_at)}</time><p>{item.body}</p>
+                    <div className={styles.activityMeta}><time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time><strong>{item.title}</strong></div>
+                    <p>{item.body}</p>
                   </article>)}
                 </section>
               </div>

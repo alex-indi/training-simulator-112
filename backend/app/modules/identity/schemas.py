@@ -1,5 +1,7 @@
 """API-схемы пользователей тренажёра."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.identity.models import UserRole
@@ -21,3 +23,14 @@ class UserLogin(BaseModel):
 
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1, max_length=128)
+
+
+class WorkstationClaim(BaseModel):
+    workstation_number: int = Field(ge=1, le=100)
+
+
+class WorkstationPresenceRead(BaseModel):
+    user_id: int
+    trainee_name: str
+    workstation_number: int
+    last_seen_at: datetime
