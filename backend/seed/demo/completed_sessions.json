@@ -1,0 +1,28 @@
+[
+  {
+    "seed_code": "DEMO_HISTORY_SHIFT_01",
+    "title": "[Демо] Дневная смена: школа и метро",
+    "topic": "Первичное решение и своевременное отражение этапов реагирования",
+    "started_at": "2026-09-24T07:00:00+00:00",
+    "group_code": "DEMO-DDS-01",
+    "cases": [
+      {"card": "DEMO_CARD_SCHOOL_01", "trainee": "trainee", "offset": 60, "decision_delay": 18, "stage_delays": [18, 24, 22, 20], "outcome": "COMPLETED", "dispatch_message": "Карточку принял. Уточняю доступ к зданию и сведения об эвакуации.", "comment": "Решение принято вовремя. Статусы ДДС обновлялись после подтверждений учебной бригады; последовательность выдержана."},
+      {"card": "DEMO_CARD_METRO_SMOKE_01", "trainee": "demo_trainee_2", "offset": 90, "decision_delay": 42, "stage_delays": [19, 52, 25, 18], "outcome": "COMPLETED", "dispatch_message": "Принято. Прошу сообщить точное место задымления и доступный вход.", "comment": "Карточка завершена, но первичное решение и отметка прибытия сделаны позже норматива. На разборе обсудить контроль времени."},
+      {"card": "DEMO_CARD_SCHOOL_02", "trainee": "trainee", "offset": 660, "decision_delay": 20, "stage_delays": [17, 28, 25, 23], "outcome": "COMPLETED", "dispatch_message": "Принято. Уточняю, остались ли люди в помещении.", "comment": "Обучаемый последовательно обработал второй вызов и завершил карточку после сообщения бригады."},
+      {"card": "DEMO_CARD_METRO_SMOKE_02", "trainee": "demo_trainee_2", "offset": 690, "decision_delay": 24, "stage_delays": [21, 27, 30, 22], "outcome": "COMPLETED", "dispatch_message": "Проверяю маршрут для группы и возможность прохода к платформе.", "comment": "После первого затруднения темп восстановлен; все этапы отражены в карточке."}
+    ]
+  },
+  {
+    "seed_code": "DEMO_HISTORY_SHIFT_02",
+    "title": "[Демо] Сложная смена: поликлиника и станция метро",
+    "topic": "Пожары на объектах с массовым пребыванием людей и разбор отклонений",
+    "started_at": "2026-09-25T08:30:00+00:00",
+    "group_code": "DEMO-DDS-02",
+    "cases": [
+      {"card": "DEMO_CARD_POLYCLINIC_01", "trainee": "demo_trainee_4", "offset": 45, "decision_delay": 16, "stage_delays": [22, 24, 28, 18], "outcome": "COMPLETED", "dispatch_message": "Карточку приняла. Прошу уточнить этаж очага и ход эвакуации посетителей.", "comment": "Верно уточнены условия на объекте. Работа с карточкой и сообщения бригады отражены последовательно."},
+      {"card": "DEMO_CARD_METRO_FIRE_01", "trainee": "demo_trainee_5", "offset": 75, "decision_delay": 35, "stage_delays": [54, 24, 56, 22], "outcome": "COMPLETED", "dispatch_message": "Принято. Уточняю доступ к техническому помещению и плотность пассажиропотока.", "comment": "Несколько задержек реакции на сообщения бригады. Карточка завершена; требуется повторить работу с оперативным каналом."},
+      {"card": "DEMO_CARD_POLYCLINIC_02", "trainee": "demo_trainee_4", "offset": 670, "decision_delay": 22, "stage_delays": [19, 24, 28, 21], "outcome": "COMPLETED", "dispatch_message": "Приняла. Уточняю, выведены ли пациенты из смежных помещений.", "comment": "Вторая карточка выполнена без существенных отклонений."},
+      {"card": "DEMO_CARD_METRO_FIRE_02", "trainee": "demo_trainee_5", "offset": 700, "decision_delay": 26, "stage_delays": [22, 20, 27, 0], "outcome": "UNFINISHED", "dispatch_message": "Принято. Ожидаю подтверждения завершения работ и сверяю статус карточки.", "comment": "После сообщения о ликвидации пожара итоговый статус ДДС не установлен, карточка осталась незавершённой. Разобрать контроль закрытия."}
+    ]
+  }
+]

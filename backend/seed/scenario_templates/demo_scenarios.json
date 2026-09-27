@@ -5,10 +5,27 @@
     "description": "Пожар или задымление в здании школы с разными условиями. Работа служб во время занятия формируется единым runtime-механизмом тренажёра.",
     "difficulty": 3,
     "variant_options": {
-      "floor": [1, 2, 3],
-      "room": ["коридор", "кабинет", "подсобное помещение"],
-      "observation": ["запах гари", "задымление", "сильное задымление"],
-      "casualties": ["пострадавшие неизвестны", "пострадавших нет", "один пострадавший", "несколько пострадавших"]
+      "floor": [
+        1,
+        2,
+        3
+      ],
+      "room": [
+        "коридор",
+        "кабинет",
+        "подсобное помещение"
+      ],
+      "observation": [
+        "запах гари",
+        "задымление",
+        "сильное задымление"
+      ],
+      "casualties": [
+        "пострадавшие неизвестны",
+        "пострадавших нет",
+        "один пострадавший",
+        "несколько пострадавших"
+      ]
     },
     "classifier_source_reference": "SRC-006-incident-classifier-v046-24.xlsx#Лист1!105",
     "object_type_code": "EDUCATION",
@@ -23,6 +40,132 @@
     "initial_title": "Сообщение о пожаре в школе",
     "initial_description": "Поступило сообщение о дыме в здании школы.",
     "initial_caller_text": "В здании школы виден дым.",
+    "events": [
+      {
+        "offset_seconds": 0,
+        "event_type": "INITIAL_REPORT",
+        "title": "Первичное сообщение",
+        "description": "Карточка передана диспетчеру."
+      }
+    ],
+    "expected_actions": [],
+    "criteria": []
+  },
+  {
+    "seed_code": "DEMO_METRO_SMOKE_001",
+    "name": "Задымление на станции метро",
+    "description": "Дым на платформе или в вестибюле станции; проверка первичного решения и реакции на сообщения бригады.",
+    "difficulty": 2,
+    "variant_options": {
+      "room": [
+        "платформа",
+        "вестибюль",
+        "переход"
+      ],
+      "observation": [
+        "запах гари",
+        "дым у эскалатора",
+        "плотное задымление"
+      ],
+      "casualties": [
+        "неизвестны",
+        "пострадавших нет",
+        "есть один пострадавший"
+      ]
+    },
+    "classifier_source_reference": "SRC-006-incident-classifier-v046-24.xlsx#Лист1!57",
+    "object_type_code": "METRO_STATION",
+    "required_tags": [],
+    "service_source_references": [
+      "СЛУЖБЫ 112.docx#word/media/image1.png/row-01"
+    ],
+    "initial_title": "Сообщение о задымлении на станции",
+    "initial_description": "На станции метро {observation}; зона: {room}; сведения о пострадавших: {casualties}.",
+    "initial_caller_text": "На станции чувствуется дым, пассажиры выходят.",
+    "events": [
+      {
+        "offset_seconds": 0,
+        "event_type": "INITIAL_REPORT",
+        "title": "Первичное сообщение",
+        "description": "Карточка передана диспетчеру."
+      }
+    ],
+    "expected_actions": [],
+    "criteria": []
+  },
+  {
+    "seed_code": "DEMO_POLYCLINIC_FIRE_001",
+    "name": "Пожар в поликлинике",
+    "description": "Очаг пожара в медицинском учреждении; разные условия доступа и эвакуации.",
+    "difficulty": 4,
+    "variant_options": {
+      "room": [
+        "регистратура",
+        "лестничная клетка",
+        "подсобное помещение"
+      ],
+      "observation": [
+        "задымление",
+        "открытое пламя",
+        "сильный запах гари"
+      ],
+      "casualties": [
+        "неизвестны",
+        "пострадавших нет",
+        "есть один пострадавший"
+      ]
+    },
+    "classifier_source_reference": "SRC-006-incident-classifier-v046-24.xlsx#Лист1!215",
+    "object_type_code": "POLYCLINIC",
+    "required_tags": [],
+    "service_source_references": [
+      "СЛУЖБЫ 112.docx#word/media/image1.png/row-01"
+    ],
+    "initial_title": "Сообщение о пожаре в поликлинике",
+    "initial_description": "В поликлинике обнаружено {observation} в зоне «{room}»; сведения о пострадавших: {casualties}.",
+    "initial_caller_text": "Сотрудники начали выводить посетителей.",
+    "events": [
+      {
+        "offset_seconds": 0,
+        "event_type": "INITIAL_REPORT",
+        "title": "Первичное сообщение",
+        "description": "Карточка передана диспетчеру."
+      }
+    ],
+    "expected_actions": [],
+    "criteria": []
+  },
+  {
+    "seed_code": "DEMO_METRO_FIRE_001",
+    "name": "Пожар на станции метро",
+    "description": "Пожар на транспортном объекте с ограниченным доступом и плотным пассажиропотоком.",
+    "difficulty": 5,
+    "variant_options": {
+      "room": [
+        "платформа",
+        "вестибюль",
+        "техническое помещение"
+      ],
+      "observation": [
+        "дым из технического помещения",
+        "пламя у электрощита",
+        "плотное задымление перехода"
+      ],
+      "casualties": [
+        "неизвестны",
+        "пострадавших нет",
+        "есть один пострадавший"
+      ]
+    },
+    "classifier_source_reference": "SRC-006-incident-classifier-v046-24.xlsx#Лист1!60",
+    "object_type_code": "METRO_STATION",
+    "required_tags": [],
+    "service_source_references": [
+      "СЛУЖБЫ 112.docx#word/media/image1.png/row-01"
+    ],
+    "initial_title": "Сообщение о пожаре на станции метро",
+    "initial_description": "На станции метро {observation}; место: {room}; сведения о пострадавших: {casualties}.",
+    "initial_caller_text": "Люди покидают станцию, движение ограничено.",
     "events": [
       {
         "offset_seconds": 0,

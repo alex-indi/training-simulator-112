@@ -1,5 +1,9 @@
 [
   {"username": "admin", "full_name": "Администратор стенда", "role": "ADMIN", "is_active": true},
   {"username": "instructor", "full_name": "Преподаватель", "role": "INSTRUCTOR", "is_active": true},
-  {"username": "trainee", "full_name": "Диспетчер ДДС", "role": "TRAINEE", "is_active": true}
+  {"username": "trainee", "full_name": "Диспетчер ДДС", "role": "TRAINEE", "is_active": true},
+  {"username": "demo_trainee_2", "full_name": "Анна Смирнова", "role": "TRAINEE", "is_active": true},
+  {"username": "demo_trainee_3", "full_name": "Илья Петров", "role": "TRAINEE", "is_active": true},
+  {"username": "demo_trainee_4", "full_name": "Мария Кузнецова", "role": "TRAINEE", "is_active": true},
+  {"username": "demo_trainee_5", "full_name": "Денис Орлов", "role": "TRAINEE", "is_active": true}
 ]
