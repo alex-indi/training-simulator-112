@@ -71,9 +71,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm .env.docker
           trap 'docker compose --env-file .env.docker down' EXIT
-          docker compose --env-file .env.docker up -d --wait --wait-timeout 180
-          docker compose --env-file .env.docker run --rm backend python -m app.scripts.bootstrap_demo
+          pwsh -NoProfile -File ./start-demo.ps1
+          test -f .env.docker
+          ! grep -q '^POSTGRES_PASSWORD=change-me$' .env.docker
           curl -fsS http://127.0.0.1:8080/ >/dev/null
           curl -fsS http://127.0.0.1:8080/admin | grep -q '<div id="root">'
           curl -fsS http://127.0.0.1:8080/health | grep -q '"status":"ok"'
@@ -86,7 +88,7 @@ jobs:
             'http://127.0.0.1:8080/socket.io/?EIO=4&transport=websocket' || true)
           printf '%s' "$upgrade_headers" | grep -q '101 Switching Protocols'
           docker compose --env-file .env.docker down
-          docker compose --env-file .env.docker up -d --wait --wait-timeout 180
+          sh ./start-demo.command
           curl -fsS http://127.0.0.1:8080/api/users/demo | grep -q 'admin'
 
   e2e-mvp:

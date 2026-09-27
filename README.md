@@ -111,15 +111,17 @@ uv run uvicorn app.main:socket_app \
 
 ## Запуск через Docker
 
-Нужны Docker Desktop либо Docker Engine с Compose. Python, Node.js, `uv` и PostgreSQL на компьютере устанавливать не требуется. Из корня репозитория:
+Нужны Docker Desktop либо Docker Engine с Compose. Python, Node.js, `uv` и PostgreSQL на компьютере устанавливать не требуется. Для обычного запуска на macOS дважды щёлкните `start-demo.command`, на Windows — `start-demo.cmd`. На Linux выполните из корня репозитория:
+
+```bash
+sh ./start-demo.command
+```
+
+Файл сам создаёт `.env.docker` со случайным паролем, собирает и запускает контейнеры, ждёт их готовности и один раз загружает demo-данные в пустую базу. Пароль сохраняется между запусками и не попадает в Git. На macOS после запуска откроется браузер. Если `.env.docker` уже существует, файл сохранит его настройки. Для ручного запуска остаются команды:
 
 ```bash
 cp .env.docker.example .env.docker
-```
-
-Измените `POSTGRES_PASSWORD` в `.env.docker` (используйте URL-безопасные символы: буквы, цифры, дефис или подчёркивание), затем выполните:
-
-```bash
+# При ручном запуске замените POSTGRES_PASSWORD в .env.docker.
 docker compose --env-file .env.docker up -d --build
 docker compose --env-file .env.docker run --rm backend python -m app.scripts.bootstrap_demo
 ```
