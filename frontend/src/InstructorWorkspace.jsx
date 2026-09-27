@@ -56,6 +56,11 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
 
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const jsonOptions = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const settingsPayload = () => ({
+    ...settings,
+    duration_minutes: settings.duration_minutes === '' ? null : Number(settings.duration_minutes),
+    delivery_interval_seconds: settings.delivery_interval_seconds === '' ? null : Number(settings.delivery_interval_seconds),
+  })
 
   const reload = useCallback(async (sessionId) => {
     const [items, savedTemplates] = await Promise.all([
@@ -156,7 +161,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   }
 
   const createSession = () => runAction(async () => {
-    const item = await api('/api/training/sessions', jsonOptions('POST', settings))
+    const item = await api('/api/training/sessions', jsonOptions('POST', settingsPayload()))
     await reload(item.id)
     openSession(item)
     setStep(1)
@@ -164,7 +169,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   })
 
   const saveSettings = () => runAction(async () => {
-    const item = await api(`/api/training/sessions/${session.id}`, jsonOptions('PUT', settings))
+    const item = await api(`/api/training/sessions/${session.id}`, jsonOptions('PUT', settingsPayload()))
     setSession(item)
     setStep(1)
     setNotice('Параметры сохранены')
@@ -298,8 +303,8 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   }
 
   const updateSettings = (event) => {
-    const { name, value, type } = event.target
-    setSettings((current) => ({ ...current, [name]: type === 'number' ? Number(value) : value }))
+    const { name, value } = event.target
+    setSettings((current) => ({ ...current, [name]: value }))
   }
   const editable = session && ['DRAFT', 'READY'].includes(session.state)
   const closeSession = () => {

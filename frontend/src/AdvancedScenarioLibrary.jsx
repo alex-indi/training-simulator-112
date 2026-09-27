@@ -185,11 +185,11 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
     setGeneratedInstance(null)
   })
   const refreshGenerationPreview = () => perform(async () => {
-    const preview = await api(`/api/scenario-templates/${generation.id}/generate-preview`, asOptions('POST', generationInput))
+    const preview = await api(`/api/scenario-templates/${generation.id}/generate-preview`, asOptions('POST', { ...generationInput, seed: generationInput.seed === '' ? null : Number(generationInput.seed) }))
     setGenerationPreview(preview); setGenerationCandidates(preview.matching_objects)
   })
   const createInstance = () => perform(async () => {
-    const created = await api(`/api/scenario-templates/${generation.id}/instances`, asOptions('POST', generationInput))
+    const created = await api(`/api/scenario-templates/${generation.id}/instances`, asOptions('POST', { ...generationInput, seed: generationInput.seed === '' ? null : Number(generationInput.seed) }))
     setGeneratedInstance(created); setGenerationPreview(null); setNotice('Карточка создана'); await load()
   }, 'ИИ формирует карточку…')
   const openInstance = (instance) => perform(async () => {
@@ -221,7 +221,7 @@ export default function AdvancedScenarioLibrary({ user, requestJson, embedded = 
         <div className={styles.fields}>
           <label>Сложность<select value={generationInput.difficulty} onChange={(event) => { setGenerationInput((old) => ({ ...old, difficulty: Number(event.target.value) })); setGenerationPreview(null) }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}/5</option>)}</select></label>
           {generation.object_rule?.selection_mode === 'GENERIC' && <><label>Выбор объекта<select value={generationInput.variant_mode} onChange={(event) => { setGenerationInput((old) => ({ ...old, variant_mode: event.target.value, object_id: null })); setGenerationPreview(null) }}><option value="MANUAL">Вручную</option><option value="RANDOM">Случайный</option></select></label>{generationInput.variant_mode === 'MANUAL' && <><label>Поиск объекта<input value={generationInput.object_query} onChange={(event) => { setGenerationInput((old) => ({ ...old, object_query: event.target.value, object_id: null })); setGenerationPreview(null) }} placeholder="Название, адрес или район" /></label><label>Подходящий объект<select value={generationInput.object_id || ''} onChange={(event) => { setGenerationInput((old) => ({ ...old, object_id: Number(event.target.value) || null })); setGenerationPreview(null) }}><option value="">Выберите объект</option>{generationCandidates.map((object) => <option key={object.id} value={object.id}>{object.name} · {object.address}</option>)}</select></label></>}</>}
-          <label>Случайный вариант<input type="number" min="0" max="2147483647" value={generationInput.seed} onChange={(event) => { setGenerationInput((old) => ({ ...old, seed: Number(event.target.value) })); setGenerationPreview(null) }} /></label>
+          <label>Случайный вариант<input type="number" min="0" max="2147483647" value={generationInput.seed} onChange={(event) => { setGenerationInput((old) => ({ ...old, seed: event.target.value })); setGenerationPreview(null) }} /></label>
           <label>Занятие<select value={generationInput.training_session_id || ''} onChange={(event) => { setGenerationInput((old) => ({ ...old, training_session_id: Number(event.target.value) || null })); setGenerationPreview(null) }}><option value="">Привязать позже</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title} · #{session.id}</option>)}</select></label>
         </div>
         {!generationPreview && <button type="button" disabled={busy} onClick={refreshGenerationPreview}>Показать предпросмотр</button>}
