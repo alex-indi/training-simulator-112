@@ -35,6 +35,8 @@ from app.modules.response.models import (
 from app.modules.scenario_library.instance_models import SavedIncidentCard
 from app.modules.training.models import (
     AssessmentAudit,
+    AssessmentDeviation,
+    AssessmentResult,
     DeliveryState,
     InstructorNote,
     QueueMode,
@@ -65,6 +67,75 @@ def load_sessions() -> list[dict]:
 
 def _at(start: datetime, seconds: int) -> datetime:
     return start + timedelta(seconds=seconds)
+
+
+def _replace_numbers(value, replacements: dict[str, str]):
+    if isinstance(value, str):
+        for old, new in replacements.items():
+            value = value.replace(old, new)
+        return value
+    if isinstance(value, list):
+        return [_replace_numbers(item, replacements) for item in value]
+    if isinstance(value, dict):
+        return {key: _replace_numbers(item, replacements) for key, item in value.items()}
+    return value
+
+
+async def _refresh_existing_session(db, session, entry, group, cards) -> None:
+    """Обновляет только ранее созданную демонстрационную смену без новой истории."""
+    session.title = entry["title"]
+    session.topic = entry["topic"]
+    groups = (await db.scalars(select(TrainingGroup).where(
+        TrainingGroup.training_session_id == session.id,
+        TrainingGroup.source_user_group_id == group.id,
+    ))).all()
+    for training_group in groups:
+        training_group.name = group.name
+
+    replacements = {}
+    incidents = (await db.scalars(select(Incident).where(
+        Incident.training_session_id == session.id
+    ).order_by(Incident.id))).all()
+    for index, incident in enumerate(incidents, 1):
+        new_number = f"112-{session.started_at:%y%m%d}-{index:03d}"
+        replacements[incident.incident_number] = new_number
+        incident.incident_number = new_number
+        code = incident.source_snapshot.get("demo_seed_code")
+        if code in cards:
+            incident.description = cards[code].snapshot["initial_state_snapshot"]["render"][
+                "rendered_text"
+            ]
+            incident.source_snapshot = {
+                **incident.source_snapshot,
+                "incident_number": new_number,
+                "description": incident.description,
+            }
+    queue = (await db.scalars(select(ScenarioQueueItem).where(
+        ScenarioQueueItem.training_session_id == session.id
+    ))).all()
+    for item in queue:
+        item.snapshot = _replace_numbers(item.snapshot, replacements)
+        code = item.snapshot.get("demo_seed_code")
+        if code in cards:
+            item.title = cards[code].name[:200]
+            item.snapshot = {**item.snapshot, "description": cards[code].snapshot[
+                "initial_state_snapshot"]["render"]["rendered_text"]}
+    results = (await db.scalars(select(AssessmentResult).join(TrainingRun).where(
+        TrainingRun.training_session_id == session.id
+    ))).all()
+    for result in results:
+        result.metrics = _replace_numbers(result.metrics, replacements)
+        result.ai_summary = _replace_numbers(result.ai_summary, replacements)
+    deviations = (await db.scalars(select(AssessmentDeviation).join(AssessmentResult).join(
+        TrainingRun
+    ).where(TrainingRun.training_session_id == session.id))).all()
+    for deviation in deviations:
+        deviation.description = _replace_numbers(deviation.description, replacements)
+    notes = (await db.scalars(select(InstructorNote).join(TrainingRun).where(
+        TrainingRun.training_session_id == session.id
+    ))).all()
+    for note in notes:
+        note.body = _replace_numbers(note.body, replacements)
 
 
 def _incident_snapshot(card: SavedIncidentCard, number: str, delivered: datetime) -> dict:
@@ -98,7 +169,9 @@ async def _create_case(db, session, run, trainee, card, unit, case, index, start
     from app.modules.training.assessment import BRIGADE_ACTIONS
 
     delivered = _at(start, case["offset"])
-    snapshot = _incident_snapshot(card, f"ДЕМО-{session.id:03d}-{index:02d}", delivered)
+    snapshot = _incident_snapshot(
+        card, f"112-{start:%y%m%d}-{index:03d}", delivered
+    )
     incident = create_delivered_incident(
         training_session_id=session.id, source_snapshot=snapshot, server_time=delivered
     )
@@ -211,7 +284,7 @@ async def seed_demo_history() -> dict[str, int]:
     from app.modules.training.assessment import assess_run
 
     engine = create_database_engine(get_settings())
-    stats = {"created": 0, "unchanged": 0}
+    stats = {"created": 0, "updated": 0, "unchanged": 0}
     try:
         factory = create_session_factory(engine)
         async with factory() as db:
@@ -229,12 +302,16 @@ async def seed_demo_history() -> dict[str, int]:
                 ResponseUnit.seed_code == "DEMO_DDS_UNIT_01"
             ))).one()
             for entry in load_sessions():
-                existing = await db.scalar(select(TrainingSession.id).where(
-                    TrainingSession.title == entry["title"],
+                existing = await db.scalar(select(TrainingSession).where(
+                    TrainingSession.title.in_([entry["title"], entry["legacy_title"]]),
                     TrainingSession.instructor_id == instructor.id,
                 ))
                 if existing is not None:
-                    stats["unchanged"] += 1
+                    old_title = existing.title
+                    await _refresh_existing_session(
+                        db, existing, entry, groups[entry["group_code"]], cards
+                    )
+                    stats["updated" if old_title != entry["title"] else "unchanged"] += 1
                     continue
                 started = datetime.fromisoformat(entry["started_at"])
                 completed = _at(started, 1500)

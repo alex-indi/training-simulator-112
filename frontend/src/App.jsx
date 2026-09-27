@@ -173,6 +173,7 @@ function App() {
   const [users, setUsers] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [loginUsername, setLoginUsername] = useState('')
+  const [manualLogin, setManualLogin] = useState(false)
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [loginSessions, setLoginSessions] = useState([])
@@ -247,7 +248,12 @@ function App() {
       .finally(() => setLoading(false))
   }, [])
 
-  const loginUser = users.find((user) => user.username === loginUsername)
+  const loginUser = users.find((user) =>
+    user.username.toLocaleLowerCase('ru-RU') === loginUsername.trim().toLocaleLowerCase('ru-RU'),
+  )
+  const quickLoginUsers = users.filter((user) =>
+    ['admin', 'instructor', 'trainee'].includes(user.username),
+  )
   const loginSession = loginSessions.find((item) => String(item.id) === loginSessionId)
 
   useEffect(() => {
@@ -402,10 +408,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: demoUser.username, password: loginPassword }),
       })
-      if (user.role === 'TRAINEE') {
-        if (!loginSession || !loginWorkstation) {
-          throw new Error('Выберите рабочее место')
-        }
+      if (user.role === 'TRAINEE' && loginSession && loginWorkstation) {
         await requestJson(`/api/training/sessions/${loginSession.id}/join`, user.username, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -640,43 +643,59 @@ function App() {
             <div className={styles.loginIdentityRow}>
               <label>
                 <span>Пользователь</span>
-                <div className={styles.loginSelectField}>
+                {manualLogin ? <input
+                  autoComplete="username"
+                  disabled={loading}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  placeholder="Введите логин пользователя"
+                  value={loginUsername}
+                /> : <div className={styles.loginSelectField}>
                   <select
                     autoComplete="username"
-                    disabled={loading || !users.length}
+                    disabled={loading || !quickLoginUsers.length}
                     onChange={(event) => setLoginUsername(event.target.value)}
                     value={loginUsername}
                   >
-                    {!users.length && <option value="">Загрузка пользователей…</option>}
-                    {users.map((user) => (
+                    {!quickLoginUsers.length && <option value="">Загрузка пользователей…</option>}
+                    {quickLoginUsers.map((user) => (
                       <option key={user.id} value={user.username}>
                         {user.full_name}
                       </option>
                     ))}
                   </select>
                   <span className={styles.chevronIcon} aria-hidden="true" />
-                </div>
+                </div>}
+                <button
+                  className={styles.loginModeButton}
+                  onClick={() => {
+                    setManualLogin((current) => !current)
+                    setLoginUsername(manualLogin ? quickLoginUsers.find((user) => user.role === 'TRAINEE')?.username || quickLoginUsers[0]?.username || '' : '')
+                    setError('')
+                  }}
+                  type="button"
+                >{manualLogin ? 'Выбрать из списка' : 'Ввести логин другого пользователя'}</button>
               </label>
 
-              {loginUser?.role === 'TRAINEE' && <label>
+              {loginUser?.role === 'TRAINEE' && loginSession && <label>
                 <span>Рабочее место</span>
                 <div className={styles.loginSelectField}>
                   <select
                     aria-label="Рабочее место"
                     disabled={loginSessionsLoading || !loginSession}
                     onChange={(event) => setLoginWorkstation(event.target.value)}
-                    required
                     value={loginWorkstation}
                   >
-                    <option value="">{loginSessionsLoading ? 'Загрузка АРМ…' : loginSession ? 'Выберите АРМ' : 'Нет доступного занятия'}</option>
+                    <option value="">Без подключения к занятию</option>
                     {Array.from({ length: loginSession?.workstation_count || 0 }, (_, index) => index + 1).map((number) => (
                       <option key={number} value={number}>АРМ {String(number).padStart(2, '0')}</option>
                     ))}
                   </select>
                   <span className={styles.chevronIcon} aria-hidden="true" />
                 </div>
-                {loginSession && <small className={styles.loginSessionName}>{loginSession.title}</small>}
+                <small className={styles.loginSessionName}>{loginSession.title}</small>
               </label>}
+              {loginUser?.role === 'TRAINEE' && !loginSession && !loginSessionsLoading &&
+                <p className={styles.loginSessionName}>Текущего занятия нет. После входа можно посмотреть результаты.</p>}
             </div>
             <label>
               <span>Пароль</span>
@@ -700,13 +719,13 @@ function App() {
 
             <StatusMessage message={error} tone="error" />
 
-            <button className={styles.loginButton} disabled={loading || !users.length || (loginUser?.role === 'TRAINEE' && !loginWorkstation)} type="submit">
+            <button className={styles.loginButton} disabled={loading || !users.length || (loginUser?.role === 'TRAINEE' && loginSessionsLoading)} type="submit">
               {loading ? 'Подключение…' : 'Войти'}
             </button>
           </form>
 
           <footer className={styles.loginFooter}>
-            <div><span>Локальный demo-доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
+            <div><span>Учебный доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
             <p>Интерфейс имитирует рабочее место ДДС. Не используйте реальные учётные данные.</p>
           </footer>
         </section>

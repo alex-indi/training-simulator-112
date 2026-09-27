@@ -140,7 +140,7 @@ async def upsert_user_groups(connection: AsyncConnection, rows: list[dict]) -> d
             ).mappings().one_or_none()
             if member is None or member["role"] != "TRAINEE":
                 raise ValueError(f"Не найден обучаемый группы {row['code']}: {username}")
-            if member["group_id"] is None:
+            if member["group_id"] != group_id:
                 await connection.execute(
                     text("UPDATE users SET group_id = :group_id WHERE id = :id"),
                     {"group_id": group_id, "id": member["id"]},
@@ -163,6 +163,11 @@ async def seed_demo() -> dict[str, dict[str, int]]:
                 "response_units": await upsert_response_units(connection, units),
                 "user_groups": await upsert_user_groups(connection, groups),
             }
+            # Локальный демонстрационный стенд: любой непустой пароль подходит
+            # для каждого активного пользователя, включая созданных через админку.
+            await connection.execute(
+                text("UPDATE users SET password_hash = NULL WHERE password_hash IS NOT NULL")
+            )
         return results
     finally:
         await engine.dispose()

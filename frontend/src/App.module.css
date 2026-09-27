@@ -147,6 +147,17 @@
   pointer-events: none;
 }
 
+.loginModeButton {
+  align-self: flex-start;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--training-accent);
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
 .loginSessionName {
   color: rgb(255 255 255 / 72%);
   font-size: 11px;

@@ -1,9 +1,314 @@
 [
-  {"username": "admin", "full_name": "Администратор стенда", "role": "ADMIN", "is_active": true},
-  {"username": "instructor", "full_name": "Преподаватель", "role": "INSTRUCTOR", "is_active": true},
-  {"username": "trainee", "full_name": "Диспетчер ДДС", "role": "TRAINEE", "is_active": true},
-  {"username": "demo_trainee_2", "full_name": "Анна Смирнова", "role": "TRAINEE", "is_active": true},
-  {"username": "demo_trainee_3", "full_name": "Илья Петров", "role": "TRAINEE", "is_active": true},
-  {"username": "demo_trainee_4", "full_name": "Мария Кузнецова", "role": "TRAINEE", "is_active": true},
-  {"username": "demo_trainee_5", "full_name": "Денис Орлов", "role": "TRAINEE", "is_active": true}
+  {
+    "username": "admin",
+    "full_name": "Администратор",
+    "role": "ADMIN",
+    "is_active": true
+  },
+  {
+    "username": "instructor",
+    "full_name": "Наталья Андреева",
+    "role": "INSTRUCTOR",
+    "is_active": true
+  },
+  {
+    "username": "trainee",
+    "full_name": "Александр Иванов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_2",
+    "full_name": "Анна Смирнова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_3",
+    "full_name": "Илья Петров",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_4",
+    "full_name": "Мария Кузнецова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_5",
+    "full_name": "Денис Орлов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_6",
+    "full_name": "Елена Волкова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_7",
+    "full_name": "Павел Соколов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_8",
+    "full_name": "Ольга Морозова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_9",
+    "full_name": "Артём Федоров",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_10",
+    "full_name": "Наталья Сергеева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_11",
+    "full_name": "Алексей Николаев",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_12",
+    "full_name": "Татьяна Белова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_13",
+    "full_name": "Максим Васильев",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_14",
+    "full_name": "Ирина Попова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_15",
+    "full_name": "Кирилл Михайлов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_16",
+    "full_name": "Виктория Новикова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_17",
+    "full_name": "Андрей Лебедев",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_18",
+    "full_name": "Светлана Павлова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_19",
+    "full_name": "Роман Семенов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_20",
+    "full_name": "Юлия Голубева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_21",
+    "full_name": "Сергей Виноградов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_22",
+    "full_name": "Дарья Богданова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_23",
+    "full_name": "Никита Воробьев",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_24",
+    "full_name": "Алина Козлова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_25",
+    "full_name": "Иван Киселев",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_26",
+    "full_name": "Полина Макарова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_27",
+    "full_name": "Егор Захаров",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_28",
+    "full_name": "Ксения Зайцева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_29",
+    "full_name": "Дмитрий Борисов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_30",
+    "full_name": "Вероника Крылова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_31",
+    "full_name": "Михаил Тарасов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_32",
+    "full_name": "Софья Медведева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_33",
+    "full_name": "Григорий Баранов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_34",
+    "full_name": "Лилия Комарова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_35",
+    "full_name": "Владислав Осипов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_36",
+    "full_name": "Анастасия Соловьева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_37",
+    "full_name": "Константин Ершов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_38",
+    "full_name": "Марина Орлова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_39",
+    "full_name": "Тимур Белов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_40",
+    "full_name": "Елизавета Романова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_41",
+    "full_name": "Степан Громов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_42",
+    "full_name": "Валерия Сидорова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_43",
+    "full_name": "Матвей Королев",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_44",
+    "full_name": "Нина Алексеева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_45",
+    "full_name": "Руслан Фролов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_46",
+    "full_name": "Диана Пономарева",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_47",
+    "full_name": "Федор Нестеров",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_48",
+    "full_name": "Любовь Куликова",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_49",
+    "full_name": "Богдан Миронов",
+    "role": "TRAINEE",
+    "is_active": true
+  },
+  {
+    "username": "demo_trainee_50",
+    "full_name": "Екатерина Филатова",
+    "role": "TRAINEE",
+    "is_active": true
+  }
 ]

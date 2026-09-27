@@ -127,9 +127,13 @@ async def seed_demo_content() -> dict[str, dict[str, int]]:
                 if row.created_by_user_id == instructor.id
             }
             for entry in load_content("card_packages.json"):
-                name = f"[Демо] {entry['name']}"
+                name = entry["name"]
                 ids = [cards[code].id for code in entry["cards"]]
-                package = packages.get(name)
+                legacy_names = {
+                    "DEMO_PACKAGE_START": "[Демо] Первые решения ДДС",
+                    "DEMO_PACKAGE_COMPLEX": "[Демо] Объекты с массовым пребыванием людей",
+                }
+                package = packages.get(name) or packages.get(legacy_names[entry["seed_code"]])
                 if package is None:
                     db.add(SavedIncidentCardPackage(
                         created_by_user_id=instructor.id,
@@ -138,8 +142,10 @@ async def seed_demo_content() -> dict[str, dict[str, int]]:
                         card_ids=ids,
                     ))
                     stats["card_packages"]["created"] += 1
-                elif (package.description != entry["description"] or package.card_ids != ids
+                elif (package.name != name or package.description != entry["description"]
+                      or package.card_ids != ids
                       or package.deleted_at is not None):
+                    package.name = name
                     package.description = entry["description"]
                     package.card_ids = ids
                     package.deleted_at = None
