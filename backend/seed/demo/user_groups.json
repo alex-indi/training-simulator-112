@@ -1,14 +1,73 @@
 [
   {
     "code": "DEMO-DDS-01",
-    "name": "Демонстрационная смена ДДС — 1",
-    "description": "Основная учебная группа для показа подготовки и проведения занятия",
-    "members": ["trainee", "demo_trainee_2", "demo_trainee_3"]
+    "name": "Группа ДДС-21",
+    "description": "Слушатели первой учебной смены",
+    "members": [
+      "trainee",
+      "demo_trainee_2",
+      "demo_trainee_3",
+      "demo_trainee_6",
+      "demo_trainee_7",
+      "demo_trainee_8",
+      "demo_trainee_9",
+      "demo_trainee_10",
+      "demo_trainee_11",
+      "demo_trainee_12",
+      "demo_trainee_13",
+      "demo_trainee_14",
+      "demo_trainee_15",
+      "demo_trainee_16",
+      "demo_trainee_17",
+      "demo_trainee_18",
+      "demo_trainee_19"
+    ]
   },
   {
     "code": "DEMO-DDS-02",
-    "name": "Демонстрационная смена ДДС — 2",
-    "description": "Дополнительная группа для показа выбора групп и подгрупп",
-    "members": ["demo_trainee_4", "demo_trainee_5"]
+    "name": "Группа ДДС-22",
+    "description": "Слушатели второй учебной смены",
+    "members": [
+      "demo_trainee_4",
+      "demo_trainee_5",
+      "demo_trainee_20",
+      "demo_trainee_21",
+      "demo_trainee_22",
+      "demo_trainee_23",
+      "demo_trainee_24",
+      "demo_trainee_25",
+      "demo_trainee_26",
+      "demo_trainee_27",
+      "demo_trainee_28",
+      "demo_trainee_29",
+      "demo_trainee_30",
+      "demo_trainee_31",
+      "demo_trainee_32",
+      "demo_trainee_33",
+      "demo_trainee_34"
+    ]
+  },
+  {
+    "code": "DEMO-DDS-03",
+    "name": "Группа ДДС-23",
+    "description": "Слушатели третьей учебной смены",
+    "members": [
+      "demo_trainee_35",
+      "demo_trainee_36",
+      "demo_trainee_37",
+      "demo_trainee_38",
+      "demo_trainee_39",
+      "demo_trainee_40",
+      "demo_trainee_41",
+      "demo_trainee_42",
+      "demo_trainee_43",
+      "demo_trainee_44",
+      "demo_trainee_45",
+      "demo_trainee_46",
+      "demo_trainee_47",
+      "demo_trainee_48",
+      "demo_trainee_49",
+      "demo_trainee_50"
+    ]
   }
 ]

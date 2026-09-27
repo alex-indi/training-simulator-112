@@ -14,7 +14,10 @@ def test_demo_content_references_are_complete() -> None:
     packages = load_content("card_packages.json")
     sessions = load_sessions()
 
-    assert len(groups) == 2
+    assert len(groups) == 3
+    assert sum(user["role"] == "TRAINEE" for user in users.values()) == 50
+    members = [name for group in groups for name in group["members"]]
+    assert len(members) == len(set(members)) == 50
     assert len(templates) >= 4
     assert len(cards) == 8
     assert len(packages) == 2
@@ -32,6 +35,7 @@ def test_demo_content_references_are_complete() -> None:
         assert len(package["cards"]) == len(set(package["cards"]))
         assert all(code in cards for code in package["cards"])
     for session in sessions:
+        assert not session["title"].startswith("[Демо]")
         group = next(row for row in groups if row["code"] == session["group_code"])
         assert len(session["cases"]) >= 4
         for case in session["cases"]:

@@ -54,7 +54,7 @@ test('MVP: общий пул, claim, принятие и сообщение бр
     expect(assigned.runs[0].group_id).toBe(group.id)
 
     const templates = await json(await instructor.get('/api/scenario-templates/simple'))
-    const template = templates.find((item) => item.name === 'Пожар в образовательном учреждении')
+    const template = templates.find((item) => item.seed_code === 'DEMO_EDUCATION_FIRE_001')
     expect(template).toBeTruthy()
 
     const cards = await json(await instructor.post(`/api/scenario-templates/${template.id}/batch`, {

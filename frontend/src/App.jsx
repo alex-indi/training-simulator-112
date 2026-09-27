@@ -174,6 +174,7 @@ function App() {
   const [users, setUsers] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [loginUsername, setLoginUsername] = useState('')
+  const [manualLogin, setManualLogin] = useState(false)
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [loginWorkstation, setLoginWorkstation] = useState('')
@@ -266,7 +267,12 @@ function App() {
       .finally(() => setLoading(false))
   }, [])
 
-  const loginUser = users.find((user) => user.username === loginUsername)
+  const loginUser = users.find((user) =>
+    user.username.toLocaleLowerCase('ru-RU') === loginUsername.trim().toLocaleLowerCase('ru-RU'),
+  )
+  const quickLoginUsers = users.filter((user) =>
+    ['admin', 'instructor', 'trainee'].includes(user.username),
+  )
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
@@ -682,22 +688,38 @@ function App() {
             <div className={styles.loginIdentityRow}>
               <label>
                 <span>Пользователь</span>
-                <div className={styles.loginSelectField}>
+                {manualLogin ? <input
+                  autoComplete="username"
+                  disabled={loading}
+                  onChange={(event) => { setLoginUsername(event.target.value); setLoginWorkstation('') }}
+                  placeholder="Введите логин пользователя"
+                  value={loginUsername}
+                /> : <div className={styles.loginSelectField}>
                   <select
                     autoComplete="username"
-                    disabled={loading || !users.length}
-                    onChange={(event) => setLoginUsername(event.target.value)}
+                    disabled={loading || !quickLoginUsers.length}
+                    onChange={(event) => { setLoginUsername(event.target.value); setLoginWorkstation('') }}
                     value={loginUsername}
                   >
-                    {!users.length && <option value="">Загрузка пользователей…</option>}
-                    {users.map((user) => (
+                    {!quickLoginUsers.length && <option value="">Загрузка пользователей…</option>}
+                    {quickLoginUsers.map((user) => (
                       <option key={user.id} value={user.username}>
                         {user.full_name}
                       </option>
                     ))}
                   </select>
                   <span className={styles.chevronIcon} aria-hidden="true" />
-                </div>
+                </div>}
+                <button
+                  className={styles.loginModeButton}
+                  onClick={() => {
+                    setManualLogin((current) => !current)
+                    setLoginUsername(manualLogin ? quickLoginUsers.find((user) => user.role === 'TRAINEE')?.username || quickLoginUsers[0]?.username || '' : '')
+                    setLoginWorkstation('')
+                    setError('')
+                  }}
+                  type="button"
+                >{manualLogin ? 'Выбрать из списка' : 'Ввести логин другого пользователя'}</button>
               </label>
 
               {loginUser?.role === 'TRAINEE' && <label>
@@ -746,7 +768,7 @@ function App() {
           </form>
 
           <footer className={styles.loginFooter}>
-            <div><span>Локальный demo-доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
+            <div><span>Учебный доступ</span><strong>{loginUsername || 'загрузка…'} / любой пароль</strong></div>
             <p>Интерфейс имитирует рабочее место ДДС. Не используйте реальные учётные данные.</p>
           </footer>
         </section>
