@@ -57,7 +57,13 @@
 /* Shared DDS workstation visual language */
 .monitor{--dds-blue:#1587c3;--dds-dark:#30373c;--dds-dock:#455159;--dds-divider:#c8ced1;--dds-panel:#f1f2f2;--dds-panel-bright:#f7fafc;--dds-border:#aeb7bb;--dds-muted:#647076;--dds-danger:#ec653b;color:#253036;font:12px/1.45 var(--app-font-family)}
 .hero{gap:18px;padding:14px 16px;border:1px solid #20282d;border-radius:0;border-bottom:5px solid var(--dds-divider);background:var(--dds-dark)}.hero small{color:#b8c4ca;font-size:9px}.hero h2{font-size:20px;font-weight:500}.hero p{color:#d4dcdf}.clock strong{font-size:24px;font-weight:500}.clock strong span{color:#b8c4ca}
+.heroActive{background:#256b3d;border-color:#174d2b}
+.heroPaused{background:#f2c94c;border-color:#b58b16;color:#282410}
+.heroPaused small,.heroPaused p,.heroPaused .clock strong span{color:#403713}
+.heroPaused .controls button{border-color:#8f701b;background:#6c5417;color:#fff}
+.heroCompleted{background:#202020;border-color:#111}
 .controls button,.runControls button,.dialog footer button,.workstationButton{min-height:34px;border:1px solid var(--dds-border);border-radius:0;padding:7px 11px;background:#eef0f0;color:#303a3f;font:inherit;font-weight:600}.controls button{border-color:#87949a;background:var(--dds-dock);color:#fff}.controls button:hover:not(:disabled){background:#53616a}.workstationButton,.dialog footer button[type=submit]{border-color:var(--dds-blue);background:var(--dds-blue);color:#fff}
+.heroPaused .controls button:hover:not(:disabled){background:#594511}
 .error,.pauseBanner{border-radius:0;border-left:4px solid}.error{border-left-color:var(--dds-danger);background:#ffd8cf;color:#791e10}.pauseBanner{border-color:#ffba52;background:#fff1d7;color:#67470e}
 .metrics{gap:7px;margin:8px 0}.metrics div,.tile,.attention,.incident{border:1px solid var(--dds-border);border-radius:0;background:var(--dds-panel-bright);box-shadow:none}.metrics div{min-height:82px;padding:11px 13px;border-top:5px solid var(--dds-dock)}.metrics span,.metrics small{color:var(--dds-muted)}.metrics strong{font-size:25px;font-weight:500}
 .body{gap:8px}.grid{gap:7px}.tile{min-height:250px;padding:12px;border-top:5px solid var(--dds-dock)}.tile:hover,.tile:focus-visible{border-color:var(--dds-blue);border-top-color:var(--dds-blue);background:#e2edf2;box-shadow:none}.tile.warn{border-left:1px solid var(--dds-border);border-top-color:#ffba52}.tileTop b{color:#17688a}.attention{padding:13px}.attention .sectionTitle b{border-radius:0;background:#ffd8cf;color:#791e10}.attention button:hover{background:#e2edf2}

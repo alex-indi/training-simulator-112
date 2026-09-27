@@ -44,6 +44,8 @@ def test_session_group_uses_owned_source_without_training_run() -> None:
     )
     database = MagicMock()
     database.get = AsyncMock(return_value=source)
+    database.flush = AsyncMock()
+    database.scalars = AsyncMock(return_value=MagicMock(all=lambda: []))
 
     async def save(_database, item):
         return item
