@@ -126,6 +126,10 @@ async def claim_workstation(
     except IntegrityError as error:
         await session.rollback()
         raise HTTPException(status_code=409, detail="Рабочее место уже занято") from error
+    if current_user.group_id is not None:
+        from app.modules.training.router import auto_connect_workstation_to_sessions
+
+        await auto_connect_workstation_to_sessions(session, current_user)
     return _presence(current_user)
 
 

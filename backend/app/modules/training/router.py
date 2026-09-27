@@ -559,43 +559,67 @@ async def join_training_session(
         for run in item.runs
     ):
         raise HTTPException(status_code=409, detail="Рабочее место уже занято")
-    if existing is None:
-        existing = TrainingRun(
-            trainee_id=current_user.id, workstation_number=payload.workstation_number
-        )
-        group = next(
-            (
-                group
-                for group in item.groups
-                if group.is_subgroup
-                and any(member.user_id == current_user.id for member in group.subgroup_memberships)
-            ),
-            None,
-        ) or next(
-            (
-                group
-                for group in item.groups
-                if group.source_user_group_id is not None
-                and group.source_user_group_id == current_user.group_id
-            ),
-            None,
-        )
-        if group is not None:
-            existing.group_id = group.id
-            existing.dds_profile = group.dds_profile or "ДДС"
-            existing.difficulty = group.difficulty
-            existing.queue_mode = group.queue_mode
-        item.runs.append(existing)
-        if not any(trainee.id == current_user.id for trainee in item.trainees):
-            item.trainees.append(current_user)
-    else:
-        existing.workstation_number = payload.workstation_number
-    existing.last_seen_at = datetime.now(UTC)
+    _enroll_workstation(item, current_user, payload.workstation_number)
     try:
         return await _save(database, item)
     except IntegrityError as error:
         await database.rollback()
         raise HTTPException(status_code=409, detail="Рабочее место уже занято") from error
+
+
+def _enroll_workstation(item: TrainingSession, trainee: User, workstation_number: int) -> None:
+    run = next((candidate for candidate in item.runs if candidate.trainee_id == trainee.id), None)
+    if run is None:
+        run = TrainingRun(trainee_id=trainee.id, workstation_number=workstation_number)
+        group = next(
+            (
+                group for group in item.groups
+                if group.is_subgroup
+                and any(member.user_id == trainee.id for member in group.subgroup_memberships)
+            ),
+            None,
+        ) or next(
+            (
+                group for group in item.groups
+                if group.source_user_group_id == trainee.group_id
+                and group.source_user_group_id is not None
+            ),
+            None,
+        )
+        if group is not None:
+            _assign_run_to_group(run, group)
+        item.runs.append(run)
+        if not any(member.id == trainee.id for member in item.trainees):
+            item.trainees.append(trainee)
+    else:
+        run.workstation_number = workstation_number
+    run.last_seen_at = datetime.now(UTC)
+
+
+async def auto_connect_workstation_to_sessions(database: AsyncSession, trainee: User) -> None:
+    """Enroll an online group member in selected, unstarted sessions."""
+    if trainee.group_id is None or trainee.workstation_number is None:
+        return
+    session_ids = (
+        await database.scalars(
+            select(TrainingSession.id)
+            .join(TrainingGroup)
+            .where(
+                TrainingGroup.source_user_group_id == trainee.group_id,
+                TrainingSession.state.in_((TrainingSessionState.DRAFT, TrainingSessionState.READY)),
+                TrainingSession.is_archived.is_(False),
+            )
+        )
+    ).all()
+    for session_id in session_ids:
+        item = await _load_session(database, session_id, for_update=True)
+        if trainee.workstation_number > item.workstation_count or any(
+            run.workstation_number == trainee.workstation_number and run.trainee_id != trainee.id
+            for run in item.runs
+        ):
+            continue
+        _enroll_workstation(item, trainee, trainee.workstation_number)
+    await database.commit()
 
 
 @router.post("/{training_session_id}/connect-workstation", response_model=TrainingSessionRead)
@@ -720,6 +744,26 @@ async def create_group(
     if any(group.name == payload.name for group in item.groups):
         raise HTTPException(status_code=409, detail="Группа с таким названием уже существует")
     item.groups.append(TrainingGroup(**payload.model_dump()))
+    if payload.source_user_group_id is not None:
+        await database.flush()
+        now = datetime.now(UTC)
+        online_members = (
+            await database.scalars(select(User).where(
+                User.group_id == payload.source_user_group_id,
+                User.role == UserRole.TRAINEE,
+                User.is_active.is_(True),
+                User.workstation_number.is_not(None),
+                User.workstation_last_seen_at >= now - WORKSTATION_ONLINE_WINDOW,
+            ))
+        ).all()
+        for trainee in online_members:
+            workstation_number = trainee.workstation_number
+            if workstation_number > item.workstation_count or any(
+                run.workstation_number == workstation_number and run.trainee_id != trainee.id
+                for run in item.runs
+            ):
+                continue
+            _enroll_workstation(item, trainee, workstation_number)
     _invalidate_readiness(item)
     return await _save(database, item)
 

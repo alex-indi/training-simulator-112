@@ -143,8 +143,8 @@ function LiveMonitor({ sessionId, user, api }) {
 
   return <div className={styles.monitor}>
     <StatusMessage message={error} tone="error" />
-    <section className={styles.hero}>
-      <div><small>LIVE · УЧЕБНАЯ СМЕНА</small><h2>{session.title}</h2><p>{session.topic || 'Без темы'}</p></div>
+    <section className={`${styles.hero} ${session.state === 'COMPLETED' ? styles.heroCompleted : session.paused_at ? styles.heroPaused : styles.heroActive}`}>
+      <div><small>{session.state === 'COMPLETED' ? 'ЗАВЕРШЕНО' : session.paused_at ? 'ПАУЗА' : 'LIVE'} · УЧЕБНАЯ СМЕНА</small><h2>{session.title}</h2><p>{session.topic || 'Без темы'}</p></div>
       <div className={styles.clock}><strong>{duration(elapsed)} <span>/ {duration((session.duration_minutes || 0) * 60)}</span></strong><small>Время занятия</small></div>
       <div className={styles.controls}>
         <button type="button" disabled={busy || session.state !== 'ACTIVE'} onClick={() => post(session.paused_at ? '/resume' : '/pause', {})}>{session.paused_at ? 'Продолжить' : 'Пауза'}</button>
