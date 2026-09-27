@@ -58,6 +58,8 @@ from app.services.text_generation.renderer import (
 
 def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
     async def fake_generate(self, request, prompt):
+        if request.facts.get("additional_conditions"):
+            assert request.facts["additional_conditions"] == ["Запах дыма на лестнице"]
         if request.context and request.context.get("previous_text"):
             assert "Сформулируй новую запись заметно иначе" in prompt
             assert "Используй только факты из facts" in prompt
@@ -438,6 +440,10 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 assert cards[0]["object_snapshot"]["id"] != cards[1]["object_snapshot"]["id"]
                 assert all(card["training_session_id"] == session.id for card in cards)
                 assert all(card["training_group_id"] == group.id for card in cards)
+                assert (
+                    "несколько пострадавших"
+                    in cards[0]["template_snapshot"]["variant_options"]["casualties"]
+                )
                 assert [card["template_snapshot"]["batch_position"] for card in cards] == [
                     1,
                     2,
@@ -455,15 +461,27 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 unchanged = await client.post(f"{first_card}/rerender-initial-message")
                 assert unchanged.status_code == 409
                 assert "Текст карточки не изменился" in unchanged.json()["detail"]
+                additional = await client.patch(
+                    f"{first_card}/additional-conditions",
+                    json={"conditions": ["  Запах дыма на лестнице  "]},
+                )
+                assert additional.status_code == 200, additional.text
+                assert additional.json()["initial_state_snapshot"]["additional_conditions"] == [
+                    "Запах дыма на лестнице"
+                ]
                 assert (
                     rerendered.json()["initial_state_snapshot"]["variant_facts"]
                     == cards[0]["initial_state_snapshot"]["variant_facts"]
                 )
                 new_facts = dict(cards[0]["initial_state_snapshot"]["variant_facts"])
                 new_facts["floor"] = 1 if new_facts["floor"] != 1 else 2
+                new_facts["casualties"] = "несколько пострадавших"
                 edited = await client.patch(f"{first_card}/variant-facts", json=new_facts)
                 assert edited.status_code == 200, edited.text
                 assert edited.json()["initial_state_snapshot"]["variant_facts"] == new_facts
+                assert edited.json()["initial_state_snapshot"]["additional_conditions"] == [
+                    "Запах дыма на лестнице"
+                ]
                 assert edited.json()["object_snapshot"]["id"] == cards[0]["object_snapshot"]["id"]
                 assert edited.json()["template_snapshot"]["variant_facts_edited"] is True
                 assert (
@@ -481,6 +499,9 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                     cards[0]["initial_state_snapshot"]["variant_facts"],
                 )
                 assert regenerated.json()["template_snapshot"]["batch_seed"] == 43
+                assert regenerated.json()["initial_state_snapshot"]["additional_conditions"] == [
+                    "Запах дыма на лестнице"
+                ]
                 second_card = f"/api/scenario-instances/{cards[1]['id']}"
                 assert (await client.delete(second_card)).status_code == 204
                 assert (await client.get(second_card)).status_code == 404

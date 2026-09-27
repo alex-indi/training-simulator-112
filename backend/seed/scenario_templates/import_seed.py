@@ -82,6 +82,7 @@ async def import_seed() -> dict[str, int]:
                         "initial_title": entry["initial_title"],
                         "initial_description": entry["initial_description"],
                         "initial_caller_text": entry["initial_caller_text"],
+                        "variant_options": entry.get("variant_options", {}),
                         "events": [
                             {
                                 **{key: value for key, value in event.items()
@@ -130,6 +131,13 @@ async def import_seed() -> dict[str, int]:
                     and as_input(existing) == data
                 ):
                     stats["unchanged"] += 1
+                    continue
+                if existing is not None and existing.status == "READY" and (
+                    as_input(existing).model_copy(update={"variant_options": data.variant_options})
+                    == data
+                ):
+                    existing.variant_options = data.variant_options
+                    stats["updated"] += 1
                     continue
                 if existing is None:
                     row = ScenarioTemplate(

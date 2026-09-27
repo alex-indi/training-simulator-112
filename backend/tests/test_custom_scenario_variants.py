@@ -4,9 +4,14 @@ from app.modules.scenario_library.variants import (
     render_variant_text,
     variant_facts,
 )
+from seed.scenario_templates.import_seed import load_seed
 
 
 def test_template_choices_override_seed_defaults_and_are_repeatable():
+    seeded = next(row for row in load_seed() if row["seed_code"] == SCHOOL_FIRE_CODE)
+    assert seeded["variant_options"] == {
+        key: list(values) for key, values in SCHOOL_FIRE_OPTIONS.items()
+    }
     options = {"floor": [2, 4], "room": ["кабинет", "коридор"]}
     first = variant_facts(SCHOOL_FIRE_CODE, 42, options)
     assert first == variant_facts(SCHOOL_FIRE_CODE, 42, options)
