@@ -386,6 +386,31 @@ async def tick_session(database: AsyncSession, session_id: int, now: datetime) -
         return []
     if session.paused_at:
         return []
+    elapsed = session.delivery_elapsed_seconds or 0
+    if session.delivery_checked_at and not session.finish_mode:
+        elapsed += max(0, (now - session.delivery_checked_at).total_seconds())
+    if (
+        session.duration_minutes
+        and not session.finish_mode
+        and elapsed >= session.duration_minutes * 60
+    ):
+        session.delivery_elapsed_seconds = session.duration_minutes * 60
+        session.delivery_checked_at = None
+        session.finish_mode = "AUTO"
+        session.state = TrainingSessionState.COMPLETED
+        session.completed_at = now
+        for run in session.runs:
+            if run.paused_at:
+                duration = max(0, (now - run.paused_at).total_seconds())
+                run.paused_seconds += duration
+                run.paused_at = None
+                for pause in run.pauses:
+                    if pause.finished_at is None:
+                        pause.finished_at = now
+                        pause.duration_seconds = duration
+        await database.commit()
+        await publish_session_event("training.control_changed", session.id, None)
+        return []
     pending = due_items(session, now)
     if session.delivery_checked_at is not None and not session.finish_mode:
         session.delivery_elapsed_seconds += max(

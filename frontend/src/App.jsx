@@ -771,7 +771,7 @@ function App() {
     <main className={styles.armShell}>
       <StatusMessage message={error ? `Ошибка: ${error}` : ''} tone="error" />
       <StatusMessage
-        message={showCompletedNotice ? 'Занятие завершено преподавателем' : ''}
+        message={showCompletedNotice ? 'Занятие завершено' : ''}
         tone="success"
         onDismiss={() => setDismissedCompletedId(completedSessionId)}
       />

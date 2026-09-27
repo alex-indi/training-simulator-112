@@ -1,14 +1,22 @@
 """Проверки серверного порядка и учебного времени выдачи."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock
 
 from app.modules.identity.models import User, UserRole
 from app.modules.incidents.workflow import create_delivered_incident
-from app.modules.training.delivery import due_items, finalize_order, generated_snapshot
+from app.modules.training.delivery import (
+    due_items,
+    finalize_order,
+    generated_snapshot,
+    tick_session,
+)
 from app.modules.training.models import (
     DeliveryOrder,
     DeliveryState,
     QueueMode,
+    RunPause,
     ScenarioQueueItem,
     TrainingMode,
     TrainingRun,
@@ -55,6 +63,56 @@ def test_flow_delivers_each_run_on_server_schedule_and_stops_at_duration():
     assert [item.id for item in due_items(session, started + timedelta(seconds=119))] == []
     assert [item.id for item in due_items(session, started + timedelta(seconds=120))] == [3, 4]
     assert [item.id for item in due_items(session, started + timedelta(minutes=5))] == [3, 4]
+
+
+def test_scheduler_completes_session_when_active_duration_expires(monkeypatch):
+    session, started = make_session()
+    session.duration_minutes = 1
+    session.delivery_elapsed_seconds = 59
+    session.delivery_checked_at = started + timedelta(seconds=59)
+    session.queue_items = []
+    pause = RunPause(started_at=started + timedelta(seconds=30))
+    run = TrainingRun(id=1, paused_at=pause.started_at, paused_seconds=0, pauses=[pause])
+    session.runs = [run]
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=MagicMock(one_or_none=lambda: session))
+    database.commit = AsyncMock()
+    notify = AsyncMock()
+    monkeypatch.setattr("app.modules.training.delivery.publish_session_event", notify)
+
+    assert asyncio.run(tick_session(database, session.id, started + timedelta(minutes=1))) == []
+    assert session.state == TrainingSessionState.COMPLETED
+    assert session.completed_at == started + timedelta(minutes=1)
+    assert session.finish_mode == "AUTO"
+    assert session.delivery_elapsed_seconds == 60
+    assert session.delivery_checked_at is None
+    assert run.paused_at is None
+    assert pause.finished_at == session.completed_at
+    assert pause.duration_seconds == 30
+    database.commit.assert_awaited_once()
+    notify.assert_awaited_once_with("training.control_changed", session.id, None)
+
+    assert asyncio.run(tick_session(database, session.id, started + timedelta(minutes=2))) == []
+    database.commit.assert_awaited_once()
+    notify.assert_awaited_once()
+
+
+def test_scheduler_does_not_complete_paused_session(monkeypatch):
+    session, started = make_session()
+    session.duration_minutes = 1
+    session.paused_at = started + timedelta(seconds=30)
+    session.delivery_elapsed_seconds = 30
+    session.delivery_checked_at = None
+    database = MagicMock()
+    database.scalars = AsyncMock(return_value=MagicMock(one_or_none=lambda: session))
+    database.commit = AsyncMock()
+    notify = AsyncMock()
+    monkeypatch.setattr("app.modules.training.delivery.publish_session_event", notify)
+
+    assert asyncio.run(tick_session(database, session.id, started + timedelta(minutes=2))) == []
+    assert session.state == TrainingSessionState.ACTIVE
+    database.commit.assert_not_awaited()
+    notify.assert_not_awaited()
 
 
 def test_fixed_set_delivers_approved_pool_at_start():
