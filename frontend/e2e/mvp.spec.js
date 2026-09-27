@@ -87,10 +87,11 @@ test('MVP: общий пул, claim, принятие и сообщение бр
 
     await expect(page.getByText(number).first()).toBeVisible()
     await page.getByText(number).first().click()
-    await page.getByRole('button', { name: 'Взять в работу' }).click()
 
-    const claimed = await json(await trainee.get(`/api/incidents/${incidentId}`))
-    expect(claimed.claimed_by_training_run_id).toBeTruthy()
+    await expect.poll(async () => {
+      const claimed = await json(await trainee.get(`/api/incidents/${incidentId}`))
+      return claimed.claimed_by_training_run_id
+    }).toBeTruthy()
 
     await page.getByRole('button', { name: /Добавлена/ }).first().click()
     await page.getByLabel('Статус', { exact: true }).selectOption('ACCEPT')
