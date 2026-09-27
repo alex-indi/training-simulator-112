@@ -86,7 +86,7 @@ def test_incident_report_keeps_source_facts_in_offline_mode():
         assert result["rendered_text"] == (
             "Очевидец сообщил о задымлении.\nСведения о пострадавших отсутствуют."
         )
-        assert result["prompt_version"] == "incident_operator_entry_v3"
+        assert result["prompt_version"] == "incident_operator_entry_v5"
         assert facts["incident_type"] == "Пожар"
 
     asyncio.run(run())
@@ -146,12 +146,13 @@ def test_offline_incident_report_accepts_partial_simple_variants():
         {
             "description": "Пожар в школе; Этаж: 2",
             "variant_facts": {"floor": 2},
+            "additional_conditions": ["Запах дыма на лестнице"],
         },
     )
 
     async def run():
         result = await AITextRenderer(FakeProvider(), enabled=False).render(request)
-        assert result["rendered_text"] == "Пожар в школе; Этаж: 2"
+        assert result["rendered_text"] == "Пожар в школе; Этаж: 2\nЗапах дыма на лестнице"
 
     asyncio.run(run())
 

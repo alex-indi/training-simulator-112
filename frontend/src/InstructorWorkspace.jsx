@@ -470,7 +470,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
         <div className={styles.cards}>{staffedGroups.map((group) => {
           const cards = scenarioInstances.filter((item) => item.training_group_id === group.id)
           const connected = session.runs.filter((run) => run.group_id === group.id).length
-          const ready = cards.length > 0 && cards.every((item) => item.status === 'CONFIRMED')
+          const ready = cards.length > 0
           return <article className={styles.card} key={group.id}>
             <strong>{group.name}</strong>
             <span>{connected} подключено · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</span>

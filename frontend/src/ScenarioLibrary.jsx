@@ -151,7 +151,6 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
 
   const approve = () => perform(async () => {
     if (picker) {
-      await api(`/api/training/sessions/${selectedSessionId}/groups/${groupId}/cards/approve`, { method: 'POST' })
       onCompleted?.()
       return
     }
@@ -227,7 +226,7 @@ export default function ScenarioLibrary({ user, requestJson, sessionId, groupId,
               {!picker && <label>Распределение<select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Выберите общий пул или АРМ</option>{targets.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
             </div>
             <div className={styles.reviewActions}>
-              <button type="button" className={styles.approveButton} disabled={busy || !target} onClick={approve}>Добавить в занятие</button>
+              <button type="button" className={styles.approveButton} disabled={busy || !target} onClick={approve}>{picker ? 'Готово' : 'Добавить в занятие'}</button>
               <button type="button" disabled={busy || !saveSelected.length} onClick={() => saveCards(saveSelected)}>Сохранить выбранные</button>
               <button type="button" disabled={busy} onClick={rerenderAll}>Перегенерировать тексты всех карточек</button>
               <button type="button" disabled={busy} onClick={replaceBatch}>Пересоздать весь набор</button>

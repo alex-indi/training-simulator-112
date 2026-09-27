@@ -6,7 +6,7 @@ import random
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -215,6 +215,7 @@ def _initial_request(content: dict) -> TextGenerationRequest:
             "object_name": content["object_snapshot"]["name"],
             "address": content["object_snapshot"].get("address"),
             "variant_facts": initial.get("variant_facts", {}),
+            "additional_conditions": initial.get("additional_conditions", []),
             "fallback_style": (
                 "SCHOOL_FIRE"
                 if content.get("template_snapshot", {}).get("seed_code") == SCHOOL_FIRE_CODE
@@ -400,7 +401,7 @@ async def _build(
         if facts_override is not None
         else variant_facts(template.seed_code, data.seed, template.variant_options)
     )
-    medical_needed = variation.get("casualties") != "пострадавших нет"
+    medical_needed = variation.get("casualties") not in {"пострадавших нет", "нет"}
     services = []
     for link in template.services:
         service = await database.get(DispatchService, link.service_id)
@@ -457,7 +458,7 @@ async def _build(
     initial_title = template.initial_title
     initial_description = template.initial_description
     initial_caller_text = template.initial_caller_text
-    if variation and template.seed_code == SCHOOL_FIRE_CODE and not template.variant_options:
+    if variation and template.seed_code == SCHOOL_FIRE_CODE:
         initial_description = (
             f"{variation['observation']} на {variation['floor']} этаже, "
             f"{variation['room']}; {variation['casualties']}."
@@ -569,6 +570,15 @@ async def _session(database: AsyncSession, session_id: int, user: User) -> Train
 
 
 def _serialize(row: ScenarioInstance) -> dict:
+    template_snapshot = row.template_snapshot
+    if template_snapshot.get("seed_code") == SCHOOL_FIRE_CODE:
+        template_snapshot = dict(template_snapshot)
+        choices = dict(template_snapshot.get("variant_options") or {})
+        choices["casualties"] = list(dict.fromkeys([
+            *choices.get("casualties", []),
+            *SCHOOL_FIRE_OPTIONS["casualties"],
+        ]))
+        template_snapshot["variant_options"] = choices
     return {
         "id": row.id,
         "scenario_template_id": row.scenario_template_id,
@@ -585,7 +595,7 @@ def _serialize(row: ScenarioInstance) -> dict:
         "initial_state_snapshot": row.initial_state_snapshot,
         "expected_actions_snapshot": row.expected_actions_snapshot,
         "assessment_criteria_snapshot": row.assessment_criteria_snapshot,
-        "template_snapshot": row.template_snapshot,
+        "template_snapshot": template_snapshot,
         "created_at": row.created_at,
         "events": [{**_event_dict(e, row.service_snapshot), "id": e.id} for e in row.events],
     }
@@ -727,6 +737,18 @@ class ManualTextInput(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
 
 
+class AdditionalConditionsInput(BaseModel):
+    conditions: list[str] = Field(max_length=8)
+
+    @field_validator("conditions")
+    @classmethod
+    def clean_conditions(cls, values: list[str]) -> list[str]:
+        cleaned = [" ".join(value.split()) for value in values]
+        if any(not value or len(value) > 200 for value in cleaned):
+            raise ValueError("Каждое условие должно содержать от 1 до 200 символов")
+        return cleaned
+
+
 async def _editable_instance(instance_id: int, user: User, database: AsyncSession):
     await read_instance(instance_id, user, database)
     row = (
@@ -736,8 +758,12 @@ async def _editable_instance(instance_id: int, user: User, database: AsyncSessio
             .options(selectinload(ScenarioInstance.events))
         )
     ).one()
-    if row.status != "DRAFT":
-        raise HTTPException(status_code=409, detail="Подтверждённый экземпляр неизменяем")
+    if row.training_group_id is not None:
+        await _session(database, row.training_session_id, user)
+        if row.status not in {"DRAFT", "CONFIRMED"}:
+            raise HTTPException(status_code=409, detail="Экземпляр неизменяем")
+    elif row.status != "DRAFT":
+        raise HTTPException(status_code=409, detail="Экземпляр неизменяем")
     return row
 
 
@@ -784,7 +810,7 @@ async def regenerate_card(
     user: Annotated[User, Depends(require_editor)],
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
-    """Replace draft facts and prepared texts, leaving confirmed snapshots untouched."""
+    """Replace prepared facts and texts before the session starts."""
     row = await _editable_instance(instance_id, user, database)
     original = (
         row.object_snapshot["id"],
@@ -814,6 +840,9 @@ async def regenerate_card(
     for key in ("batch_seed", "batch_position"):
         if key in row.template_snapshot:
             content["template_snapshot"][key] = row.template_snapshot[key]
+    content["initial_state_snapshot"]["additional_conditions"] = row.initial_state_snapshot.get(
+        "additional_conditions", []
+    )
     await _render_content(content, database)
     row.name = content["name"]
     row.generation_seed = seed
@@ -868,12 +897,39 @@ async def edit_variant_facts(
         if key in row.template_snapshot:
             content["template_snapshot"][key] = row.template_snapshot[key]
     content["template_snapshot"]["variant_facts_edited"] = True
+    content["initial_state_snapshot"]["additional_conditions"] = row.initial_state_snapshot.get(
+        "additional_conditions", []
+    )
     await _render_content(content, database)
     row.name = content["name"]
     row.service_snapshot = content["service_snapshot"]
     row.initial_state_snapshot = content["initial_state_snapshot"]
     row.template_snapshot = content["template_snapshot"]
     row.events = [ScenarioInstanceEvent(**event) for event in content["events"]]
+    await database.commit()
+    return await read_instance(instance_id, user, database)
+
+
+@instance_router.patch("/{instance_id}/additional-conditions")
+async def edit_additional_conditions(
+    instance_id: int,
+    data: AdditionalConditionsInput,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    row = await _editable_instance(instance_id, user, database)
+    snapshot = dict(row.initial_state_snapshot)
+    snapshot["additional_conditions"] = data.conditions
+    content = {
+        "initial_state_snapshot": snapshot,
+        "classifier_snapshot": row.classifier_snapshot,
+        "object_snapshot": row.object_snapshot,
+        "template_snapshot": row.template_snapshot,
+    }
+    render = await (await renderer_for_database(database)).render(_initial_request(content))
+    await _record_usage(database, [render])
+    snapshot["render"] = render
+    row.initial_state_snapshot = snapshot
     await database.commit()
     return await read_instance(instance_id, user, database)
 

@@ -7,7 +7,7 @@ const choices = {
   floor: { label: 'Этаж', values: [1, 2, 3, 4] },
   room: { label: 'Место', values: ['кабинет', 'коридор', 'подсобное помещение'] },
   observation: { label: 'Задымление', values: ['нет', 'слабое', 'сильное'] },
-  casualties: { label: 'Пострадавшие', values: ['нет', 'неизвестно', 'есть'] },
+  casualties: { label: 'Пострадавшие', values: ['нет', 'неизвестно', 'есть', 'один пострадавший', 'несколько пострадавших'] },
 }
 const empty = () => ({ name: '', classifier_rule_id: '', object_type_id: '', difficulty: 3, variant_options: {} })
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -80,7 +80,7 @@ export default function IncidentTemplates({ user, requestJson, onUse, onSaved, o
         <label>Тип происшествия<select value={draft.classifier_rule_id} disabled={!canEdit} onChange={(event) => setDraft((current) => ({ ...current, classifier_rule_id: event.target.value }))}><option value="">Выберите тип</option>{catalog.rules.map((rule) => <option key={rule.id} value={rule.id}>{rule.group} · {rule.type}</option>)}{draft.classifier_rule_id && !catalog.rules.some((rule) => rule.id === Number(draft.classifier_rule_id)) && <option value={draft.classifier_rule_id}>Выбранный тип #{draft.classifier_rule_id}</option>}</select></label>
         <label>Тип объекта<select value={draft.object_type_id} disabled={!canEdit} onChange={(event) => setDraft((current) => ({ ...current, object_type_id: event.target.value }))}><option value="">Выберите тип</option>{catalog.object_types.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
         <label>Сложность<select value={draft.difficulty} disabled={!canEdit} onChange={(event) => setDraft((current) => ({ ...current, difficulty: Number(event.target.value) }))}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{difficultyLabels[value]}</option>)}</select></label>
-        <h3>Варианты условий</h3><p>Отметьте значения, которые могут встретиться в карточках.</p>
+        <h3>Варианты условий</h3><p>Это учебные варианты шаблона, а не значения классификатора. Отметьте те, которые могут встретиться в карточках.</p>
         {Object.entries(choices).map(([key, item]) => <fieldset key={key} disabled={!canEdit}><legend>{item.label}</legend>{item.values.map((value) => <label key={value}><input type="checkbox" checked={(draft.variant_options[key] || []).includes(value)} onChange={() => toggle(key, value)} /> {value}</label>)}</fieldset>)}
         <h3>Службы по классификатору</h3>{services.length ? <ul>{services.map((service) => <li key={service.id}>{service.official_name}</li>)}</ul> : <p>{draft.classifier_rule_id ? 'Для этого типа службы не указаны.' : 'Выберите тип происшествия.'}</p>}
         {canEdit && <div className={styles.actions}><button type="button" disabled={busy || !draft.name.trim() || !draft.classifier_rule_id || !draft.object_type_id} onClick={save}>Сохранить</button></div>}

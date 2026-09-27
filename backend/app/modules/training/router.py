@@ -123,10 +123,7 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
             cards = [row for row in masters if row.training_group_id == group.id]
             if len(cards) < required:
                 warnings.append(f"Группа «{group.name}»: нужно не менее {required} карточек")
-            elif any(row.status != "CONFIRMED" for row in cards):
-                warnings.append(f"Группа «{group.name}»: набор не утверждён")
         prepared = len(masters)
-        approved = sum(row.status == "CONFIRMED" for row in masters)
         return ReadinessRead(
             participant_count=len(runs),
             workstation_count=item.workstation_count,
@@ -140,10 +137,9 @@ def _readiness(item: TrainingSession) -> ReadinessRead:
             and all(
                 sum(row.training_group_id == group.id for row in masters) >= required
                 for group in staffed_groups
-            )
-            and prepared == approved,
+            ),
             prepared_count=prepared,
-            approved_count=approved,
+            approved_count=prepared,
         )
     if not runs:
         warnings.append("Нет подключённых участников")

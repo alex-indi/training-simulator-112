@@ -1,4 +1,4 @@
-"""Create runtime queues from the instructor-approved group master packs."""
+"""Create runtime queues from prepared group card sets."""
 
 from copy import deepcopy
 
@@ -11,7 +11,7 @@ from app.modules.training.models import QueueMode, TrainingSession
 
 
 async def materialize_group_pools(database: AsyncSession, session: TrainingSession) -> None:
-    """Copy approved facts and text once at launch; never run generation or AI here."""
+    """Copy prepared facts and text once at launch; never run generation or AI here."""
     if not any(group.source_user_group_id is not None for group in session.groups):
         return
     if session.queue_items:
