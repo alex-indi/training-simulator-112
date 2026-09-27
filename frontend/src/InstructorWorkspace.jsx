@@ -44,7 +44,6 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   const [cardsOpen, setCardsOpen] = useState(false)
   const [groupsOpen, setGroupsOpen] = useState(false)
   const [userGroups, setUserGroups] = useState([])
-  const [onlineWorkstations, setOnlineWorkstations] = useState([])
   const [subgroupDraft, setSubgroupDraft] = useState(null)
   const [subgroupEditingId, setSubgroupEditingId] = useState(null)
   const [pickerGroupId, setPickerGroupId] = useState(null)
@@ -125,17 +124,6 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   }, [api, openSessionId, session?.state])
 
   useEffect(() => {
-    if (!openSessionId) return undefined
-    let active = true
-    const refresh = () => api('/api/users/workstations')
-      .then((items) => { if (active) setOnlineWorkstations(items) })
-      .catch((cause) => { if (active) setError(cause.message) })
-    refresh()
-    const timer = window.setInterval(refresh, 5000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [api, openSessionId])
-
-  useEffect(() => {
     if (!openSessionId || session?.state === 'ACTIVE') return undefined
     const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', { auth: { username: user.username } })
     const refresh = () => reload(openSessionId).catch(() => {})
@@ -201,13 +189,6 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
     }))
     setSession(item)
     setNotice(`Группа ${source.code || source.name} добавлена`)
-  })
-
-  const connectWorkstation = (presence) => runAction(async () => {
-    const item = await api(`/api/training/sessions/${session.id}/connect-workstation`,
-      jsonOptions('POST', { trainee_id: presence.user_id }))
-    setSession(item)
-    setNotice(`АРМ ${presence.workstation_number} подключён к занятию`)
   })
 
   const updateSessionGroup = (group, changes) => runAction(async () => {
@@ -477,13 +458,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
       </>}
       {step === 3 && <section className={styles.section}>
         <h3>Подключение и запуск</h3>
-        <p>Выберите авторизованные АРМ для занятия. При подключении применяется состав подгрупп; рабочую группу можно изменить без изменения постоянного состава.</p>
-        {editable && <><h4>АРМ в сети</h4><div className={styles.stationGrid}>
-          {onlineWorkstations.filter((presence) => !session.runs.some((run) => run.trainee_id === presence.user_id)).map((presence) => <div className={styles.station} key={presence.user_id}>
-            <b>АРМ {String(presence.workstation_number).padStart(2, '0')}</b><span>{presence.trainee_name}</span>
-            <small>● В сети</small><button type="button" disabled={busy || presence.workstation_number > session.workstation_count} onClick={() => connectWorkstation(presence)}>Подключить к занятию</button>
-          </div>)}
-        </div>{!onlineWorkstations.some((presence) => !session.runs.some((run) => run.trainee_id === presence.user_id)) && <p>Свободных АРМ в сети пока нет.</p>}</>}
+        <p>Участники выбранных групп автоматически подключаются к занятию, когда занимают АРМ. Рабочую группу можно изменить без изменения постоянного состава.</p>
         <div className={styles.stationGrid}>{session.runs.map((run) => <div className={`${styles.station} ${run.online ? styles.online : ''}`} key={run.id}>
           <b>АРМ {String(run.workstation_number).padStart(2, '0')}</b><span>{run.trainee_name}</span>
           <small>{run.online ? '● Подключён' : '○ Не в сети'}</small>
