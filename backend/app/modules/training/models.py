@@ -184,6 +184,9 @@ class TrainingRun(Base):
         ForeignKey("training_groups.id", ondelete="SET NULL")
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    open_incident_id: Mapped[int | None] = mapped_column(
+        ForeignKey("incidents.id", ondelete="SET NULL")
+    )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     paused_seconds: Mapped[float] = mapped_column(Float, default=0, server_default="0")

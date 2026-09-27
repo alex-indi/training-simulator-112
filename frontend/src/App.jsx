@@ -353,6 +353,14 @@ function App() {
   }, [selectedIncident?.id])
 
   useEffect(() => {
+    if (!activeSessionId || currentUser?.role !== 'TRAINEE') return
+    requestJson(`/api/training/sessions/${activeSessionId}/workstation-view`, currentUser.username, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ incident_id: null }),
+    }).catch((cause) => setError(cause.message))
+  }, [activeSessionId, currentUser])
+
+  useEffect(() => {
     if (!selectedIncident) return
     const current = incidents.find((incident) => incident.id === selectedIncident.id)
     if (current) setSelectedIncident(current)
@@ -497,6 +505,10 @@ function App() {
       ].filter((service) => service && service.trim().toUpperCase() !== 'ДДС'))]
       const own = services.includes('Служба 101') ? 'Служба 101' : cardServiceName(openedIncident.viewer_dds_profile)
       setSelectedIncident(openedIncident)
+      await requestJson(`/api/training/sessions/${openedIncident.training_session_id}/workstation-view`, currentUser.username, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ incident_id: openedIncident.id }),
+      }).catch((cause) => setError(cause.message))
       setPreviewStatuses({})
       setSelectedService(openedIncident.can_edit && openedIncident.viewer_dds_profile === 'ДДС' && !services.includes('Служба 101')
         ? 'Служба 102'
@@ -517,6 +529,10 @@ function App() {
   }
 
   const closeCard = () => {
+    if (selectedIncident) requestJson(`/api/training/sessions/${selectedIncident.training_session_id}/workstation-view`, currentUser.username, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ incident_id: null }),
+    }).catch((cause) => setError(cause.message))
     setSelectedIncident(null)
     setSelectedService('')
     setServiceHistoryOpen(false)

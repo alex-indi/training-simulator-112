@@ -51,6 +51,7 @@ async def _incidents(database: AsyncSession, session_id: int) -> list[Incident]:
         .options(
             selectinload(Incident.actions),
             selectinload(Incident.scenario_events),
+            selectinload(Incident.activities),
             selectinload(Incident.response_assignments).selectinload(
                 ResponseAssignment.response_unit
             ),
@@ -95,6 +96,11 @@ def _incident_read(
         "description": incident.description,
         "source": incident.source,
         "applicant_name": incident.applicant_name,
+        "applicant_phone": incident.applicant_phone,
+        "reported_at": incident.reported_at,
+        "latitude": incident.latitude,
+        "longitude": incident.longitude,
+        "source_snapshot": incident.source_snapshot,
         "training_group_id": incident.training_group_id,
         "training_run_id": incident.training_run_id,
         "claimed_by_training_run_id": incident.claimed_by_training_run_id,
@@ -127,6 +133,17 @@ def _incident_read(
                 "created_at": event.created_at,
             }
             for event in (incident.scenario_events or [])
+        ],
+        "activities": [
+            {
+                "id": activity.id,
+                "kind": activity.kind,
+                "service_name": activity.service_name,
+                "stage": activity.stage,
+                "body": activity.body,
+                "created_at": activity.created_at,
+            }
+            for activity in (incident.activities or [])
         ],
         "response_assignments": [
             {
@@ -289,6 +306,7 @@ def _run_snapshot(
         "group_name": run.group.name if run.group else None,
         "online": online,
         "last_seen_at": run.last_seen_at,
+        "open_incident_id": run.open_incident_id,
         "paused_at": run.paused_at,
         "counts": {
             "new": new_count,

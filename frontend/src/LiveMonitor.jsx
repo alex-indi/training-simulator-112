@@ -3,8 +3,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
 import styles from './LiveMonitor.module.css'
-import { ddsStatusLabels, incidentHistoryLabels, responseStateLabels, responseSenderLabels } from './uiLabels.js'
+import { ddsStatusLabels } from './uiLabels.js'
 import StatusMessage from './StatusMessage.jsx'
+import WorkstationMirror from './WorkstationMirror.jsx'
 
 const statusLabels = ddsStatusLabels
 
@@ -31,13 +32,13 @@ function LiveMonitor({ sessionId, user, api }) {
   const [snapshot, setSnapshot] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [workstation, setWorkstation] = useState(null)
+  const [detailRevision, setDetailRevision] = useState(0)
   const workstationId = workstation?.id
   const [error, setError] = useState('')
   const [dialog, setDialog] = useState('')
   const [busy, setBusy] = useState(false)
   const [scenarios, setScenarios] = useState([])
   const [notes, setNotes] = useState([])
-  const [scenarioDetails, setScenarioDetails] = useState({})
   const [draft, setDraft] = useState({ scenario_id: '', target: 'CLASS', target_id: '', incident_id: '', kind: 'NEW_INFORMATION', body: '', mode: 'GRACEFUL', reason: '' })
   const selectedScenario = scenarios.find((item) => item.id === Number(draft.scenario_id))
   const [, setTick] = useState(0)
@@ -56,8 +57,8 @@ function LiveMonitor({ sessionId, user, api }) {
       auth: { username: user.username },
     })
     socket.on('connect', () => { socket.emit('subscribe', { session_id: sessionId }); refresh() })
-    for (const event of ['incident.delivered', 'incident.claimed', 'incident.updated', 'response.message_created', 'training.control_changed']) {
-      socket.on(event, refresh)
+    for (const event of ['incident.delivered', 'incident.opened', 'incident.claimed', 'incident.updated', 'response.message_created', 'training.control_changed', 'training.workstation_view_changed']) {
+      socket.on(event, () => { refresh(); setDetailRevision((value) => value + 1) })
     }
     const poll = window.setInterval(refresh, 10000)
     const timer = window.setInterval(() => setTick((value) => value + 1), 1000)
@@ -73,7 +74,7 @@ function LiveMonitor({ sessionId, user, api }) {
     load()
     const poll = window.setInterval(load, 10000)
     return () => { active = false; window.clearInterval(poll) }
-  }, [api, sessionId, workstationId])
+  }, [api, sessionId, workstationId, detailRevision])
 
   useEffect(() => {
     if (!selectedId) return undefined
@@ -116,16 +117,6 @@ function LiveMonitor({ sessionId, user, api }) {
     try { setScenarios(await api(`/api/training/sessions/${sessionId}/scenarios`)); setDialog('card') }
     catch (cause) { setError(cause.message) }
   }
-  const showScenario = async (instanceId) => {
-    try {
-      const [instance, materialization] = await Promise.all([
-        api(`/api/scenario-instances/${instanceId}`),
-        api(`/api/scenario-instances/${instanceId}/materialization`),
-      ])
-      setScenarioDetails((current) => ({ ...current, [instanceId]: { instance, materialization } }))
-    } catch (cause) { setError(cause.message) }
-  }
-
   const submitDialog = async (event) => {
     event.preventDefault()
     if (dialog === 'card') await post('/manual-cards', { scenario_id: Number(draft.scenario_id), target: draft.target, target_id: draft.target_id ? Number(draft.target_id) : null })
@@ -190,13 +181,13 @@ function LiveMonitor({ sessionId, user, api }) {
         </button>) : <p>Сейчас нет сигналов.</p>}
       </aside>
     </div>
-    {selected && <div className={styles.overlay} onMouseDown={() => { setSelectedId(null); setWorkstation(null) }}><aside className={styles.drawer} onMouseDown={(event) => event.stopPropagation()}>
+    {selected && <div className={styles.overlay} onMouseDown={() => { setSelectedId(null); setWorkstation(null) }}><aside className={`${styles.drawer} ${workstation ? styles.drawerMirror : ''}`} onMouseDown={(event) => event.stopPropagation()}>
       <header><div><small>АРМ {String(selected.workstation_number || 0).padStart(2, '0')} · {selected.online ? 'Online' : 'Offline'}</small><h2>{selected.trainee_name}</h2><p>{selected.group_name || 'Не распределён'} · {selected.dds_profile}</p></div><button type="button" onClick={() => { setSelectedId(null); setWorkstation(null) }} aria-label="Закрыть">×</button></header>
       <button className={styles.workstationButton} type="button" onClick={() => setWorkstation(workstation ? null : { id: selected.id })}>{workstation ? '← К деталям участника' : 'Открыть рабочее место'}</button>
+      {workstation ? <WorkstationMirror workstation={workstation} /> : <>
       <div className={styles.runControls}><button type="button" disabled={busy} onClick={() => selected.paused_at ? post(`/runs/${selected.id}/resume`, {}) : setDialog('runPause')}>{selected.paused_at ? 'Продолжить АРМ' : 'Приостановить АРМ'}</button><button type="button" onClick={() => setDialog('note')}>+ Заметка</button></div>
       {notes.length > 0 && <section><h3>Заметки преподавателя</h3>{notes.map((note) => <p className={styles.event} key={note.id}>{time(note.created_at)} · {note.body}</p>)}</section>}
-      {workstation?.incidents ? <><h3>Карточки рабочего места</h3>{incidentList(workstation.incidents)}{workstation.incidents.map((incident) => <section key={incident.id} className={styles.readonly}><h4>{incident.incident_number} · {incident.incident_type}</h4><p>{incident.address}</p><p>{incident.description}</p>{incident.scenario_instance_id && <><button type="button" onClick={() => showScenario(incident.scenario_instance_id)}>Показать план сценария</button>{scenarioDetails[incident.scenario_instance_id] && <div><p>Шаблон: {scenarioDetails[incident.scenario_instance_id].instance.template_snapshot.name} · объект: {scenarioDetails[incident.scenario_instance_id].instance.object_snapshot.name}</p><ol>{scenarioDetails[incident.scenario_instance_id].instance.events.map((event) => { const fact = scenarioDetails[incident.scenario_instance_id].materialization.runtime_events.find((item) => item.scenario_instance_event_id === event.id); return <li key={event.sequence_number}>T+{duration(event.offset_seconds)} · {event.title} — {event.description} · {event.event_type === 'INITIAL_REPORT' ? 'Исходное сообщение' : fact?.released_at ? `Выдано ${time(fact.released_at)}` : 'Ожидает'}</li> })}</ol></div>}</>}{incident.scenario_events?.map((item) => <p key={item.id}><b>{item.origin === 'SCENARIO' ? 'Сценарий' : 'Вводная преподавателя'} · {time(item.created_at)}</b> {item.body}</p>)}<h5>Статусы и комментарии</h5>{incident.actions.map((action) => <p key={action.id}>{time(action.created_at)} · {incidentHistoryLabels[action.status] || action.status}{action.comment ? ` — ${action.comment}` : ''}</p>)}<h5>Группы и сообщения</h5>{incident.response_assignments.map((assignment) => <div key={assignment.id}><b>{assignment.unit_name} · {responseStateLabels[assignment.state] || assignment.state}</b>{assignment.messages.map((message) => <p key={message.id}>{time(message.created_at)} · {responseSenderLabels[message.sender_type] || message.sender_type}: {message.body}</p>)}</div>)}</section>)}</> : <>
-        <h3>Активные карточки</h3>{selected.active_incidents.length ? incidentList(selected.active_incidents) : <p>Активных карточек нет.</p>}
+      <h3>Активные карточки</h3>{selected.active_incidents.length ? incidentList(selected.active_incidents) : <p>Активных карточек нет.</p>}
         <h3>Последние действия</h3>{selected.timeline.length ? selected.timeline.map((entry, index) => <p className={styles.event} key={`${entry.incident_id}-${index}`}><time>{time(entry.at)}</time>{entry.text}</p>) : <p>Действий пока нет.</p>}
         <h3>Сигналы</h3>{selected.signals.length ? selected.signals.map((signal, index) => <p className={styles.signal} key={`${signal.kind}-${index}`}>⚠ {signal.text}</p>) : <p>Сигналов нет.</p>}
       </>}
