@@ -36,8 +36,6 @@ jobs:
         working-directory: backend
       - run: uv run python -m app.scripts.bootstrap_demo
         working-directory: backend
-      - run: uv run python -m app.scripts.seed_all
-        working-directory: backend
       - run: uv run pytest -q tests/test_seed_core.py tests/test_seed_demo.py
         working-directory: backend
         env:
@@ -58,6 +56,38 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare demo environment
+        run: cp .env.docker.example .env.docker
+      - name: Validate and build Compose services
+        run: |
+          docker compose --env-file .env.docker config -q
+          docker compose --env-file .env.docker build
+      - name: Start containers and check reverse proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker compose --env-file .env.docker down' EXIT
+          docker compose --env-file .env.docker up -d --wait --wait-timeout 180
+          docker compose --env-file .env.docker run --rm backend python -m app.scripts.bootstrap_demo
+          curl -fsS http://127.0.0.1:8080/ >/dev/null
+          curl -fsS http://127.0.0.1:8080/admin | grep -q '<div id="root">'
+          curl -fsS http://127.0.0.1:8080/health | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8080/api/users/demo | grep -q 'admin'
+          curl -fsS 'http://127.0.0.1:8080/socket.io/?EIO=4&transport=polling' | grep -q '^0'
+          upgrade_headers=$(curl -sS --max-time 2 -D - -o /dev/null \
+            -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+            -H 'Sec-WebSocket-Version: 13' \
+            -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+            'http://127.0.0.1:8080/socket.io/?EIO=4&transport=websocket' || true)
+          printf '%s' "$upgrade_headers" | grep -q '101 Switching Protocols'
+          docker compose --env-file .env.docker down
+          docker compose --env-file .env.docker up -d --wait --wait-timeout 180
+          curl -fsS http://127.0.0.1:8080/api/users/demo | grep -q 'admin'
 
   e2e-mvp:
     runs-on: ubuntu-latest
@@ -101,7 +131,6 @@ jobs:
         working-directory: backend
         run: |
           uv run python -m app.scripts.bootstrap_demo
-          uv run python -m app.scripts.seed_all
           E2E_SEED=1 uv run python -m tests.e2e_seed
       - name: Run simplified MVP smoke
         shell: bash

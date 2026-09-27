@@ -109,6 +109,34 @@ uv run uvicorn app.main:socket_app \
 
 Поддерживаемая конфигурация стенда — один backend container и один Uvicorn worker. `dev.py` предназначен для локальной разработки и не является production launcher. Для разработки с разными портами сохраните `VITE_API_URL=http://localhost:8000` в корневом `.env`.
 
+## Запуск через Docker
+
+Нужны Docker Desktop либо Docker Engine с Compose. Python, Node.js, `uv` и PostgreSQL на компьютере устанавливать не требуется. Из корня репозитория:
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+Измените `POSTGRES_PASSWORD` в `.env.docker` (используйте URL-безопасные символы: буквы, цифры, дефис или подчёркивание), затем выполните:
+
+```bash
+docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker run --rm backend python -m app.scripts.bootstrap_demo
+```
+
+Откройте `http://localhost:8080` или `http://localhost:8080/admin`. `bootstrap_demo` нужен один раз после создания чистой базы: он сам применяет миграции и загружает справочники и demo-данные. Повторно запускать `seed_all` не требуется. Обычный старт backend применяет только миграции, без seed. По умолчанию AI выключен и используется локальный fallback; после загрузки и сборки образов стенд работает без внешних API и интернета. Для другого порта измените `APP_PORT`, а для внешнего origin — `FRONTEND_ORIGINS` в `.env.docker`.
+
+Для последующих запусков, просмотра состояния и логов, остановки:
+
+```bash
+docker compose --env-file .env.docker up -d
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker down
+```
+
+Данные PostgreSQL хранятся в именованном volume `postgres_data` и сохраняются после `down`. Сделайте резервную копию этого volume перед переносом или обновлением стенда. Команда `docker compose down -v` удаляет volume и **все данные занятий и результаты**. Для осознанного полного сброса используйте `sh scripts/docker-reset-demo.sh` (PowerShell: `scripts/docker-reset-demo.ps1`): скрипт запросит ввод `RESET`, удалит volume, поднимет стенд и выполнит bootstrap заново.
+
 ## Рабочий путь преподавателя
 
 Подготовка занятия состоит из четырёх шагов:
