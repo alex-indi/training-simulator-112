@@ -244,9 +244,18 @@
   color: #172026;
   font-size: 11px;
 }
+.sessionReconnectOverlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(29 43 51 / 50%);
+}
 .sessionReconnect {
-  margin: 18px auto;
-  width: min(760px, calc(100% - 40px));
+  box-sizing: border-box;
+  width: min(760px, 100%);
   padding: 18px 22px;
   border: 1px solid #aeb7bb;
   background: #f7fafc;
@@ -366,6 +375,11 @@
   grid-template-rows: 75px 38px;
   background: #30373c;
   color: #fff;
+}
+
+.clockPanelAboveReconnect {
+  position: relative;
+  z-index: 41;
 }
 
 .clockUpper {

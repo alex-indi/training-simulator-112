@@ -444,7 +444,7 @@ def _result_read(
     if public:
         data.pop("automatic_score")
         if result.confirmed_at is None:
-            data["final_score"] = result.automatic_score
+            data["final_score"] = None
         else:
             data["deviations"] = [
                 item for item in data["deviations"] if item["decision"] == "CONFIRMED"
