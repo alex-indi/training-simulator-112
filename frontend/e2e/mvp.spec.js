@@ -42,6 +42,10 @@ test('MVP: общий пул, claim, принятие и сообщение бр
     }))
 
     await login(page, 'trainee', 1)
+    await expect.poll(async () => {
+      const sessions = await json(await trainee.get('/api/training/sessions'))
+      return sessions.find((item) => item.id === session.id)?.own_run?.id
+    }).toBeTruthy()
 
     const grouped = await json(await instructor.post(`/api/training/sessions/${session.id}/groups`, {
       data: {
