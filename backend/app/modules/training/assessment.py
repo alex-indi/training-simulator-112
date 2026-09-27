@@ -489,24 +489,22 @@ async def _generate_summary(
     }
     try:
         renderer = await renderer_for_database(database)
-        if renderer.enabled and renderer.provider.name != "template":
-            rendered = await renderer.render(
-                TextGenerationRequest(
-                    task=TextGenerationTask.ASSESSMENT_SUMMARY,
-                    facts=facts,
-                    context={
-                        "instructor_comment": (
-                            instructor_comment
-                            if instructor_comment is not None
-                            else result.final_comment or ""
-                        ),
-                        "previous_summary": result.ai_summary or "",
-                    },
-                )
+        rendered = await renderer.render(
+            TextGenerationRequest(
+                task=TextGenerationTask.ASSESSMENT_SUMMARY,
+                facts=facts,
+                context={
+                    "instructor_comment": (
+                        instructor_comment
+                        if instructor_comment is not None
+                        else result.final_comment or ""
+                    ),
+                    "previous_summary": result.ai_summary or "",
+                },
             )
-            if not rendered["fallback_used"]:
-                summary = rendered["rendered_text"]
-                provider = rendered["provider"]
+        )
+        summary = rendered["rendered_text"]
+        provider = rendered["provider"]
     except Exception:
         pass  # Оценка и сохранение решения преподавателя доступны без AI.
     result.ai_summary = summary
@@ -757,8 +755,6 @@ async def assessment_summary(
     database: Annotated[AsyncSession, Depends(get_database_session)],
 ) -> dict:
     result = await _editable_result(database, session_id, run_id, user)
-    if result.ai_summary_generated_at is None:
-        await _generate_summary(database, result)
     return {
         "ai_summary": result.ai_summary,
         "ai_summary_provider": result.ai_summary_provider,

@@ -529,10 +529,24 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
                 clone = (await client.get(f"/api/scenario-instances/{copied.json()['id']}")).json()
                 assert clone["status"] == "CONFIRMED"
                 assert clone["object_snapshot"]["address"] == "Пехотная, 1"
+                assert clone["template_snapshot"]["source_saved_card_id"] == card_id
+                duplicate = await client.post(
+                    f"/api/incident-cards/{card_id}/add-to-group",
+                    json={"session_id": session.id, "group_id": group.id},
+                )
+                assert duplicate.status_code == 409
                 edited_card = await client.patch(
                     f"/api/incident-cards/{card_id}/text", json={"text": "Проверенный текст"}
                 )
                 assert edited_card.status_code == 200, edited_card.text
+                rerendered_card = await client.post(
+                    f"/api/incident-cards/{card_id}/rerender-text"
+                )
+                assert rerendered_card.status_code == 200, rerendered_card.text
+                assert (
+                    rerendered_card.json()["initial_state_snapshot"]["render"]["rendered_text"]
+                    == "Новая оперативная формулировка"
+                )
                 assert (
                     clone["initial_state_snapshot"]["render"]["rendered_text"]
                     != "Проверенный текст"
