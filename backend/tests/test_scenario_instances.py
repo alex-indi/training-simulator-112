@@ -33,6 +33,7 @@ from app.modules.object_registry.models import (
 from app.modules.response import models as response_models  # noqa: F401
 from app.modules.scenario_library.instance_models import (
     SavedIncidentCard,
+    SavedIncidentCardPackage,
     ScenarioInstance,
     ScenarioInstanceEvent,
 )
@@ -111,6 +112,7 @@ def test_generation_snapshot_permissions_and_session_attachment(monkeypatch):
         ScenarioInstance,
         ScenarioInstanceEvent,
         SavedIncidentCard,
+        SavedIncidentCardPackage,
     ]
     Base.metadata.create_all(engine, tables=[model.__table__ for model in tables])
     with Session(engine, expire_on_commit=False) as db:
