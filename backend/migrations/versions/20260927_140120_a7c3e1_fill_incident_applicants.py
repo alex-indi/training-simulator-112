@@ -44,8 +44,12 @@ def upgrade() -> None:
                 WHEN applicant_phone IS NULL OR btrim(applicant_phone) = '' THEN
                     '+7 (9' || lpad(floor(random() * 100)::integer::text, 2, '0') || ') '
                     || substring(lpad(floor(random() * 10000000)::integer::text, 7, '0'), 1, 3)
-                    || '-' || substring(lpad(floor(random() * 10000000)::integer::text, 7, '0'), 4, 2)
-                    || '-' || substring(lpad(floor(random() * 10000000)::integer::text, 7, '0'), 6, 2)
+                    || '-' || substring(
+                        lpad(floor(random() * 10000000)::integer::text, 7, '0'), 4, 2
+                    )
+                    || '-' || substring(
+                        lpad(floor(random() * 10000000)::integer::text, 7, '0'), 6, 2
+                    )
                 ELSE applicant_phone
             END
         WHERE applicant_name IS NULL OR btrim(applicant_name) = ''

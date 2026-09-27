@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
+import { apiUrl } from './apiUrl.js'
 import styles from './InstructorWorkspace.module.css'
 import LiveMonitor from './LiveMonitor.jsx'
 import AssessmentWorkspace from './AssessmentWorkspace.jsx'
@@ -137,7 +138,7 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
 
   useEffect(() => {
     if (!openSessionId || session?.state === 'ACTIVE') return undefined
-    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', { auth: { username: user.username } })
+    const socket = io(apiUrl, { auth: { username: user.username } })
     const refresh = () => reload(openSessionId).catch(() => {})
     socket.on('connect', () => { socket.emit('subscribe', { session_id: openSessionId }); refresh() })
     socket.on('incident.delivered', refresh)

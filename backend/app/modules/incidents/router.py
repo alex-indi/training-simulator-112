@@ -566,8 +566,13 @@ async def change_incident_emergency_kind(
         (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
         None,
     )
-    if incident.training_group_id is not None and incident.claimed_by_training_run_id != owner_run_id:
-        raise HTTPException(status_code=409, detail="Карточка уже взята в работу другим диспетчером")
+    if (
+        incident.training_group_id is not None
+        and incident.claimed_by_training_run_id != owner_run_id
+    ):
+        raise HTTPException(
+            status_code=409, detail="Карточка уже взята в работу другим диспетчером"
+        )
     if incident.training_session.state != TrainingSessionState.ACTIVE:
         raise HTTPException(status_code=409, detail="Изменение доступно только в активном занятии")
     if incident.opened_at is None:

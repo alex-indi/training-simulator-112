@@ -84,6 +84,31 @@ FRONTEND_ORIGINS=http://192.168.1.25:5173
 
 Для MVP запускайте один backend worker/process. Планировщик доставки дополнительно защищён PostgreSQL advisory lock, но это не режим работы нескольких backend-процессов для учебного стенда.
 
+## Production build
+
+Соберите frontend без `VITE_API_URL`, чтобы REST и Socket.IO обращались к тому же origin, с которого открыта страница:
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+Готовые статические файлы находятся в `frontend/dist/`; Node.js для их раздачи не нужен. При раздаче настройте SPA fallback на `index.html` для прямого открытия `/admin`, а `/api/*` и `/socket.io/*` направьте на backend без изменения пути. `GET /health` остаётся проверкой доступности backend.
+
+Запуск backend из отдельного терминала после настройки окружения и базы данных:
+
+```bash
+cd backend
+uv sync --frozen
+uv run uvicorn app.main:socket_app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --workers 1
+```
+
+Поддерживаемая конфигурация стенда — один backend container и один Uvicorn worker. `dev.py` предназначен для локальной разработки и не является production launcher. Для разработки с разными портами сохраните `VITE_API_URL=http://localhost:8000` в корневом `.env`.
+
 ## Рабочий путь преподавателя
 
 Подготовка занятия состоит из четырёх шагов:
