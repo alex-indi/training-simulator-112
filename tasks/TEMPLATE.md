@@ -1,8 +1,6 @@
-# UT112-XX — Краткое название
+# Краткое название работы
 
-- **Branch:** `feature/UT112-XX-short-name`
-- **Owner:** ...
-- **WEEEK:** ...
+- **Branch:** `codex/short-name`
 - **Updated:** YYYY-MM-DD HH:MM
 
 ## Цель
