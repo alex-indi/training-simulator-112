@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from datetime import UTC, datetime
+from secrets import choice, randbelow
 from typing import Any
 
 from app.modules.incidents.models import (
@@ -45,6 +46,31 @@ COMMENT_REQUIRED_ACTIONS = {
     IncidentActionType.REJECT,
     IncidentActionType.REFUSE_WORK,
 }
+
+APPLICANT_NAMES = (
+    "Александров Александр Сергеевич",
+    "Белов Дмитрий Андреевич",
+    "Васильев Михаил Олегович",
+    "Волкова Анна Игоревна",
+    "Захарова Елена Викторовна",
+    "Козлов Алексей Николаевич",
+    "Кузнецова Мария Александровна",
+    "Морозов Иван Павлович",
+    "Новикова Ольга Сергеевна",
+    "Орлов Максим Дмитриевич",
+    "Петрова Наталья Андреевна",
+    "Смирнов Сергей Владимирович",
+    "Соколова Екатерина Михайловна",
+    "Фёдоров Артём Романович",
+    "Яковлева Ирина Алексеевна",
+)
+
+
+def generate_applicant() -> tuple[str, str]:
+    """Формирует учебные контактные данные, которые сохраняются вместе с карточкой."""
+    phone_digits = "".join(str(randbelow(10)) for _ in range(7))
+    phone = f"+7 (9{randbelow(100):02d}) {phone_digits[:3]}-{phone_digits[3:5]}-{phone_digits[5:]}"
+    return choice(APPLICANT_NAMES), phone
 
 
 def get_available_actions(incident: Incident) -> list[IncidentActionType]:
@@ -98,6 +124,10 @@ def create_delivered_incident(
     """Создаёт независимый snapshot карточки и фиксирует серверное время доставки."""
     delivered_at = server_time or datetime.now(UTC)
     snapshot = deepcopy(source_snapshot)
+    if not snapshot.get("applicant_name") or not snapshot.get("applicant_phone"):
+        generated_name, generated_phone = generate_applicant()
+        snapshot["applicant_name"] = snapshot.get("applicant_name") or generated_name
+        snapshot["applicant_phone"] = snapshot.get("applicant_phone") or generated_phone
     old_address = snapshot["address"]
     snapshot["address"] = normalize_address(old_address) or old_address
     if snapshot["source"] == "SCENARIO_INSTANCE" and old_address != snapshot["address"]:

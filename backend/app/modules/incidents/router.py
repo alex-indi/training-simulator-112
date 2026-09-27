@@ -17,6 +17,7 @@ from app.modules.incidents.schemas import (
     IncidentActionCreate,
     IncidentActionRead,
     IncidentCreate,
+    IncidentEmergencyUpdate,
     IncidentRead,
 )
 from app.modules.incidents.workflow import (
@@ -130,6 +131,7 @@ def _to_read_model(incident: Incident, user: User) -> IncidentRead:
         source=incident.source,
         applicant_name=incident.applicant_name,
         applicant_phone=incident.applicant_phone,
+        emergency_kind=incident.emergency_kind,
         address=incident.address,
         latitude=incident.latitude,
         longitude=incident.longitude,
@@ -542,6 +544,35 @@ async def change_incident_status(
     database.add(action)
     if payload.action.value == "ACCEPT":
         record_other_service_reactions(incident, action.created_at)
+    await database.commit()
+    await publish_session_event("incident.updated", incident.training_session_id, incident.id)
+    return _to_read_model(incident, current_user)
+
+
+@router.patch("/{incident_id}/emergency-kind", response_model=IncidentRead)
+async def change_incident_emergency_kind(
+    incident_id: int,
+    payload: IncidentEmergencyUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> IncidentRead:
+    """Устанавливает взаимоисключающий признак ЧС/ЧП или снимает его."""
+    if current_user.role != UserRole.TRAINEE:
+        raise HTTPException(status_code=403, detail="Признак может менять только обучаемый")
+    incident = await _load_incident(database, incident_id, for_update=True)
+    _ensure_incident_visible(incident, current_user)
+    _ensure_training_running(incident, current_user)
+    owner_run_id = next(
+        (run.id for run in incident.training_session.runs if run.trainee_id == current_user.id),
+        None,
+    )
+    if incident.training_group_id is not None and incident.claimed_by_training_run_id != owner_run_id:
+        raise HTTPException(status_code=409, detail="Карточка уже взята в работу другим диспетчером")
+    if incident.training_session.state != TrainingSessionState.ACTIVE:
+        raise HTTPException(status_code=409, detail="Изменение доступно только в активном занятии")
+    if incident.opened_at is None:
+        raise HTTPException(status_code=409, detail="Сначала откройте карточку")
+    incident.emergency_kind = payload.emergency_kind
     await database.commit()
     await publish_session_event("incident.updated", incident.training_session_id, incident.id)
     return _to_read_model(incident, current_user)

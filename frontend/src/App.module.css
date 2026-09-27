@@ -1132,9 +1132,13 @@
 .warningIcon::before {
   position: absolute;
   inset: 0;
-  background: #fff;
+  background: #253036;
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
   content: '';
+}
+
+.emergencyButton .warningIcon::before {
+  background: #fff;
 }
 
 .warningIcon::after {
@@ -1142,11 +1146,15 @@
   top: 4px;
   left: 0;
   width: 100%;
-  color: #ec653b;
+  color: #fff;
   content: '!';
   font-size: 12px;
   line-height: 1;
   text-align: center;
+}
+
+.emergencyButton .warningIcon::after {
+  color: #ec653b;
 }
 
 .incidentBody {

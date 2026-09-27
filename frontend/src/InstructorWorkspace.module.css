@@ -361,6 +361,8 @@
 .shell .cardEditorDanger:hover:not(:disabled){border-color:#9b3823;background:#f9e2dc}
 .cardEditorBody .cardEditorHint{color:var(--dds-muted);font-size:11px}
 .preparedGroupCard .cardList button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+.selectAllCards{display:flex;align-items:center;gap:8px;width:max-content;font-weight:600}
+.selectAllCards input{width:18px;height:18px;margin:0}
 .useDialog{width:min(100%,520px);display:grid;gap:12px}
 .useDialog h2,.useDialog p{margin:0}
 .useDialog label{display:grid;gap:6px}

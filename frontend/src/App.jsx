@@ -662,6 +662,29 @@ function App() {
     }
   }
 
+  const toggleEmergencyKind = async (kind) => {
+    if (!selectedIncident?.can_edit) return
+    setError('')
+    setLoading(true)
+    try {
+      const updatedIncident = await requestJson(
+        `/api/incidents/${selectedIncident.id}/emergency-kind`,
+        currentUser.username,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emergency_kind: selectedIncident.emergency_kind === kind ? null : kind }),
+        },
+      )
+      setSelectedIncident(updatedIncident)
+      setIncidents((items) => items.map((item) => (item.id === updatedIncident.id ? updatedIncident : item)))
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (currentUser?.role === 'INSTRUCTOR') {
     return <InstructorWorkspace user={currentUser} users={users} selectUser={selectUser} requestJson={requestJson} onLogout={logout} />
   }
@@ -881,8 +904,8 @@ function App() {
                 <span>Заблокированные: {operationalValue(snapshot?.blocked_people)}</span>
               </div>
               <div className={styles.indicatorActions}>
-                <button type="button" disabled title="Признак чрезвычайной ситуации">ЧС <span className={styles.chsBoltIcon} aria-hidden="true" /></button>
-                <button className={styles.emergencyButton} type="button" disabled title="Признак чрезвычайного происшествия">ЧП <span className={styles.warningIcon} aria-hidden="true" /></button>
+                <button className={selectedIncident.emergency_kind === 'ЧС' ? styles.emergencyButton : ''} type="button" disabled={!selectedIncident.can_edit || loading} aria-pressed={selectedIncident.emergency_kind === 'ЧС'} onClick={() => toggleEmergencyKind('ЧС')} title="Признак чрезвычайной ситуации">ЧС <span className={styles.chsBoltIcon} aria-hidden="true" /></button>
+                <button className={selectedIncident.emergency_kind === 'ЧП' ? styles.emergencyButton : ''} type="button" disabled={!selectedIncident.can_edit || loading} aria-pressed={selectedIncident.emergency_kind === 'ЧП'} onClick={() => toggleEmergencyKind('ЧП')} title="Признак чрезвычайного происшествия">ЧП <span className={styles.warningIcon} aria-hidden="true" /></button>
                 <button className={styles.pencilButton} type="button" disabled title="Редактирование классификации доступно оператору Службы 112"><span className={styles.editPencilIcon} aria-hidden="true" /></button>
               </div>
             </div>

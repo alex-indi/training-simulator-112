@@ -73,6 +73,9 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
     ].join(' '))
     return terms.every((term) => content.includes(term))
   })
+  const selectableVisibleCards = visibleCards.filter((card) => !usedIds.has(card.id))
+  const allVisibleSelected = selectableVisibleCards.length > 0
+    && selectableVisibleCards.every((card) => selected.includes(card.id))
   const templates = [...new Map(cards.map((card) => [
     String(card.source_template_id ?? 'none'),
     card.template_snapshot?.name || 'Без шаблона',
@@ -188,7 +191,18 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
         <button type="button" role="tab" aria-selected={activeTab === 'cards'} onClick={() => setActiveTab('cards')}>Карточки ({cards.length})</button>
         <button type="button" role="tab" aria-selected={activeTab === 'packages'} onClick={() => setActiveTab('packages')}>Пакеты ({packages.length})</button>
       </div>
-      {activeTab === 'cards' && <small>Показано {visibleCards.length} из {cards.length}</small>}
+      {activeTab === 'cards' && <div className={styles.savedSelectionBar}>
+        <small>Показано {visibleCards.length} из {cards.length}</small>
+        {picker && !!selectableVisibleCards.length && <label>
+          <input type="checkbox" checked={allVisibleSelected} onChange={(event) => {
+            const visibleIds = new Set(selectableVisibleCards.map((card) => card.id))
+            setSelected((current) => event.target.checked
+              ? [...new Set([...current, ...visibleIds])]
+              : current.filter((id) => !visibleIds.has(id)))
+          }} />
+          <span>Выбрать все показанные</span>
+        </label>}
+      </div>}
     </div>
     {!openedCard && <StatusMessage message={error} tone="error" />}
     {!openedCard && <StatusMessage message={notice} tone="success" />}
