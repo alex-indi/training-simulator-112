@@ -103,7 +103,7 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
     {!selected && error && <p className={styles.error} role="alert">{error}</p>}
     {!selected && notice && <p className={styles.notice} role="status">{notice}</p>}
     {editable && <div className={styles.actions}>
-      <button type="button" disabled={busy} onClick={() => onAddSaved(group.id)}>+ Добавить готовые карточки</button>
+      <button type="button" disabled={busy} onClick={() => onAddSaved(group.id)}>+ Добавить из библиотеки</button>
       <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Сформировать из шаблона</button>
       <button type="button" disabled={busy || !selectedForRerender.some((id) => instances.some((item) => item.id === id))} onClick={rerenderSelected}>Перегенерировать тексты выбранных</button>
     </div>}

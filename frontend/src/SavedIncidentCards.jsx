@@ -10,6 +10,10 @@ const searchable = (value) => String(value || '').toLocaleLowerCase('ru').replac
 export default function SavedIncidentCards({ user, requestJson, sessionId, groupId, onCompleted, picker = false }) {
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const [cards, setCards] = useState([])
+  const [packages, setPackages] = useState([])
+  const [activeTab, setActiveTab] = useState('cards')
+  const [packageDraft, setPackageDraft] = useState(null)
+  const [templateFilter, setTemplateFilter] = useState('all')
   const [usedIds, setUsedIds] = useState(new Set())
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState([])
@@ -23,11 +27,13 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const reload = useCallback(async () => {
-    const [saved, instances] = await Promise.all([
+    const [saved, savedPackages, instances] = await Promise.all([
       api('/api/incident-cards'),
+      api('/api/incident-cards/packages'),
       picker ? api(`/api/training/sessions/${sessionId}/scenario-instances`) : Promise.resolve([]),
     ])
     setCards(saved)
+    setPackages(savedPackages)
     const assigned = new Set(saved.filter((card) => instances.some((item) =>
       item.training_group_id === Number(groupId) && (
         item.template_snapshot?.source_saved_card_id === card.id || (
@@ -55,6 +61,13 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
     ].join(' '))
     return terms.every((term) => content.includes(term))
   })
+  const templates = [...new Map(cards.map((card) => [
+    String(card.source_template_id ?? 'none'),
+    card.template_snapshot?.name || 'Без шаблона',
+  ])).entries()]
+  const packageCandidates = cards.filter((card) =>
+    templateFilter === 'all' || String(card.source_template_id ?? 'none') === templateFilter
+  )
 
   useEffect(() => {
     if (!openedId) return undefined
@@ -108,21 +121,60 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
     for (const id of selected) await api(`/api/incident-cards/${id}/add-to-group`, json('POST', { session_id: sessionId, group_id: groupId }))
     setNotice(`Добавлено ${selected.length} карточек`); setSelected([]); onCompleted?.()
   })
+  const startPackage = (item = null) => {
+    setPackageDraft(item ? {
+      id: item.id, name: item.name, description: item.description,
+      card_ids: [...item.card_ids],
+    } : { name: '', description: '', card_ids: [] })
+    setTemplateFilter('all')
+    setActiveTab('packages')
+    setError('')
+  }
+  const togglePackageCard = (id) => setPackageDraft((current) => ({
+    ...current,
+    card_ids: current.card_ids.includes(id)
+      ? current.card_ids.filter((item) => item !== id)
+      : [...current.card_ids, id],
+  }))
+  const savePackage = () => perform(async () => {
+    const path = packageDraft.id ? `/api/incident-cards/packages/${packageDraft.id}` : '/api/incident-cards/packages'
+    await api(path, json(packageDraft.id ? 'PATCH' : 'POST', packageDraft))
+    await reload()
+    setPackageDraft(null)
+    setNotice('Пакет сохранён')
+  })
+  const removePackage = (item) => {
+    if (!window.confirm(`Удалить пакет «${item.name}»? Карточки останутся в библиотеке.`)) return
+    perform(async () => {
+      await api(`/api/incident-cards/packages/${item.id}`, { method: 'DELETE' })
+      await reload()
+      setNotice('Пакет удалён')
+    })
+  }
+  const addPackage = (item) => perform(async () => {
+    const result = await api(`/api/incident-cards/packages/${item.id}/add-to-group`, json('POST', { session_id: sessionId, group_id: groupId }))
+    setNotice(`Добавлено ${result.added_count} карточек`)
+    onCompleted?.()
+  })
 
   return <main className={styles.shell}><div className={styles.content}>
     <div className={styles.savedLibraryToolbar}>
-      <div><h2>Карточки происшествий</h2><p>Сохранённые карточки можно использовать в разных занятиях.</p></div>
-      <div className={styles.savedLibraryControls}>
+      <div><h2>Библиотека карточек</h2><p>Карточки и пакеты можно использовать в разных занятиях.</p></div>
+      {activeTab === 'cards' && <div className={styles.savedLibraryControls}>
         <label className={styles.savedSearch}>Поиск карточки
           <span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Название, объект, тип или адрес" />{search && <button type="button" onClick={() => setSearch('')} aria-label="Очистить поиск">×</button>}</span>
         </label>
         {picker && <button type="button" className={styles.savedAddButton} disabled={busy || !selected.length} onClick={add}>Добавить выбранные ({selected.length})</button>}
+      </div>}
+      <div className={styles.savedTabs} role="tablist" aria-label="Разделы библиотеки">
+        <button type="button" role="tab" aria-selected={activeTab === 'cards'} onClick={() => setActiveTab('cards')}>Карточки ({cards.length})</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'packages'} onClick={() => setActiveTab('packages')}>Пакеты ({packages.length})</button>
       </div>
-      <small>Показано {visibleCards.length} из {cards.length}</small>
+      {activeTab === 'cards' && <small>Показано {visibleCards.length} из {cards.length}</small>}
     </div>
     {!openedCard && error && <p className={styles.error} role="alert">{error}</p>}
     {!openedCard && notice && <p className={styles.notice} role="status">{notice}</p>}
-    <div className={styles.savedCardGrid}>{visibleCards.map((card) => {
+    {activeTab === 'cards' && <><div className={styles.savedCardGrid}>{visibleCards.map((card) => {
       const isSelected = selected.includes(card.id)
       const summary = <><strong>{card.name}</strong><small>{card.classifier_snapshot.final_incident_type}</small></>
       const isUsed = usedIds.has(card.id)
@@ -135,7 +187,42 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
       </article>
     })}</div>
     {!cards.length && <p>Сохранённых карточек пока нет.</p>}
-    {!!cards.length && !visibleCards.length && <p>По запросу ничего не найдено.</p>}
+    {!!cards.length && !visibleCards.length && <p>По запросу ничего не найдено.</p>}</>}
+    {activeTab === 'packages' && <section className={styles.savedPackages}>
+      {!picker && !packageDraft && <button type="button" className={styles.savedAddButton} onClick={() => startPackage()}>+ Создать пакет</button>}
+      {packageDraft && <div className={styles.savedPackageEditor}>
+        <h3>{packageDraft.id ? 'Изменить пакет' : 'Новый пакет'}</h3>
+        <label>Название пакета<input value={packageDraft.name} maxLength={160} onChange={(event) => setPackageDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Например: Пожар в школе" /></label>
+        <label>Описание (необязательно)<input value={packageDraft.description} maxLength={500} onChange={(event) => setPackageDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Для какого занятия или темы" /></label>
+        <div className={styles.savedPackageSelectionHeader}>
+          <label>Карточки по шаблону<select value={templateFilter} onChange={(event) => setTemplateFilter(event.target.value)}><option value="all">Все шаблоны</option>{templates.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+          <button type="button" onClick={() => setPackageDraft((current) => ({ ...current, card_ids: [...new Set([...current.card_ids, ...packageCandidates.map((card) => card.id)])] }))}>Выбрать показанные</button>
+          <button type="button" onClick={() => { const shown = new Set(packageCandidates.map((card) => card.id)); setPackageDraft((current) => ({ ...current, card_ids: current.card_ids.filter((id) => !shown.has(id)) })) }}>Снять выбор</button>
+        </div>
+        <div className={styles.savedPackageChecklist}>{packageCandidates.map((card) => <label key={card.id}>
+          <input type="checkbox" checked={packageDraft.card_ids.includes(card.id)} onChange={() => togglePackageCard(card.id)} />
+          <span><strong>{card.name}</strong><small>{card.template_snapshot?.name || 'Без шаблона'} · {card.object_snapshot?.name}</small></span>
+        </label>)}</div>
+        <p>Выбрано карточек: {packageDraft.card_ids.length}</p>
+        <div className={styles.savedPackageActions}><button type="button" className={styles.savedAddButton} disabled={busy || !packageDraft.name.trim() || !packageDraft.card_ids.length || packageDraft.card_ids.length > 100} onClick={savePackage}>Сохранить пакет</button><button type="button" disabled={busy} onClick={() => setPackageDraft(null)}>Отмена</button></div>
+      </div>}
+      {!packageDraft && <div className={styles.savedPackageGrid}>{packages.map((item) => {
+        const members = item.card_ids.map((id) => cards.find((card) => card.id === id)).filter(Boolean)
+        const available = members.filter((card) => !usedIds.has(card.id)).length
+        const canEdit = user.role === 'ADMIN' || item.created_by_user_id === user.id
+        return <article className={styles.savedPackage} key={item.id}>
+          <h3>{item.name}</h3>
+          {item.description && <p>{item.description}</p>}
+          <small>{members.length} карточек{picker && available !== members.length ? ` · новых для группы: ${available}` : ''}</small>
+          <ul>{members.slice(0, 5).map((card) => <li key={card.id}>{card.name}</li>)}{members.length > 5 && <li>И ещё {members.length - 5}</li>}</ul>
+          <div className={styles.savedPackageActions}>
+            {picker && <button type="button" className={styles.savedAddButton} disabled={busy || !available} onClick={() => addPackage(item)}>Добавить пакет</button>}
+            {!picker && canEdit && <><button type="button" onClick={() => startPackage(item)}>Изменить</button><button type="button" disabled={busy} onClick={() => removePackage(item)}>Удалить</button></>}
+          </div>
+        </article>
+      })}</div>}
+      {!packageDraft && !packages.length && <p>Пакетов пока нет. Создайте пакет из карточек библиотеки.</p>}
+    </section>}
   </div>
   {openedCard && createPortal(<div className={styles.savedPreviewOverlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenedId(null) }}>
     <section className={styles.savedPreviewDialog} role="dialog" aria-modal="true" aria-labelledby={`saved-card-${openedCard.id}`}>
