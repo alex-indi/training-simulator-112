@@ -30,15 +30,6 @@ function AssessmentWorkspace({ session, api, embedded = false }) {
     setComment(selected?.final_comment || '')
     setScore(selected?.final_score ?? '')
   }, [selectedId, selected?.final_comment, selected?.final_score])
-  useEffect(() => {
-    if (!selectedId || !selected || selected.ai_summary_generated_at) return
-    let active = true
-    api(`/api/training/sessions/${session.id}/runs/${selectedId}/assessment/summary`)
-      .then(() => { if (active) refresh() })
-      .catch((cause) => { if (active) setError(cause.message) })
-    return () => { active = false }
-  }, [api, refresh, selected, selectedId, session.id])
-
   const submit = async (path, body) => {
     setBusy(true)
     setError('')
@@ -92,8 +83,8 @@ function AssessmentWorkspace({ session, api, embedded = false }) {
           {selected.deviations.map((item) => <p key={item.id} className={styles.deviation}><b>{severityNames[item.severity]}:</b> {item.description}</p>)}
           {!selected.deviations.length && <p>Замечаний нет.</p>}
           <h3>Автоматическое резюме</h3>
-          <p className={styles.aiSummary}>{selected.ai_summary}</p>
-          <button type="button" disabled={busy} onClick={regenerate}>Перегенерировать резюме</button>
+          {selected.ai_summary_generated_at && <p className={styles.aiSummary}>{selected.ai_summary}</p>}
+          <button type="button" disabled={busy} onClick={regenerate}>{busy ? 'Формируется…' : selected.ai_summary_generated_at ? 'Перегенерировать резюме' : 'Сформировать'}</button>
           <h3>Результат преподавателя</h3>
           <label>Комментарий преподавателя<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label>
           <label>Итоговая оценка, 0–100<input type="number" min="0" max="100" value={score} onChange={(event) => setScore(event.target.value)} /></label>

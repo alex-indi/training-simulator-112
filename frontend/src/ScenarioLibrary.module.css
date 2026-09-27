@@ -84,6 +84,9 @@
 .savedCardGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));align-items:start;gap:8px}
 .savedCard{min-width:0;border:1px solid var(--dds-border);border-top:4px solid var(--dds-dock);background:var(--dds-panel-bright)}
 .savedCardSelected{border-color:var(--dds-blue);border-top-color:var(--dds-blue);background:#e2edf2}
+.savedCardUsed{border-top-color:#8d9a9f}
+.savedCardUsed .savedCardMain{cursor:default}
+.savedCardUsed .savedCardSummary small:last-child{color:#456472;font-weight:600}
 .savedCardMain{display:flex;align-items:start;gap:9px;min-height:58px;box-sizing:border-box;padding:10px;cursor:pointer}
 .savedCardMain input{flex:0 0 16px;margin:2px 0 0}
 .savedCardSummary{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
@@ -92,6 +95,8 @@
 .shell .savedPreviewButton{width:calc(100% - 20px);min-height:30px;margin:0 10px 10px;padding:5px 9px}
 .savedPreviewOverlay{--dds-blue:#1587c3;--dds-danger:#ec653b;position:fixed;inset:0;z-index:200;display:grid;place-items:center;box-sizing:border-box;padding:20px;background:#132b38b8;color:#253036;font:12px/1.45 var(--app-font-family)}
 .savedPreviewDialog{width:min(100%,900px);max-height:calc(100vh - 40px);overflow:auto;box-sizing:border-box;padding:16px;border:1px solid #82939c;background:#f1f2f2;box-shadow:0 12px 35px #10232e55}
+.savedPreviewDialog>.notice,.savedPreviewDialog>.error{margin:0 0 12px;padding:9px 12px}
+.savedPreviewDialog>.generationStatus{margin:0 0 12px}
 .savedPreviewHeader{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--dds-border,#aeb7bb)}
 .savedPreviewHeader h2{margin:0;font-size:18px;overflow-wrap:anywhere}
 .savedPreviewHeader button{flex:0 0 auto}

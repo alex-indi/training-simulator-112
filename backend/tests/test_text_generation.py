@@ -92,6 +92,27 @@ def test_incident_report_keeps_source_facts_in_offline_mode():
     asyncio.run(run())
 
 
+def test_assessment_summary_has_factual_fallback_when_ai_fails():
+    request = TextGenerationRequest(
+        TextGenerationTask.ASSESSMENT_SUMMARY,
+        {
+            "cards_processed": 3,
+            "completed": 2,
+            "critical_errors": ["Нет первичного решения"],
+            "major_errors": [],
+            "additional_errors": [],
+        },
+    )
+
+    async def run():
+        result = await AITextRenderer(FakeProvider(ValueError("unavailable"))).render(request)
+        assert result["fallback_used"]
+        assert "Обработано карточек: 3; завершено: 2" in result["rendered_text"]
+        assert "Нет первичного решения" in result["rendered_text"]
+
+    asyncio.run(run())
+
+
 def test_school_fire_fallback_is_short_and_keeps_variant_facts():
     variant = {
         "floor": 2,

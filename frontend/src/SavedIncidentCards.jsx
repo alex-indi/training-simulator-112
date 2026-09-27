@@ -10,6 +10,7 @@ const searchable = (value) => String(value || '').toLocaleLowerCase('ru').replac
 export default function SavedIncidentCards({ user, requestJson, sessionId, groupId, onCompleted, picker = false }) {
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const [cards, setCards] = useState([])
+  const [usedIds, setUsedIds] = useState(new Set())
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState([])
   const [openedId, setOpenedId] = useState(null)
@@ -18,9 +19,27 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
   const [facts, setFacts] = useState({})
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const reload = useCallback(async () => setCards(await api('/api/incident-cards')), [api])
+  const reload = useCallback(async () => {
+    const [saved, instances] = await Promise.all([
+      api('/api/incident-cards'),
+      picker ? api(`/api/training/sessions/${sessionId}/scenario-instances`) : Promise.resolve([]),
+    ])
+    setCards(saved)
+    const assigned = new Set(saved.filter((card) => instances.some((item) =>
+      item.training_group_id === Number(groupId) && (
+        item.template_snapshot?.source_saved_card_id === card.id || (
+          item.scenario_template_id === card.source_template_id
+          && JSON.stringify(item.object_snapshot) === JSON.stringify(card.object_snapshot)
+          && JSON.stringify(item.initial_state_snapshot) === JSON.stringify(card.initial_state_snapshot)
+        )
+      )
+    )).map((card) => card.id))
+    setUsedIds(assigned)
+    setSelected((current) => current.filter((id) => !assigned.has(id)))
+  }, [api, groupId, picker, sessionId])
   useEffect(() => { reload().catch((cause) => setError(cause.message)) }, [reload])
 
   const openedCard = cards.find((card) => card.id === openedId)
@@ -46,9 +65,9 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [openedId])
 
-  const perform = async (action) => {
-    setBusy(true); setError(''); setNotice('')
-    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false) }
+  const perform = async (action, status = '') => {
+    setBusy(true); setGenerationStatus(status); setError(''); setNotice('')
+    try { await action() } catch (cause) { setError(cause.message) } finally { setBusy(false); setGenerationStatus('') }
   }
   const toggleSelected = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   const openCard = (card) => {
@@ -65,7 +84,16 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
   const saveFacts = (card) => perform(async () => {
     await api(`/api/incident-cards/${card.id}/facts`, json('PATCH', { facts }))
     await reload(); setEditingFactsId(null); setNotice('Условия и текст карточки обновлены')
-  })
+  }, 'ИИ обновляет текст карточки…')
+  const rerenderText = (card) => {
+    if (text !== card.initial_state_snapshot.render?.rendered_text && !window.confirm('Несохранённые правки текста будут заменены. Продолжить?')) return
+    perform(async () => {
+      const updated = await api(`/api/incident-cards/${card.id}/rerender-text`, { method: 'POST' })
+      setText(updated.initial_state_snapshot.render.rendered_text)
+      await reload()
+      setNotice('Текст карточки перегенерирован')
+    }, 'ИИ перегенерирует текст карточки…')
+  }
   const remove = (card) => {
     if (!window.confirm(`Удалить карточку «${card.name}»?`)) return
     perform(async () => {
@@ -97,10 +125,11 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
     <div className={styles.savedCardGrid}>{visibleCards.map((card) => {
       const isSelected = selected.includes(card.id)
       const summary = <><strong>{card.name}</strong><small>{card.classifier_snapshot.final_incident_type}</small></>
-      return <article className={`${styles.savedCard} ${isSelected ? styles.savedCardSelected : ''}`} key={card.id}>
+      const isUsed = usedIds.has(card.id)
+      return <article className={`${styles.savedCard} ${isSelected ? styles.savedCardSelected : ''} ${isUsed ? styles.savedCardUsed : ''}`} key={card.id}>
         {picker ? <label className={styles.savedCardMain}>
-          <input type="checkbox" checked={isSelected} onChange={() => toggleSelected(card.id)} aria-label={`Выбрать карточку: ${card.name}`} />
-          <span className={styles.savedCardSummary}>{summary}</span>
+          <input type="checkbox" checked={isSelected} disabled={isUsed} onChange={() => toggleSelected(card.id)} aria-label={isUsed ? `Карточка уже добавлена: ${card.name}` : `Выбрать карточку: ${card.name}`} />
+          <span className={styles.savedCardSummary}>{summary}{isUsed && <small>Уже добавлена в группу</small>}</span>
         </label> : <div className={styles.savedCardMain}><span className={styles.savedCardSummary}>{summary}</span></div>}
         <button type="button" className={styles.savedPreviewButton} onClick={() => openCard(card)}>{user.role === 'ADMIN' || card.created_by_user_id === user.id ? 'Предпросмотр и редактирование' : 'Предпросмотр карточки'}</button>
       </article>
@@ -113,13 +142,14 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
       <header className={styles.savedPreviewHeader}><h2 id={`saved-card-${openedCard.id}`}>{openedCard.name}</h2><button type="button" autoFocus onClick={() => setOpenedId(null)}>Закрыть</button></header>
       {error && <p className={styles.error} role="alert">{error}</p>}
       {notice && <p className={styles.notice} role="status">{notice}</p>}
+      {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
       <div className={styles.savedPreviewBody}>
         <p><b>Тип:</b> {openedCard.classifier_snapshot.final_incident_type}</p>
         <p><b>Объект:</b> {openedCard.object_snapshot.name}</p>
         <p><b>Адрес:</b> {openedCard.object_snapshot.address}</p>
         <p><b>Условия:</b> {Object.entries(openedCard.initial_state_snapshot.variant_facts || {}).map(([key, value]) => `${factNames[key] || key}: ${value}`).join(' · ') || 'Без дополнительных условий'}</p>
         {editingFactsId === openedCard.id && <div className={styles.savedEditFacts}>{Object.entries(openedCard.template_snapshot.variant_options || {}).map(([key, values]) => <label key={key}>{factNames[key] || key}<select value={facts[key] ?? ''} onChange={(event) => setFacts((current) => ({ ...current, [key]: key === 'floor' ? Number(event.target.value) : event.target.value }))}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>)}<div className={styles.savedEditActions}><button type="button" disabled={busy} onClick={() => saveFacts(openedCard)}>Сохранить условия</button><button type="button" onClick={() => setEditingFactsId(null)}>Отмена</button></div></div>}
-        <div className={styles.savedCardText}><b>Текст карточки</b>{editingId === openedCard.id ? <><textarea value={text} onChange={(event) => setText(event.target.value)} /><div className={styles.savedEditActions}><button type="button" disabled={busy || !text.trim()} onClick={() => saveText(openedCard)}>Сохранить текст</button><button type="button" onClick={() => setEditingId(null)}>Отмена</button></div></> : <p>{openedCard.initial_state_snapshot.render?.rendered_text}</p>}</div>
+        <div className={styles.savedCardText}><b>Текст карточки</b>{editingId === openedCard.id ? <><textarea value={text} onChange={(event) => setText(event.target.value)} /><div className={styles.savedEditActions}><button type="button" disabled={busy || !text.trim()} onClick={() => saveText(openedCard)}>Сохранить текст</button><button type="button" disabled={busy} onClick={() => rerenderText(openedCard)}>Перегенерировать текст</button><button type="button" onClick={() => setEditingId(null)}>Отмена</button></div></> : <p>{openedCard.initial_state_snapshot.render?.rendered_text}</p>}</div>
         <div><b>Службы по классификатору</b><ul>{openedCard.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul></div>
         {canEditOpened && <div className={styles.savedEditActions}>
           <button type="button" onClick={() => { setEditingId(openedCard.id); setEditingFactsId(null); setText(openedCard.initial_state_snapshot.render?.rendered_text || '') }}>Редактировать текст</button>

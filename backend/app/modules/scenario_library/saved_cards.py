@@ -18,10 +18,10 @@ from app.modules.scenario_library.instance_models import (
     ScenarioInstance,
     ScenarioInstanceEvent,
 )
-from app.modules.scenario_library.instances import _initial_request, read_instance
+from app.modules.scenario_library.instances import _initial_request, _record_usage, read_instance
 from app.modules.scenario_library.router import require_editor
 from app.modules.training.models import TrainingGroup, TrainingSession, TrainingSessionState
-from app.services.text_generation.renderer import renderer_for_database
+from app.services.text_generation.renderer import TextGenerationRequest, renderer_for_database
 
 router = APIRouter(prefix="/api/incident-cards", tags=["incident-cards"])
 
@@ -191,6 +191,41 @@ async def edit_card_facts(
     return serialize(card)
 
 
+@router.post("/{card_id}/rerender-text")
+async def rerender_card_text(
+    card_id: int,
+    user: Annotated[User, Depends(require_editor)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> dict:
+    card = await get_card(database, card_id)
+    if user.role != UserRole.ADMIN and card.created_by_user_id != user.id:
+        raise HTTPException(403, "Редактировать карточку может только автор или администратор")
+    content = dict(card.snapshot)
+    initial = dict(content["initial_state_snapshot"])
+    previous_text = initial.get("render", {}).get("rendered_text", "")
+    request = _initial_request(content)
+    renderer = await renderer_for_database(database)
+    render = await renderer.render(
+        TextGenerationRequest(
+            task=request.task,
+            facts=request.facts,
+            context={"previous_text": previous_text} if previous_text else None,
+        )
+    )
+    await _record_usage(database, [render])
+    if render["fallback_used"] and renderer.enabled and renderer.provider.name != "template":
+        await database.commit()
+        raise HTTPException(503, "Модель не смогла сформировать текст. Повторите попытку")
+    if render["rendered_text"].strip() == previous_text.strip():
+        await database.commit()
+        raise HTTPException(409, "Новая формулировка не получена. Текст карточки не изменился")
+    initial["render"] = render
+    content["initial_state_snapshot"] = initial
+    card.snapshot = content
+    await database.commit()
+    return serialize(card)
+
+
 @router.delete("/{card_id}", status_code=204)
 async def delete_card(
     card_id: int,
@@ -219,9 +254,29 @@ async def add_to_group(
         raise HTTPException(403, "Нет доступа к занятию")
     if session.state not in {"DRAFT", "READY"}:
         raise HTTPException(409, "Занятие уже началось")
-    group = await database.get(TrainingGroup, data.group_id)
+    group = await database.scalar(
+        select(TrainingGroup).where(TrainingGroup.id == data.group_id).with_for_update()
+    )
     if group is None or group.training_session_id != session.id:
         raise HTTPException(422, "Группа не принадлежит занятию")
+    existing = (
+        await database.scalars(
+            select(ScenarioInstance).where(
+                ScenarioInstance.training_session_id == session.id,
+                ScenarioInstance.training_group_id == group.id,
+            )
+        )
+    ).all()
+    if any(
+        row.template_snapshot.get("source_saved_card_id") == card.id
+        or (
+            row.object_snapshot == card.snapshot["object_snapshot"]
+            and row.initial_state_snapshot == card.snapshot["initial_state_snapshot"]
+            and row.scenario_template_id == card.source_template_id
+        )
+        for row in existing
+    ):
+        raise HTTPException(409, "Эта карточка уже добавлена в группу")
     if session.state == TrainingSessionState.READY:
         session.state = TrainingSessionState.DRAFT
     content = card.snapshot
@@ -240,7 +295,7 @@ async def add_to_group(
         initial_state_snapshot=content["initial_state_snapshot"],
         expected_actions_snapshot=content["expected_actions_snapshot"],
         assessment_criteria_snapshot=content["assessment_criteria_snapshot"],
-        template_snapshot=content["template_snapshot"],
+        template_snapshot={**content["template_snapshot"], "source_saved_card_id": card.id},
         events=[ScenarioInstanceEvent(**event) for event in content["events"]],
     )
     database.add(row)

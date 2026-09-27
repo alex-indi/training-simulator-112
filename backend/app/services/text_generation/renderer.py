@@ -105,6 +105,22 @@ class TemplateTextGenerationProvider:
                 ]
             else:
                 parts = [facts.get("description"), facts.get("caller_text")]
+        elif request.task == TextGenerationTask.ASSESSMENT_SUMMARY:
+            parts = [
+                f"Обработано карточек: {facts['cards_processed']}; завершено: {facts['completed']}."
+            ]
+            for label, key in (
+                ("Критические замечания", "critical_errors"),
+                ("Основные замечания", "major_errors"),
+                ("Дополнительные замечания", "additional_errors"),
+            ):
+                issues = facts.get(key) or []
+                if issues:
+                    shown = "; ".join(str(issue)[:350] for issue in issues[:3])
+                    remainder = f"; ещё {len(issues) - 3}" if len(issues) > 3 else ""
+                    parts.append(f"{label} ({len(issues)}): {shown}{remainder}.")
+                else:
+                    parts.append(f"{label}: нет.")
         else:
             parts = [facts.get("description") or facts.get("title")]
         text = "\n".join(str(value).strip() for value in parts if value and str(value).strip())
