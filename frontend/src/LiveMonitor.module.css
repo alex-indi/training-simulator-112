@@ -15,7 +15,7 @@
 .runControls { display: flex; gap: 8px; margin-top: 10px; }
 .runControls button { flex: 1; padding: 10px; border: 1px solid #a6bdc9; border-radius: 8px; background: #edf5f9; color: #174762; cursor: pointer; }
 .dialogBackdrop { position: fixed; inset: 0; z-index: 50; background: #0c1d2a88; display: grid; place-items: center; padding: 18px; }
-.dialog { width: min(480px, 100%); max-height: 90vh; overflow: auto; background: white; border-radius: 14px; padding: 22px; box-shadow: 0 14px 50px #081b2d40; }
+.dialog { width: auto; max-height: 90vh; overflow: auto; background: white; border-radius: 14px; padding: 22px; box-shadow: 0 14px 50px #081b2d40; }
 .dialog header, .dialog footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .dialog header h3 { margin: 0 0 14px; }
 .dialog header button { border: 0; background: none; font-size: 24px; cursor: pointer; }
@@ -23,7 +23,7 @@
 .dialog select, .dialog textarea { display: block; width: 100%; margin-top: 5px; border: 1px solid #b8cad3; border-radius: 7px; padding: 9px; font: inherit; }
 .dialog textarea { min-height: 90px; resize: vertical; }
 .dialog fieldset { border: 0; padding: 0; }.dialog fieldset label { font-weight: 400; }
-.dialog .finishOptions label{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:start;column-gap:9px;margin:10px 0;line-height:1.4;cursor:pointer}
+.dialog .finishOptions label{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;column-gap:9px;margin:0px 0;line-height:1.4;cursor:pointer}
 .finishOptions input[type="radio"]{width:16px;height:16px;margin:3px 0 0;align-self:start;accent-color:var(--dds-blue,#1587c3)}
 .finishOptions span{display:block;min-width:0}
 .dialog footer { justify-content: flex-end; margin-top: 20px; }.dialog footer button { padding: 9px 15px; border: 1px solid #93b1c0; border-radius: 7px; background: #eff5f7; cursor: pointer; }.dialog footer button[type=submit] { background: #176b96; color: white; border-color: #176b96; }
