@@ -93,7 +93,8 @@ test('MVP: общий пул, claim, принятие и сообщение бр
       return claimed.claimed_by_training_run_id
     }).toBeTruthy()
 
-    await page.getByRole('button', { name: /Добавлена/ }).first().click()
+    const ownServiceEdit = page.getByRole('button', { name: 'Изменить статус службы Служба 101' })
+    await ownServiceEdit.click()
     await page.getByLabel('Статус', { exact: true }).selectOption('ACCEPT')
     await page.getByRole('button', { name: 'Сохранить статус' }).click()
 
@@ -107,7 +108,7 @@ test('MVP: общий пул, claim, принятие и сообщение бр
       return incident.activities.some((item) => item.kind === 'TRAINING_BRIGADE' && item.stage === 'EN_ROUTE')
     }, { timeout: 30000 }).toBe(true)
 
-    await page.getByRole('button', { name: /Принята/ }).first().click()
+    await ownServiceEdit.click()
     await page.getByLabel('Статус', { exact: true }).selectOption('START_RESPONSE')
     await page.getByRole('button', { name: 'Сохранить статус' }).click()
 
