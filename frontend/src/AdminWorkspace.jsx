@@ -4,6 +4,7 @@ import PropTypes from 'prop-types'
 import styles from './AdminWorkspace.module.css'
 import IncidentTemplates from './IncidentTemplates.jsx'
 import WorkspaceClock from './WorkspaceClock.jsx'
+import StatusMessage from './StatusMessage.jsx'
 
 const sections = [
   ['overview', 'Обзор'],
@@ -961,7 +962,7 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
           finally { setLoading(false) }
         }}>Проверить подключение</button>
       </form>
-      {aiHealth && <p role="status">Провайдер: {aiHealth.provider} · модель: {aiHealth.model || '—'} · состояние: {aiHealthLabels[aiHealth.status] || aiHealth.status}{aiHealth.available && !aiHealth.renderer_enabled ? ' · Модель не активирована' : ''}</p>}
+      <StatusMessage message={aiHealth ? `Провайдер: ${aiHealth.provider} · модель: ${aiHealth.model || '—'} · состояние: ${aiHealthLabels[aiHealth.status] || aiHealth.status}${aiHealth.available && !aiHealth.renderer_enabled ? ' · Модель не активирована' : ''}` : ''} />
       <h3>Usage за 31 день</h3>{!usage.length ? <Empty>Статистика usage не поступала</Empty> : <div className={styles.compactList}>{usage.map((item) => <article key={item.day}><b>{item.day}</b><span>запросов {item.requests}</span><small>input {item.input_tokens} · output {item.output_tokens} · fallback {item.fallbacks} · ошибок {item.errors}</small></article>)}</div>}
     </>
   )
@@ -993,8 +994,8 @@ function AdminWorkspace({ user, users, selectUser, requestJson, onLogout, onCurr
           </div>
           <WorkspaceClock user={user} users={users} selectUser={selectUser} onLogout={onLogout} />
         </header>
-        {error && <div className={styles.error} role="alert">{error}</div>}
-        {notice && <div className={styles.notice}>{notice}</div>}
+        <StatusMessage message={error} tone="error" />
+        <StatusMessage message={notice} tone="success" />
         <div className={styles.content} aria-busy={loading}>{loading && data === null ? <div className={styles.loading}>Загрузка…</div> : content()}</div>
       </section>
       {renderUserModal()}

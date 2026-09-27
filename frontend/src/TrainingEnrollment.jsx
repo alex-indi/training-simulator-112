@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
 import styles from './TrainingEnrollment.module.css'
+import StatusMessage from './StatusMessage.jsx'
 
 function TrainingEnrollment({ user, requestJson, onJoined }) {
   const [sessions, setSessions] = useState([])
@@ -70,15 +71,15 @@ function TrainingEnrollment({ user, requestJson, onJoined }) {
   if (ownRun && !error && !selected?.paused_at && !ownRun.paused_at) return null
   return <section className={styles.panel} aria-label="Учебное занятие">
     <strong>Учебное занятие</strong>
-    {error && <span className={styles.error} role="alert">{error}</span>}
+    <StatusMessage message={error} tone="error" />
     {availableSessions.length > 0 && <>
       <select aria-label="Занятие" value={selected?.id || ''} onChange={(event) => { setSessionId(event.target.value); setStation('') }}>
         {availableSessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
       </select>
       {ownRun ? <span>АРМ {String(ownRun.workstation_number).padStart(2, '0')} · {ownRun.dds_profile === 'ДДС' ? 'профиль ожидает назначения' : ownRun.dds_profile} · {ownRun.online ? 'online' : 'подключение'}</span>
         : <form onSubmit={join}><label>Рабочее место <input type="number" min="1" max={selected.workstation_count} value={station} onChange={(event) => setStation(event.target.value)} required /></label><button type="submit" disabled={busy || !station}>Занять АРМ</button></form>}
-      {selected?.paused_at && <strong role="status">ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ</strong>}
-      {!selected?.paused_at && ownRun?.paused_at && <strong role="status">ВАШЕ РАБОЧЕЕ МЕСТО ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ</strong>}
+      <StatusMessage message={selected?.paused_at ? 'ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" />
+      <StatusMessage message={!selected?.paused_at && ownRun?.paused_at ? 'ВАШЕ РАБОЧЕЕ МЕСТО ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" />
     </>}
   </section>
 }

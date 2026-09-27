@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import PropTypes from 'prop-types'
 
 import styles from './InstructorWorkspace.module.css'
+import StatusMessage from './StatusMessage.jsx'
 
 const emptyDraft = { name: '', code: '', member_ids: [] }
 
@@ -96,10 +97,10 @@ export default function InstructorGroups({ api, compact = false, onCreated, onCh
     ? trainees.filter((trainee) => trainee.full_name.toLocaleLowerCase('ru').includes(normalizedMemberSearch)).slice(0, 8)
     : []
 
-  return <section className={styles.section}>
+  return <section className={`${styles.section} ${styles.workspaceSection}`}>
     <div className={styles.topline}><div><h2>{compact ? 'Новая постоянная группа' : 'Группы обучающихся'}</h2><p>Постоянный состав доступен для будущих занятий.</p></div>
       <button type="button" onClick={startCreate}>{compact ? '+ Создать новую группу' : '+ Создать группу'}</button></div>
-    {error && <p className={styles.error} role="alert">{error}</p>}
+    <StatusMessage message={error} tone="error" />
     {!compact && <div className={styles.groupFilters}>
       <input aria-label="Поиск группы" placeholder="Поиск по названию или коду" value={search} onChange={(event) => setSearch(event.target.value)} />
       <label><input type="checkbox" checked={archiveOpen} onChange={(event) => setArchiveOpen(event.target.checked)} /> Показать архив</label>

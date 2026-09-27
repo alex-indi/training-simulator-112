@@ -6,6 +6,7 @@ import styles from './App.module.css'
 import AdminWorkspace from './AdminWorkspace.jsx'
 import InstructorWorkspace from './InstructorWorkspace.jsx'
 import TrainingResults from './TrainingResults.jsx'
+import StatusMessage from './StatusMessage.jsx'
 import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels } from './uiLabels.js'
 import { initialOrderNumber, previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
@@ -697,7 +698,7 @@ function App() {
               </div>
             </label>
 
-            {error && <div className={styles.loginError} role="alert">{error}</div>}
+            <StatusMessage message={error} tone="error" />
 
             <button className={styles.loginButton} disabled={loading || !users.length || (loginUser?.role === 'TRAINEE' && !loginWorkstation)} type="submit">
               {loading ? 'Подключение…' : 'Войти'}
@@ -768,16 +769,12 @@ function App() {
 
   return (
     <main className={styles.armShell}>
-      {currentUser?.role === 'TRAINEE' && <TrainingResults user={currentUser} requestJson={requestJson} />}
-      {error && (
-        <div className={styles.errorBanner} role="alert">
-          <strong>Ошибка:</strong> {error}
-        </div>
-      )}
-      {showCompletedNotice && <section className={styles.sessionCompletedNotice} role="status">
-        <strong>Занятие завершено преподавателем</strong>
-        <button type="button" onClick={() => setDismissedCompletedId(completedSessionId)}>Вернуться</button>
-      </section>}
+      <StatusMessage message={error ? `Ошибка: ${error}` : ''} tone="error" />
+      <StatusMessage
+        message={showCompletedNotice ? 'Занятие завершено преподавателем' : ''}
+        tone="success"
+        onDismiss={() => setDismissedCompletedId(completedSessionId)}
+      />
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
@@ -998,7 +995,9 @@ function App() {
                   <span>{clockHours}:{clockMinutes}</span><sup>:{clockSeconds}</sup>
                 </time>
               </div>
-              <div className={styles.clockLower} aria-hidden="true" />
+              <div className={styles.clockLower}>
+                <TrainingResults user={currentUser} requestJson={requestJson} />
+              </div>
             </div>
           </header>
 

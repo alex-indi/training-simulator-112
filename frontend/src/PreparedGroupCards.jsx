@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { factNames } from './cardVariantFacts'
 import styles from './InstructorWorkspace.module.css'
+import StatusMessage from './StatusMessage.jsx'
 
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
@@ -100,14 +101,14 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
     </header>
     <p>{group.member_count} человек · {group.difficulty || 'Без сложности'} · {group.queue_mode === 'SHARED_QUEUE' ? 'Общий пул' : 'Личный пул'}</p>
     {Object.entries(counts).map(([name, count]) => <p key={name}>{name} · {count}</p>)}
-    {!selected && error && <p className={styles.error} role="alert">{error}</p>}
-    {!selected && notice && <p className={styles.notice} role="status">{notice}</p>}
+    {!selected && <StatusMessage message={error} tone="error" />}
+    {!selected && <StatusMessage message={notice} tone="success" />}
     {editable && <div className={styles.actions}>
       <button type="button" disabled={busy} onClick={() => onAddSaved(group.id)}>+ Добавить из библиотеки</button>
       <button type="button" disabled={busy} onClick={() => onAdd(group.id)}>+ Сформировать из шаблона</button>
       <button type="button" disabled={busy || !selectedForRerender.some((id) => instances.some((item) => item.id === id))} onClick={rerenderSelected}>Перегенерировать тексты выбранных</button>
     </div>}
-    {!selected && generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
+    {!selected && <StatusMessage message={generationStatus} />}
     {!!instances.length && <div className={styles.scenarioList}>
       <nav aria-label={`Карточки группы ${group.name}`} className={styles.cardList}>{instances.map((item, index) => <div key={item.id}>
         {editable && <input type="checkbox" aria-label={`Выбрать карточку ${index + 1} для перегенерации`} checked={selectedForRerender.includes(item.id)} onChange={(event) => setSelectedForRerender((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />}
@@ -120,9 +121,9 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
           <div><small>{group.name}</small><h3 id={`card-editor-${group.id}-${selected.id}`}>{selected.template_snapshot.name}</h3></div>
           <button type="button" autoFocus onClick={() => setSelectedId(null)}>Закрыть</button>
         </header>
-        {error && <p className={styles.error} role="alert">{error}</p>}
-        {notice && <p className={styles.notice} role="status">{notice}</p>}
-        {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
+        <StatusMessage message={error} tone="error" />
+        <StatusMessage message={notice} tone="success" />
+        <StatusMessage message={generationStatus} />
         <div className={styles.cardEditorBody}>
           <div className={styles.cardEditorClassification}>
             <span>Классификация</span>

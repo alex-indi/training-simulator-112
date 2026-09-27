@@ -11,6 +11,7 @@ import IncidentTemplates from './IncidentTemplates.jsx'
 import SavedIncidentCards from './SavedIncidentCards.jsx'
 import WorkspaceClock from './WorkspaceClock.jsx'
 import { sessionStateLabels, trainingModeLabels } from './uiLabels.js'
+import StatusMessage from './StatusMessage.jsx'
 
 const emptySettings = {
   title: `Практическое занятие · ${new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow' }).format(new Date())}`, topic: '', mode: 'FLOW', duration_minutes: 30,
@@ -378,11 +379,11 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   if (groupsOpen) return renderWorkspace('Группы обучающихся', <div className={styles.content}><InstructorGroups api={api} onChanged={setUserGroups} /></div>)
 
   if (libraryOpen) return renderWorkspace('Шаблоны инцидентов', <div className={styles.embeddedContent}>
-    <IncidentTemplates key={libraryKey} user={user} requestJson={requestJson} onViewChange={setLibraryDetailOpen} onUse={(item) => { setLibraryUse(item); setUseSessionId(String(session?.id || '')); setUseGroupId('') }} />
+    <IncidentTemplates embedded key={libraryKey} user={user} requestJson={requestJson} onViewChange={setLibraryDetailOpen} onUse={(item) => { setLibraryUse(item); setUseSessionId(String(session?.id || '')); setUseGroupId('') }} />
     {libraryUse && <div className={styles.pickerOverlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLibraryUse(null) }}><section className={styles.useDialog} role="dialog" aria-modal="true" aria-label="Создать карточки"><h2>Создать карточки</h2><p>{libraryUse.name}</p><label>Занятие<select value={useSessionId} onChange={(event) => { setUseSessionId(event.target.value); setUseGroupId('') }}><option value="">Выберите занятие</option>{sessions.filter((item) => ['DRAFT', 'READY'].includes(item.state)).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label><label>Группа<select value={useGroupId} onChange={(event) => setUseGroupId(event.target.value)}><option value="">Выберите группу</option>{sessions.find((item) => item.id === Number(useSessionId))?.groups.filter((group) => group.member_count > 0).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><div className={styles.actions}><button type="button" disabled={!useGroupId} onClick={startUsingTemplate}>Продолжить</button><button type="button" onClick={() => setLibraryUse(null)}>Отмена</button></div></section></div>}
   </div>)
 
-  if (cardsOpen) return renderWorkspace('Карточки происшествий', <div className={styles.embeddedContent}><SavedIncidentCards user={user} requestJson={requestJson} /></div>)
+  if (cardsOpen) return renderWorkspace('Карточки происшествий', <div className={styles.embeddedContent}><SavedIncidentCards embedded user={user} requestJson={requestJson} /></div>)
 
   if (session?.state === 'ACTIVE') return renderWorkspace('Live-монитор', <>
     <div className={styles.content}>
@@ -393,8 +394,8 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
   if (session?.state === 'COMPLETED') return renderWorkspace('Результаты и оценивание', <AssessmentWorkspace embedded session={session} api={api} />)
 
   return renderWorkspace(session ? steps[step] : 'Занятия', <>
-    {error && <p className={styles.error} role="alert">{error}</p>}
-    {notice && <p className={styles.notice} role="status">{notice}</p>}
+    <StatusMessage message={error} tone="error" />
+    <StatusMessage message={notice} tone="success" />
     {!session ? <div className={styles.content}>
       <div className={styles.topline}><div><h2>Занятия</h2><p>Выберите группы и подготовьте материал до подключения класса.</p></div><button type="button" onClick={() => { setSettings({ ...emptySettings, title: `Практическое занятие · ${new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow' }).format(new Date())}` }); setSession({ id: null, state: 'DRAFT', runs: [], groups: [] }); setStep(0) }}>+ Новое занятие</button></div>
       {['DRAFT', 'ACTIVE', 'COMPLETED'].map((state) => <section key={state} className={styles.section}>
@@ -443,7 +444,6 @@ function InstructorWorkspace({ user, users, selectUser, requestJson, onLogout })
         </section>}
         {subgroupDraft && <div className={styles.groupOverlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSubgroupDraft(null) }}><section className={styles.groupDialog} role="dialog" aria-modal="true" aria-label={subgroupEditingId ? 'Изменить подгруппу' : 'Создать подгруппу'}>
           <h3>{subgroupEditingId ? 'Изменить подгруппу' : 'Создать подгруппу'}</h3>
-          {error && <p className={styles.error} role="alert">{error}</p>}
           <label>Название<input value={subgroupDraft.name} maxLength={160} onChange={(event) => setSubgroupDraft((current) => ({ ...current, name: event.target.value }))} /></label>
           <h4>Участники</h4>
           <div className={styles.memberList}>{userGroups.filter((source) => session.groups.some((group) => group.source_user_group_id === source.id)).map((source) => <div key={source.id}>

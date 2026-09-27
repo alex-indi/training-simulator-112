@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 
 import styles from './LiveMonitor.module.css'
 import { ddsStatusLabels, incidentHistoryLabels, responseStateLabels, responseSenderLabels } from './uiLabels.js'
+import StatusMessage from './StatusMessage.jsx'
 
 const statusLabels = ddsStatusLabels
 
@@ -148,7 +149,7 @@ function LiveMonitor({ sessionId, user, api }) {
     .filter((item, index, items) => items.findIndex((other) => other.id === item.id) === index)
 
   return <div className={styles.monitor}>
-    {error && <p className={styles.error} role="alert">{error}</p>}
+    <StatusMessage message={error} tone="error" />
     <section className={styles.hero}>
       <div><small>LIVE · УЧЕБНАЯ СМЕНА</small><h2>{session.title}</h2><p>{session.topic || 'Без темы'}</p></div>
       <div className={styles.clock}><strong>{duration(elapsed)} <span>/ {duration((session.duration_minutes || 0) * 60)}</span></strong><small>Время занятия</small></div>
@@ -159,9 +160,9 @@ function LiveMonitor({ sessionId, user, api }) {
         <button type="button" disabled={busy || session.state !== 'ACTIVE'} onClick={() => { setDraft((value) => ({ ...value, mode: session.finish_mode === 'GRACEFUL' ? 'IMMEDIATE' : 'GRACEFUL' })); setDialog('finish') }}>{session.finish_mode === 'GRACEFUL' ? 'Завершить немедленно' : 'Завершить'}</button>
       </div>
     </section>
-    {session.paused_at && <p className={styles.pauseBanner} role="status">ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ</p>}
-    {session.finish_mode === 'GRACEFUL' && session.state === 'ACTIVE' && <p className={styles.pauseBanner} role="status">Выдача остановлена. Обучаемые завершают текущие карточки.</p>}
-    {session.state === 'COMPLETED' && <p className={styles.pauseBanner} role="status">Занятие завершено. История карточек сохранена.</p>}
+    <StatusMessage message={session.paused_at ? 'ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" />
+    <StatusMessage message={session.finish_mode === 'GRACEFUL' && session.state === 'ACTIVE' ? 'Выдача остановлена. Обучаемые завершают текущие карточки.' : ''} tone="warning" />
+    <StatusMessage message={session.state === 'COMPLETED' ? 'Занятие завершено. История карточек сохранена.' : ''} tone="success" />
     <section className={styles.metrics} aria-label="Сводка класса">
       <div><span>На связи</span><strong>{counts.online}</strong><small>{counts.offline} offline</small></div>
       <div><span>Новые</span><strong>{counts.new}</strong></div>

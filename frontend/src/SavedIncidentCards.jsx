@@ -4,11 +4,12 @@ import { createPortal } from 'react-dom'
 import { factNames } from './cardVariantFacts'
 import styles from './ScenarioLibrary.module.css'
 import editorStyles from './InstructorWorkspace.module.css'
+import StatusMessage from './StatusMessage.jsx'
 
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const searchable = (value) => String(value || '').toLocaleLowerCase('ru').replaceAll('ё', 'е')
 
-export default function SavedIncidentCards({ user, requestJson, sessionId, groupId, onCompleted, picker = false }) {
+export default function SavedIncidentCards({ user, requestJson, sessionId, groupId, onCompleted, picker = false, embedded = false }) {
   const api = useCallback((path, options) => requestJson(path, user.username, options), [requestJson, user.username])
   const [cards, setCards] = useState([])
   const [packages, setPackages] = useState([])
@@ -174,7 +175,7 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
     onCompleted?.()
   })
 
-  return <main className={styles.shell}><div className={styles.content}>
+  return <main className={`${styles.shell} ${embedded ? styles.embedded : ''}`}><div className={styles.content}>
     <div className={styles.savedLibraryToolbar}>
       <div><h2>Библиотека карточек</h2><p>Карточки и пакеты можно использовать в разных занятиях.</p></div>
       {activeTab === 'cards' && <div className={styles.savedLibraryControls}>
@@ -189,8 +190,8 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
       </div>
       {activeTab === 'cards' && <small>Показано {visibleCards.length} из {cards.length}</small>}
     </div>
-    {!openedCard && error && <p className={styles.error} role="alert">{error}</p>}
-    {!openedCard && notice && <p className={styles.notice} role="status">{notice}</p>}
+    {!openedCard && <StatusMessage message={error} tone="error" />}
+    {!openedCard && <StatusMessage message={notice} tone="success" />}
     {activeTab === 'cards' && <><div className={styles.savedCardGrid}>{visibleCards.map((card) => {
       const isSelected = selected.includes(card.id)
       const summary = <><strong>{card.name}</strong><small>{card.classifier_snapshot.final_incident_type}</small></>
@@ -247,9 +248,9 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
         <div><small>Библиотека карточек</small><h3 id={`saved-card-${openedCard.id}`}>{openedCard.template_snapshot.name || openedCard.name}</h3></div>
         <button type="button" autoFocus onClick={() => setOpenedId(null)}>Закрыть</button>
       </header>
-      {error && <p className={styles.error} role="alert">{error}</p>}
-      {notice && <p className={styles.notice} role="status">{notice}</p>}
-      {generationStatus && <p className={editorStyles.generationStatus} role="status">{generationStatus}</p>}
+      <StatusMessage message={error} tone="error" />
+      <StatusMessage message={notice} tone="success" />
+      <StatusMessage message={generationStatus} />
       <div className={editorStyles.cardEditorBody}>
         <div className={editorStyles.cardEditorClassification}>
           <span>Классификация</span>
