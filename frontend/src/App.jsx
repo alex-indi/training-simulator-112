@@ -180,7 +180,13 @@ function App() {
   const [loginWorkstation, setLoginWorkstation] = useState('')
   const [loginSessionsLoading, setLoginSessionsLoading] = useState(false)
   const [incidents, setIncidents] = useState([])
+  const [trainingSessions, setTrainingSessions] = useState([])
+  const [trainingSessionId, setTrainingSessionId] = useState(() => Number(window.sessionStorage.getItem('ut112-trainee-session-id')) || null)
+  const [nextSessionId, setNextSessionId] = useState('')
+  const [nextWorkstation, setNextWorkstation] = useState('')
+  const [joiningSession, setJoiningSession] = useState(false)
   const [joinedSessionId, setJoinedSessionId] = useState(null)
+  const [activeTrainingSession, setActiveTrainingSession] = useState(null)
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [completedSessionId, setCompletedSessionId] = useState(null)
   const [dismissedCompletedId, setDismissedCompletedId] = useState(null)
@@ -265,7 +271,9 @@ function App() {
       .then((items) => {
         if (!active) return
         const available = items.filter((item) => ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
-        const preferred = available.find((item) => item.state === 'ACTIVE' && item.own_run)
+        const pinnedId = Number(window.sessionStorage.getItem('ut112-trainee-session-id'))
+        const preferred = available.find((item) => item.id === pinnedId)
+          || available.find((item) => item.state === 'ACTIVE' && item.own_run)
           || available.find((item) => item.own_run)
           || available[0]
         setLoginSessions(available)
@@ -289,17 +297,24 @@ function App() {
           requestJson('/api/incidents', currentUser.username),
         ])
         if (!active) return
-        const currentSession = sessions.find((item) => item.state === 'ACTIVE' && item.own_run)
-        const joinedSession = currentSession
+        const preferred = sessions.find((item) => item.id === trainingSessionId && item.own_run)
+        const currentSession = preferred
+          ? preferred.state === 'ACTIVE' ? preferred : null
+          : sessions.find((item) => item.state === 'ACTIVE' && item.own_run)
+        const joinedSession = preferred || currentSession
           || sessions.find((item) => ['DRAFT', 'READY'].includes(item.state) && item.own_run)
-        const lastCompleted = sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
+        const lastCompleted = preferred?.state === 'COMPLETED' ? preferred
+          : sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
         const currentItems = currentSession ? items.filter((item) => item.training_session_id === currentSession.id) : []
         if (activeSessionIdRef.current !== (currentSession?.id || null)) {
           activeSessionIdRef.current = currentSession?.id || null
           setFilters(emptyFilters)
         }
         setActiveSessionId(currentSession?.id || null)
+        setActiveTrainingSession(currentSession || null)
         setJoinedSessionId(joinedSession?.id || null)
+        setTrainingSessions(sessions.filter((item) => ['DRAFT', 'READY'].includes(item.state)
+          || (item.state === 'ACTIVE' && item.own_run)))
         setCompletedSessionId(lastCompleted?.id || null)
         setIncidents(currentItems)
         if (selectedIncidentId.current && !currentItems.some((item) => item.id === selectedIncidentId.current)) {
@@ -331,10 +346,10 @@ function App() {
     socket.on('incident.claimed', refresh)
     socket.on('incident.updated', refresh)
     socket.on('training.control_changed', refresh)
-    const fallback = window.setInterval(refresh, 30000)
+    const fallback = window.setInterval(refresh, 5000)
     refresh()
     return () => { active = false; window.clearInterval(fallback); socket.disconnect() }
-  }, [currentUser])
+  }, [currentUser, trainingSessionId])
 
   useEffect(() => {
     if (currentUser?.role !== 'TRAINEE' || !joinedSessionId) return undefined
@@ -420,6 +435,8 @@ function App() {
           body: JSON.stringify({ workstation_number: Number(loginWorkstation) }),
         })
         setJoinedSessionId(loginSession.id)
+        window.sessionStorage.setItem('ut112-trainee-session-id', String(loginSession.id))
+        setTrainingSessionId(loginSession.id)
       }
       window.sessionStorage.setItem('ut112-demo-username', user.username)
       setCurrentUser(user)
@@ -431,12 +448,35 @@ function App() {
     }
   }
 
+  const joinNextSession = async (event) => {
+    event.preventDefault()
+    if (!nextSessionId || !nextWorkstation) return
+    setJoiningSession(true)
+    setError('')
+    try {
+      await requestJson(`/api/training/sessions/${nextSessionId}/join`, currentUser.username, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workstation_number: Number(nextWorkstation) }),
+      })
+      const id = Number(nextSessionId)
+      window.sessionStorage.setItem('ut112-trainee-session-id', String(id))
+      setTrainingSessionId(id)
+      setJoinedSessionId(id)
+      setNextSessionId('')
+      setNextWorkstation('')
+    } catch (cause) { setError(cause.message) } finally { setJoiningSession(false) }
+  }
+
   const logout = () => {
     window.sessionStorage.removeItem('ut112-demo-username')
+    window.sessionStorage.removeItem('ut112-trainee-session-id')
     setCurrentUser(null)
+    setTrainingSessionId(null)
+    setTrainingSessions([])
     setIncidents([])
     setJoinedSessionId(null)
     setActiveSessionId(null)
+    setActiveTrainingSession(null)
     activeSessionIdRef.current = null
     setCompletedSessionId(null)
     setDismissedCompletedId(null)
@@ -461,7 +501,12 @@ function App() {
     const demoUsername = event.target.value
     setError('')
     setIncidents([])
+    window.sessionStorage.removeItem('ut112-trainee-session-id')
+    setTrainingSessionId(null)
+    setTrainingSessions([])
+    setJoinedSessionId(null)
     setActiveSessionId(null)
+    setActiveTrainingSession(null)
     activeSessionIdRef.current = null
     setCompletedSessionId(null)
     setDismissedCompletedId(null)
@@ -675,6 +720,22 @@ function App() {
               </label>
 
               {loginUser?.role === 'TRAINEE' && <label>
+                <span>Занятие</span>
+                <div className={styles.loginSelectField}>
+                  <select aria-label="Занятие" disabled={loginSessionsLoading || !loginSessions.length}
+                    onChange={(event) => {
+                      setLoginSessionId(event.target.value)
+                      const item = loginSessions.find((entry) => String(entry.id) === event.target.value)
+                      setLoginWorkstation(item?.own_run?.workstation_number ? String(item.own_run.workstation_number) : '')
+                    }} value={loginSessionId}>
+                    <option value="">Выберите занятие</option>
+                    {loginSessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+                  </select>
+                  <span className={styles.chevronIcon} aria-hidden="true" />
+                </div>
+              </label>}
+
+              {loginUser?.role === 'TRAINEE' && <label>
                 <span>Рабочее место</span>
                 <div className={styles.loginSelectField}>
                   <select
@@ -774,6 +835,7 @@ function App() {
     : selectedIncident?.actions || []
   const newCount = incidents.filter((incident) => !incident.opened_at).length
   const incidentFeed = selectedIncident ? [
+    { key: 'report', kind: 'REPORT', title: incidentSourceLabels[selectedIncident.source] || selectedIncident.source, body: selectedIncident.description, created_at: selectedIncident.reported_at },
     { key: 'delivered', kind: 'SYSTEM', title: 'Система-112', body: 'Карточка поступила', created_at: selectedIncident.delivered_at },
     ...(selectedIncident.opened_at ? [{ key: 'opened', kind: 'SYSTEM', title: 'Система-112', body: 'Карточка открыта', created_at: selectedIncident.opened_at }] : []),
     ...(selectedIncident.scenario_events || []).map((item) => ({ key: `scenario-${item.id}`, kind: 'SYSTEM', title: 'Новая вводная', body: item.body, created_at: item.created_at })),
@@ -786,11 +848,27 @@ function App() {
   return (
     <main className={styles.armShell}>
       <StatusMessage message={error ? `Ошибка: ${error}` : ''} tone="error" />
+      <StatusMessage message={activeTrainingSession?.paused_at ? 'ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" duration={86_400_000} />
+      <StatusMessage message={!activeTrainingSession?.paused_at && activeTrainingSession?.own_run?.paused_at ? 'ВАШЕ РАБОЧЕЕ МЕСТО ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ' : ''} tone="warning" duration={86_400_000} />
       <StatusMessage
         message={showCompletedNotice ? 'Занятие завершено' : ''}
         tone="success"
         onDismiss={() => setDismissedCompletedId(completedSessionId)}
       />
+
+      {!activeSessionId && <section className={styles.sessionReconnect} aria-label="Подключение к занятию">
+        <h2>Подключение к занятию</h2>
+        <p>Вы остались в системе. Выберите следующее занятие и АРМ.</p>
+        {trainingSessions.length ? <form onSubmit={joinNextSession}>
+          <div><label htmlFor="next-training-session">Занятие</label><select id="next-training-session" required value={nextSessionId} onChange={(event) => {
+            const item = trainingSessions.find((entry) => entry.id === Number(event.target.value))
+            setNextSessionId(event.target.value)
+            setNextWorkstation(item?.own_run?.workstation_number ? String(item.own_run.workstation_number) : '')
+          }}><option value="">Выберите занятие</option>{trainingSessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
+          <div><label htmlFor="next-workstation">Рабочее место</label><select id="next-workstation" required disabled={!nextSessionId} value={nextWorkstation} onChange={(event) => setNextWorkstation(event.target.value)}><option value="">Выберите АРМ</option>{Array.from({ length: trainingSessions.find((item) => item.id === Number(nextSessionId))?.workstation_count || 0 }, (_, index) => index + 1).map((number) => <option key={number} value={number}>АРМ {String(number).padStart(2, '0')}</option>)}</select></div>
+          <button type="submit" disabled={joiningSession || !nextSessionId || !nextWorkstation}>{joiningSession ? 'Подключение…' : 'Подключиться'}</button>
+        </form> : <p>Доступных занятий пока нет.</p>}
+      </section>}
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
@@ -844,13 +922,10 @@ function App() {
                 <button type="button" disabled title="Открыть точку происшествия на карте">⌖</button>
               </div>
               <div className={styles.reportPanel}>
-                <strong>{formatDateTime(selectedIncident.reported_at)}</strong>
-                <p>{selectedIncident.description}</p>
-                <span>Источник: {incidentSourceLabels[selectedIncident.source] || selectedIncident.source}</span>
                 <section className={styles.incidentActivity} aria-label="Информация по происшествию">
-                  <h2>Информация по происшествию</h2>
                   {incidentFeed.map((item) => <article key={item.key} className={item.kind === 'TRAINING_BRIGADE' ? styles.brigadeActivity : styles.activityEntry}>
-                    <strong>{item.title}</strong><time>{formatDateTime(item.created_at)}</time><p>{item.body}</p>
+                    <div className={styles.activityMeta}><time dateTime={item.created_at}>{formatDateTime(item.created_at)}</time><strong>{item.title}</strong></div>
+                    <p>{item.body}</p>
                   </article>)}
                 </section>
               </div>

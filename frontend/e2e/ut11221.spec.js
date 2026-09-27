@@ -9,6 +9,7 @@ async function json(response) {
 }
 
 test('instructor controls active session and trainee sees pause', async ({ browser }) => {
+  test.setTimeout(70000)
   const instructorApi = await apiRequest.newContext({ baseURL: apiBase, extraHTTPHeaders: { 'X-Demo-User': 'instructor' } })
   const traineeApi = await apiRequest.newContext({ baseURL: apiBase, extraHTTPHeaders: { 'X-Demo-User': 'trainee' } })
   const instructor = await browser.newPage()
@@ -48,10 +49,14 @@ test('instructor controls active session and trainee sees pause', async ({ brows
       sessionStorage.setItem('ut112-demo-username', 'instructor')
       sessionStorage.setItem('ut112-instructor-session-id', String(id))
     }, session.id)
+    await trainee.addInitScript((id) => {
+      sessionStorage.setItem('ut112-demo-username', 'trainee')
+      sessionStorage.setItem('ut112-trainee-session-id', String(id))
+    }, session.id)
     await instructor.goto('/')
     await expect(instructor.getByRole('heading', { name: title })).toBeVisible()
     await trainee.goto('/')
-    await trainee.getByLabel('Занятие', { exact: true }).selectOption({ label: title })
+    await expect(trainee.getByRole('combobox', { name: 'Текущий пользователь' })).toHaveValue('trainee')
 
     await instructor.getByRole('button', { name: 'Пауза', exact: true }).click()
     await expect(instructor.getByText('ЗАНЯТИЕ ПРИОСТАНОВЛЕНО ПРЕПОДАВАТЕЛЕМ')).toBeVisible()
@@ -94,6 +99,19 @@ test('instructor controls active session and trainee sees pause', async ({ brows
     await instructor.getByRole('button', { name: 'Завершить немедленно' }).click()
     await dialog.getByRole('button', { name: 'Сохранить' }).click()
     await expect.poll(async () => (await json(await instructorApi.get(`/api/training/sessions/${session.id}`))).state).toBe('COMPLETED')
+
+    await expect(trainee.getByRole('region', { name: 'Подключение к занятию' })).toBeVisible()
+    const nextTitle = unique('E2E next session')
+    const nextSession = await json(await instructorApi.post('/api/training/sessions', {
+      data: { title: nextTitle, mode: 'MANUAL', workstation_count: 2 },
+    }))
+    await trainee.getByLabel('Занятие', { exact: true }).selectOption({ label: nextTitle })
+    await trainee.getByLabel('Рабочее место', { exact: true }).selectOption('1')
+    await trainee.getByRole('button', { name: 'Подключиться' }).click()
+    await expect.poll(async () => {
+      const sessions = await json(await traineeApi.get('/api/training/sessions'))
+      return sessions.find((item) => item.id === nextSession.id)?.own_run?.workstation_number
+    }).toBe(1)
   } finally {
     await instructor.close()
     await trainee.close()

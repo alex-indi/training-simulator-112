@@ -102,13 +102,14 @@ function LiveMonitor({ sessionId, user, api }) {
   }, [dialog, selectedId])
 
   const post = async (path, body) => {
+    const dialogAtStart = dialog
     setBusy(true); setError('')
     try {
       const result = await api(`/api/training/sessions/${sessionId}${path}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
       await refresh()
-      setDialog('')
+      setDialog((current) => current === dialogAtStart ? '' : current)
       return result
     } catch (cause) { setError(cause.message); return null } finally { setBusy(false) }
   }
