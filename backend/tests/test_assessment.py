@@ -12,8 +12,27 @@ from app.modules.incidents.models import (
     IncidentActivity,
     IncidentLifecycleState,
 )
-from app.modules.training.assessment import _score, assess_run
-from app.modules.training.models import RunPause, SessionPause, TrainingRun
+from app.modules.response import models as response_models  # noqa: F401
+from app.modules.training.assessment import _result_read, _score, assess_run
+from app.modules.training.models import AssessmentResult, RunPause, SessionPause, TrainingRun
+
+
+def test_public_result_has_no_final_score_until_instructor_confirms_it():
+    result = AssessmentResult(
+        training_run_id=7,
+        automatic_score=100,
+        metrics={"cards": 0},
+        deviations=[],
+    )
+
+    pending = _result_read(result, [], public=True)
+    assert pending["final_score"] is None
+    assert "automatic_score" not in pending
+
+    result.final_score = 0
+    result.confirmed_at = datetime(2026, 9, 27, tzinfo=UTC)
+    confirmed = _result_read(result, [], public=True)
+    assert confirmed["final_score"] == 0
 
 
 def test_assessment_uses_training_time_and_keeps_automatic_score_after_review():

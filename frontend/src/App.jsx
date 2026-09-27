@@ -291,21 +291,27 @@ function App() {
           ? nextRunSession || preferred
           : preferred || nextRunSession
         const currentSession = joinedSession?.state === 'ACTIVE' ? joinedSession : null
-        const lastCompleted = preferred?.state === 'COMPLETED' ? preferred
-          : sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
         if (joinedSession && joinedSession.id !== trainingSessionId) {
           window.sessionStorage.setItem('ut112-trainee-session-id', String(joinedSession.id))
           setTrainingSessionId(joinedSession.id)
         }
         const currentItems = currentSession ? items.filter((item) => item.training_session_id === currentSession.id) : []
-        if (activeSessionIdRef.current !== (currentSession?.id || null)) {
-          activeSessionIdRef.current = currentSession?.id || null
+        const nextActiveSessionId = currentSession?.id || null
+        const previousActiveSessionId = activeSessionIdRef.current
+        if (previousActiveSessionId !== nextActiveSessionId) {
+          if (previousActiveSessionId && !nextActiveSessionId
+            && sessions.some((item) => item.id === previousActiveSessionId && item.state === 'COMPLETED')) {
+            setCompletedSessionId(previousActiveSessionId)
+            setDismissedCompletedId(null)
+          } else {
+            setCompletedSessionId(null)
+          }
+          activeSessionIdRef.current = nextActiveSessionId
           setFilters(emptyFilters)
         }
-        setActiveSessionId(currentSession?.id || null)
+        setActiveSessionId(nextActiveSessionId)
         setActiveTrainingSession(currentSession || null)
         setJoinedSessionId(joinedSession?.id || null)
-        setCompletedSessionId(lastCompleted?.id || null)
         setIncidents(currentItems)
         if (selectedIncidentId.current && !currentItems.some((item) => item.id === selectedIncidentId.current)) {
           setSelectedIncident(null)
@@ -864,10 +870,12 @@ function App() {
         onDismiss={() => setDismissedCompletedId(completedSessionId)}
       />
 
-      {!activeSessionId && <section className={styles.sessionReconnect} aria-label="Подключение к занятию">
-        <h2>АРМ {String(workstationNumber).padStart(2, '0')} подключён</h2>
-        <p>Ожидайте, пока преподаватель подключит рабочее место к занятию.</p>
-      </section>}
+      {!activeSessionId && <div className={styles.sessionReconnectOverlay}>
+        <section className={styles.sessionReconnect} aria-label="Подключение к занятию">
+          <h2>АРМ {String(workstationNumber).padStart(2, '0')} подключён</h2>
+          <p>Ожидайте, пока преподаватель подключит рабочее место к занятию.</p>
+        </section>
+      </div>}
 
       {selectedIncident ? (
         <section className={styles.incidentWorkspace} aria-busy={loading}>
@@ -1060,7 +1068,7 @@ function App() {
               </div>
             </div>
 
-            <div className={styles.clockPanel}>
+            <div className={`${styles.clockPanel} ${!activeSessionId ? styles.clockPanelAboveReconnect : ''}`}>
               <div className={styles.clockUpper}>
                 <div className={styles.clockDetails}>
                   <strong>{formatClockDate(now)}</strong>

@@ -57,7 +57,7 @@ function TrainingResults({ user, requestJson }) {
                   <strong>{item.title} · {new Date(item.date).toLocaleDateString('ru-RU')}</strong>
                   <small>{item.dds_profile} · {item.difficulty || 'Без сложности'} · карточек: {item.cards}</small>
                 </span>
-                <b>Итог: {item.result.final_score} / 100</b>
+                <b>{item.result.confirmed_at ? `Итог: ${item.result.final_score} / 100` : 'Нет оценки'}</b>
                 <i aria-hidden="true">{expanded ? '−' : '+'}</i>
               </button>
 
