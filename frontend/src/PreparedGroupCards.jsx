@@ -1,10 +1,10 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState } from 'react'
 
+import { factNames } from './cardVariantFacts'
 import styles from './InstructorWorkspace.module.css'
 
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-const factNames = { floor: 'Этаж', room: 'Помещение', observation: 'Обстановка', casualties: 'Пострадавшие' }
 
 export default function PreparedGroupCards({ group, instances, editable, api, refresh, onAdd, onAddSaved }) {
   const [selectedId, setSelectedId] = useState(null)

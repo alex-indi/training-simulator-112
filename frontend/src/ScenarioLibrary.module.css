@@ -111,24 +111,4 @@
 .savedCardSummary strong{display:-webkit-box;overflow:hidden;font-size:12px;line-height:1.4;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 .savedCardSummary small{color:var(--dds-muted);font-size:10px}
 .shell .savedPreviewButton{width:calc(100% - 20px);min-height:30px;margin:0 10px 10px;padding:5px 9px}
-.savedPreviewOverlay{--dds-blue:#1587c3;--dds-danger:#ec653b;position:fixed;inset:0;z-index:200;display:grid;place-items:center;box-sizing:border-box;padding:20px;background:#132b38b8;color:#253036;font:12px/1.45 var(--app-font-family)}
-.savedPreviewDialog{width:min(100%,900px);max-height:calc(100vh - 40px);overflow:auto;box-sizing:border-box;padding:16px;border:1px solid #82939c;background:#f1f2f2;box-shadow:0 12px 35px #10232e55}
-.savedPreviewDialog>.notice,.savedPreviewDialog>.error{margin:0 0 12px;padding:9px 12px}
-.savedPreviewDialog>.generationStatus{margin:0 0 12px}
-.savedPreviewHeader{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--dds-border,#aeb7bb)}
-.savedPreviewHeader h2{margin:0;font-size:18px;overflow-wrap:anywhere}
-.savedPreviewHeader button{flex:0 0 auto}
-.savedPreviewBody{display:grid;gap:12px}
-.savedPreviewBody p{margin:0;overflow-wrap:anywhere}
-.savedPreviewBody ul{margin:5px 0 0;padding-left:20px}
-.savedCardText{display:grid;gap:7px;padding:10px;border:1px solid #c3c9cc;background:#f7fafc}
-.savedCardText p{white-space:pre-wrap}
-.savedEditFacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
-.savedEditFacts label{display:grid;gap:4px;font-weight:600}
-.savedEditFacts .savedEditActions{grid-column:1/-1}
-.savedEditActions{display:flex;flex-wrap:wrap;gap:7px}
-.savedPreviewOverlay button{min-height:34px;box-sizing:border-box;border:1px solid #aeb7bb;padding:7px 11px;background:#eef0f0;color:#303a3f;font:inherit;font-weight:600;cursor:pointer}
-.savedPreviewOverlay button:disabled{cursor:not-allowed;opacity:.5}
-.savedPreviewOverlay select,.savedPreviewOverlay textarea{width:100%;box-sizing:border-box;min-height:36px;padding:7px;border:1px solid #98a3a8;background:#f7fafc;color:#253036;font:inherit}
-.savedPreviewOverlay textarea{min-height:150px;resize:vertical}
-@media(max-width:700px){.savedLibraryToolbar{position:static}.savedPreviewOverlay{padding:8px}.savedPreviewDialog{max-height:calc(100vh - 16px);padding:10px}.savedPreviewHeader{flex-direction:column}.savedPreviewHeader button{align-self:start}}
+@media(max-width:700px){.savedLibraryToolbar{position:static}}

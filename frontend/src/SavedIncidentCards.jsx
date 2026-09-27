@@ -1,10 +1,11 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { factNames } from './cardVariantFacts'
 import styles from './ScenarioLibrary.module.css'
+import editorStyles from './InstructorWorkspace.module.css'
 
 const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-const factNames = { floor: 'Этаж', room: 'Место', observation: 'Задымление', casualties: 'Пострадавшие' }
 const searchable = (value) => String(value || '').toLocaleLowerCase('ru').replaceAll('ё', 'е')
 
 export default function SavedIncidentCards({ user, requestJson, sessionId, groupId, onCompleted, picker = false }) {
@@ -18,10 +19,9 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState([])
   const [openedId, setOpenedId] = useState(null)
-  const [editingId, setEditingId] = useState(null)
-  const [editingFactsId, setEditingFactsId] = useState(null)
   const [facts, setFacts] = useState({})
   const [text, setText] = useState('')
+  const [additionalConditions, setAdditionalConditions] = useState([])
   const [busy, setBusy] = useState(false)
   const [generationStatus, setGenerationStatus] = useState('')
   const [error, setError] = useState('')
@@ -50,6 +50,17 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
 
   const openedCard = cards.find((card) => card.id === openedId)
   const canEditOpened = openedCard && (user.role === 'ADMIN' || openedCard.created_by_user_id === user.id)
+  const variantOptions = openedCard?.template_snapshot.variant_options || {}
+  const savedConditions = openedCard?.initial_state_snapshot.additional_conditions || []
+  const cleanedConditions = additionalConditions.map((value) => value.trim()).filter(Boolean)
+  const conditionsChanged = JSON.stringify(cleanedConditions) !== JSON.stringify(savedConditions)
+  const factsChanged = Object.keys(variantOptions).some((key) => facts[key] !== openedCard?.initial_state_snapshot.variant_facts?.[key])
+  const textChanged = text !== (openedCard?.initial_state_snapshot.render?.rendered_text || '')
+  useEffect(() => {
+    setText(openedCard?.initial_state_snapshot.render?.rendered_text || '')
+    setFacts(openedCard?.initial_state_snapshot.variant_facts || {})
+    setAdditionalConditions(openedCard?.initial_state_snapshot.additional_conditions || [])
+  }, [openedCard])
   const terms = searchable(search).trim().split(/\s+/).filter(Boolean)
   const visibleCards = cards.filter((card) => {
     const content = searchable([
@@ -85,19 +96,25 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
   const toggleSelected = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
   const openCard = (card) => {
     setOpenedId(card.id)
-    setEditingId(null)
-    setEditingFactsId(null)
     setError('')
     setNotice('')
   }
   const saveText = (card) => perform(async () => {
     await api(`/api/incident-cards/${card.id}/text`, json('PATCH', { text }))
-    await reload(); setEditingId(null); setNotice('Текст сохранён')
+    await reload(); setNotice('Текст сохранён')
   })
   const saveFacts = (card) => perform(async () => {
     await api(`/api/incident-cards/${card.id}/facts`, json('PATCH', { facts }))
-    await reload(); setEditingFactsId(null); setNotice('Условия и текст карточки обновлены')
+    await reload(); setNotice('Условия и текст карточки обновлены')
   }, 'ИИ обновляет текст карточки…')
+  const saveAdditionalConditions = (card) => {
+    if ((textChanged || factsChanged || card.initial_state_snapshot.render?.render_origin === 'MANUAL')
+      && !window.confirm('Сохранение дополнительных условий заменит текущий текст и несохранённые правки карточки. Продолжить?')) return
+    perform(async () => {
+      await api(`/api/incident-cards/${card.id}/additional-conditions`, json('PATCH', { conditions: cleanedConditions }))
+      await reload(); setNotice('Условия сохранены, текст обновлён')
+    }, 'ИИ обновляет текст карточки…')
+  }
   const rerenderText = (card) => {
     if (text !== card.initial_state_snapshot.render?.rendered_text && !window.confirm('Несохранённые правки текста будут заменены. Продолжить?')) return
     perform(async () => {
@@ -224,25 +241,51 @@ export default function SavedIncidentCards({ user, requestJson, sessionId, group
       {!packageDraft && !packages.length && <p>Пакетов пока нет. Создайте пакет из карточек библиотеки.</p>}
     </section>}
   </div>
-  {openedCard && createPortal(<div className={styles.savedPreviewOverlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenedId(null) }}>
-    <section className={styles.savedPreviewDialog} role="dialog" aria-modal="true" aria-labelledby={`saved-card-${openedCard.id}`}>
-      <header className={styles.savedPreviewHeader}><h2 id={`saved-card-${openedCard.id}`}>{openedCard.name}</h2><button type="button" autoFocus onClick={() => setOpenedId(null)}>Закрыть</button></header>
+  {openedCard && createPortal(<div className={`${editorStyles.shell} ${editorStyles.pickerOverlay}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenedId(null) }}>
+    <section className={`${editorStyles.pickerDialog} ${editorStyles.cardEditorDialog}`} role="dialog" aria-modal="true" aria-labelledby={`saved-card-${openedCard.id}`}>
+      <header className={editorStyles.cardEditorHeader}>
+        <div><small>Библиотека карточек</small><h3 id={`saved-card-${openedCard.id}`}>{openedCard.template_snapshot.name || openedCard.name}</h3></div>
+        <button type="button" autoFocus onClick={() => setOpenedId(null)}>Закрыть</button>
+      </header>
       {error && <p className={styles.error} role="alert">{error}</p>}
       {notice && <p className={styles.notice} role="status">{notice}</p>}
-      {generationStatus && <p className={styles.generationStatus} role="status">{generationStatus}</p>}
-      <div className={styles.savedPreviewBody}>
-        <p><b>Тип:</b> {openedCard.classifier_snapshot.final_incident_type}</p>
-        <p><b>Объект:</b> {openedCard.object_snapshot.name}</p>
-        <p><b>Адрес:</b> {openedCard.object_snapshot.address}</p>
-        <p><b>Условия:</b> {Object.entries(openedCard.initial_state_snapshot.variant_facts || {}).map(([key, value]) => `${factNames[key] || key}: ${value}`).join(' · ') || 'Без дополнительных условий'}</p>
-        {editingFactsId === openedCard.id && <div className={styles.savedEditFacts}>{Object.entries(openedCard.template_snapshot.variant_options || {}).map(([key, values]) => <label key={key}>{factNames[key] || key}<select value={facts[key] ?? ''} onChange={(event) => setFacts((current) => ({ ...current, [key]: key === 'floor' ? Number(event.target.value) : event.target.value }))}>{values.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>)}<div className={styles.savedEditActions}><button type="button" disabled={busy} onClick={() => saveFacts(openedCard)}>Сохранить условия</button><button type="button" onClick={() => setEditingFactsId(null)}>Отмена</button></div></div>}
-        <div className={styles.savedCardText}><b>Текст карточки</b>{editingId === openedCard.id ? <><textarea value={text} onChange={(event) => setText(event.target.value)} /><div className={styles.savedEditActions}><button type="button" disabled={busy || !text.trim()} onClick={() => saveText(openedCard)}>Сохранить текст</button><button type="button" disabled={busy} onClick={() => rerenderText(openedCard)}>Перегенерировать текст</button><button type="button" onClick={() => setEditingId(null)}>Отмена</button></div></> : <p>{openedCard.initial_state_snapshot.render?.rendered_text}</p>}</div>
-        <div><b>Службы по классификатору</b><ul>{openedCard.service_snapshot.map((service) => <li key={service.service_id}>{service.official_name}</li>)}</ul></div>
-        {canEditOpened && <div className={styles.savedEditActions}>
-          <button type="button" onClick={() => { setEditingId(openedCard.id); setEditingFactsId(null); setText(openedCard.initial_state_snapshot.render?.rendered_text || '') }}>Редактировать текст</button>
-          {!!Object.keys(openedCard.template_snapshot.variant_options || {}).length && <button type="button" onClick={() => { setEditingFactsId(openedCard.id); setEditingId(null); setFacts(openedCard.initial_state_snapshot.variant_facts || {}) }}>Изменить условия</button>}
-          {!picker && <button type="button" disabled={busy} onClick={() => remove(openedCard)}>Удалить</button>}
-        </div>}
+      {generationStatus && <p className={editorStyles.generationStatus} role="status">{generationStatus}</p>}
+      <div className={editorStyles.cardEditorBody}>
+        <div className={editorStyles.cardEditorClassification}>
+          <span>Классификация</span>
+          <strong>{openedCard.classifier_snapshot.incident_group || openedCard.classifier_snapshot.final_incident_type}</strong>
+          {openedCard.classifier_snapshot.final_incident_type !== openedCard.classifier_snapshot.incident_group && <small>Вид происшествия: {openedCard.classifier_snapshot.final_incident_type}</small>}
+        </div>
+        <div className={editorStyles.cardEditorMeta}>
+          <p><b>Объект</b><span>{openedCard.object_snapshot.name}</span></p>
+          <p><b>Адрес</b><span>{openedCard.object_snapshot.address}</span></p>
+        </div>
+        <section className={editorStyles.cardEditorSection}>
+          <div className={editorStyles.cardEditorSectionHeader}><h4>Условия</h4></div>
+          <p className={editorStyles.cardEditorHint}>Учебные варианты заданы шаблоном; классификация взята из справочника.</p>
+          {canEditOpened && !!Object.keys(variantOptions).length ? <>
+            <div className={editorStyles.cardEditorFacts}>{Object.entries(variantOptions).map(([key, choices]) => <label key={key}>{factNames[key] || key}<select value={facts[key] ?? ''} onChange={(event) => setFacts((current) => ({ ...current, [key]: key === 'floor' ? Number(event.target.value) : event.target.value }))}>{choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select></label>)}</div>
+            <div className={editorStyles.cardEditorSectionActions}><button type="button" className={editorStyles.cardEditorPrimary} disabled={busy || conditionsChanged || !factsChanged} title={conditionsChanged ? 'Сначала сохраните дополнительные условия' : ''} onClick={() => saveFacts(openedCard)}>Сохранить условия</button></div>
+          </> : <p>{Object.entries(openedCard.initial_state_snapshot.variant_facts || {}).map(([key, value]) => `${factNames[key] || key}: ${value}`).join(' · ') || 'Без дополнительных условий'}</p>}
+          <div className={editorStyles.cardEditorAdditional}>
+            <div className={editorStyles.cardEditorAdditionalHeader}><div><h5>Дополнительные условия</h5><small>Учитываются при формировании текста карточки.</small></div>{canEditOpened && <button type="button" disabled={busy || additionalConditions.length >= 8} onClick={() => setAdditionalConditions((current) => [...current, ''])}>+ Добавить условие</button>}</div>
+            {additionalConditions.map((condition, index) => <div className={editorStyles.cardEditorConditionRow} key={index}>
+              <input aria-label={`Дополнительное условие ${index + 1}`} value={condition} maxLength={200} readOnly={!canEditOpened} placeholder="Например: запах дыма на лестничной клетке" onChange={(event) => setAdditionalConditions((current) => current.map((value, position) => position === index ? event.target.value : value))} />
+              {canEditOpened && <button type="button" aria-label={`Удалить условие ${index + 1}`} disabled={busy} onClick={() => setAdditionalConditions((current) => current.filter((_, position) => position !== index))}>Удалить</button>}
+            </div>)}
+            {canEditOpened && conditionsChanged && <div className={editorStyles.cardEditorSectionActions}><button type="button" className={editorStyles.cardEditorPrimary} disabled={busy} onClick={() => saveAdditionalConditions(openedCard)}>Сохранить и обновить текст</button></div>}
+          </div>
+        </section>
+        <section className={editorStyles.cardEditorSection}>
+          <div className={editorStyles.cardEditorSectionHeader}><h4>Текст карточки</h4></div>
+          <textarea aria-label="Текст карточки" value={text} readOnly={!canEditOpened} onChange={(event) => setText(event.target.value)} />
+          {canEditOpened && <div className={editorStyles.cardEditorSectionActions}>
+            <button type="button" className={editorStyles.cardEditorPrimary} disabled={busy || conditionsChanged || !text.trim() || !textChanged} title={conditionsChanged ? 'Сначала сохраните дополнительные условия' : ''} onClick={() => saveText(openedCard)}>Сохранить текст</button>
+            <button type="button" disabled={busy || conditionsChanged || textChanged} onClick={() => rerenderText(openedCard)}>Перегенерировать текст</button>
+          </div>}
+        </section>
+        {canEditOpened && !picker && <footer className={editorStyles.cardEditorFooter}><button type="button" className={editorStyles.cardEditorDanger} disabled={busy} onClick={() => remove(openedCard)}>Удалить</button></footer>}
+        <p className={editorStyles.cardEditorHint}>Работа служб формируется автоматически во время занятия.</p>
       </div>
     </section>
   </div>, document.body)}
