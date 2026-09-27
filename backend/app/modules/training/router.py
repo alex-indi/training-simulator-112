@@ -15,6 +15,7 @@ from app.db.dependencies import get_database_session
 from app.modules.admin.models import UserGroup
 from app.modules.identity.dependencies import get_current_user
 from app.modules.identity.models import User, UserRole
+from app.modules.identity.router import WORKSTATION_ONLINE_WINDOW
 from app.modules.incidents.models import Incident
 from app.modules.scenario_library.instance_models import ScenarioInstance
 from app.modules.training.models import (
@@ -30,6 +31,7 @@ from app.modules.training.models import (
 )
 from app.modules.training.schemas import (
     BulkAssignment,
+    ConnectWorkstationRequest,
     GroupMemberRead,
     GroupRead,
     GroupWrite,
@@ -594,6 +596,34 @@ async def join_training_session(
     except IntegrityError as error:
         await database.rollback()
         raise HTTPException(status_code=409, detail="Рабочее место уже занято") from error
+
+
+@router.post("/{training_session_id}/connect-workstation", response_model=TrainingSessionRead)
+async def connect_workstation(
+    training_session_id: int,
+    payload: ConnectWorkstationRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    database: Annotated[AsyncSession, Depends(get_database_session)],
+) -> TrainingSessionRead:
+    item = await _load_session(database, training_session_id, for_update=True)
+    _ensure_session_owner(item, current_user)
+    trainee = await database.get(User, payload.trainee_id)
+    now = datetime.now(UTC)
+    if (
+        trainee is None
+        or trainee.role != UserRole.TRAINEE
+        or not trainee.is_active
+        or trainee.workstation_number is None
+        or trainee.workstation_last_seen_at is None
+        or now - trainee.workstation_last_seen_at >= WORKSTATION_ONLINE_WINDOW
+    ):
+        raise HTTPException(status_code=409, detail="Обучаемый не подключён к АРМ")
+    return await join_training_session(
+        training_session_id,
+        JoinRequest(workstation_number=trainee.workstation_number),
+        trainee,
+        database,
+    )
 
 
 @router.post("/{training_session_id}/heartbeat", status_code=204)

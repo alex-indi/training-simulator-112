@@ -30,6 +30,7 @@ test('MVP: общий пул, claim, принятие и сообщение бр
     await page.addInitScript((id) => {
       sessionStorage.setItem('ut112-demo-username', 'trainee')
       sessionStorage.setItem('ut112-trainee-session-id', String(id))
+      sessionStorage.setItem('ut112-workstation-number', '1')
     }, session.id)
     await page.goto('/')
     await expect(page.getByRole('combobox', { name: 'Текущий пользователь' })).toHaveValue('trainee')

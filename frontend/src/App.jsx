@@ -11,6 +11,7 @@ import { ddsStatusLabels, incidentHistoryLabels, incidentSourceLabels } from './
 import { initialOrderNumber, previewActionStatuses, previewAvailableActions, previewCurrentStatus, previewServiceTiles, statusEditorActions } from './serviceStatusPreview.js'
 
 const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+const workstationLimit = 100
 
 const roleLabels = {
   ADMIN: 'Администратор',
@@ -175,15 +176,10 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
-  const [loginSession, setLoginSession] = useState(null)
   const [loginWorkstation, setLoginWorkstation] = useState('')
-  const [loginSessionsLoading, setLoginSessionsLoading] = useState(false)
+  const [workstationNumber, setWorkstationNumber] = useState(() => Number(window.sessionStorage.getItem('ut112-workstation-number')) || null)
   const [incidents, setIncidents] = useState([])
-  const [trainingSessions, setTrainingSessions] = useState([])
   const [trainingSessionId, setTrainingSessionId] = useState(() => Number(window.sessionStorage.getItem('ut112-trainee-session-id')) || null)
-  const [nextSessionId, setNextSessionId] = useState('')
-  const [nextWorkstation, setNextWorkstation] = useState('')
-  const [joiningSession, setJoiningSession] = useState(false)
   const [joinedSessionId, setJoinedSessionId] = useState(null)
   const [activeTrainingSession, setActiveTrainingSession] = useState(null)
   const [activeSessionId, setActiveSessionId] = useState(null)
@@ -228,6 +224,20 @@ function App() {
   }, [currentUser])
 
   useEffect(() => {
+    if (currentUser?.role !== 'TRAINEE' || !workstationNumber) return undefined
+    let active = true
+    requestJson('/api/users/workstation', currentUser.username, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workstation_number: workstationNumber }),
+    }).catch((cause) => { if (active) setError(cause.message) })
+    const heartbeat = () => requestJson('/api/users/workstation/heartbeat', currentUser.username, {
+      method: 'POST',
+    }).catch((cause) => { if (active) setError(cause.message) })
+    const timer = window.setInterval(heartbeat, 20000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [currentUser, workstationNumber])
+
+  useEffect(() => {
     const savedUsername = window.sessionStorage.getItem('ut112-demo-username')
     requestJson('/api/users/demo')
       .then(async (demoUsers) => {
@@ -241,6 +251,10 @@ function App() {
         if (preferredUsername) {
           try {
             const selected = await requestJson('/api/users/me', preferredUsername)
+            if (selected.role === 'TRAINEE' && !Number(window.sessionStorage.getItem('ut112-workstation-number'))) {
+              window.sessionStorage.removeItem('ut112-demo-username')
+              return
+            }
             window.sessionStorage.setItem('ut112-demo-username', selected.username)
             setCurrentUser(selected)
           } catch {
@@ -254,35 +268,6 @@ function App() {
 
   const loginUser = users.find((user) => user.username === loginUsername)
   useEffect(() => {
-    if (loginUser?.role !== 'TRAINEE' || currentUser) {
-      setLoginSession(null)
-      setLoginWorkstation('')
-      setLoginSessionsLoading(false)
-      return undefined
-    }
-
-    let active = true
-    setLoginSessionsLoading(true)
-    requestJson('/api/training/sessions', loginUser.username)
-      .then((items) => {
-        if (!active) return
-        const available = items.filter((item) => ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
-        const pinnedId = Number(window.sessionStorage.getItem('ut112-trainee-session-id'))
-        const preferred = available.find((item) => item.id === pinnedId)
-          || available.find((item) => item.state === 'ACTIVE' && item.own_run)
-          || available.find((item) => item.own_run)
-          || available[0]
-        setLoginSession(preferred || null)
-        setLoginWorkstation(preferred?.own_run?.workstation_number
-          ? String(preferred.own_run.workstation_number)
-          : '')
-      })
-      .catch((requestError) => { if (active) setError(requestError.message) })
-      .finally(() => { if (active) setLoginSessionsLoading(false) })
-    return () => { active = false }
-  }, [currentUser, loginUser])
-
-  useEffect(() => {
     if (currentUser?.role !== 'TRAINEE') return undefined
     let active = true
     const refresh = async () => {
@@ -293,13 +278,19 @@ function App() {
         ])
         if (!active) return
         const preferred = sessions.find((item) => item.id === trainingSessionId && item.own_run)
-        const currentSession = preferred
-          ? preferred.state === 'ACTIVE' ? preferred : null
-          : sessions.find((item) => item.state === 'ACTIVE' && item.own_run)
-        const joinedSession = preferred || currentSession
-          || sessions.find((item) => ['DRAFT', 'READY'].includes(item.state) && item.own_run)
+        const nextRunSession = sessions.find((item) => item.own_run
+          && (!preferred || item.id > preferred.id)
+          && ['DRAFT', 'READY', 'ACTIVE'].includes(item.state))
+        const joinedSession = preferred?.state === 'COMPLETED'
+          ? nextRunSession || preferred
+          : preferred || nextRunSession
+        const currentSession = joinedSession?.state === 'ACTIVE' ? joinedSession : null
         const lastCompleted = preferred?.state === 'COMPLETED' ? preferred
           : sessions.find((item) => item.state === 'COMPLETED' && item.own_run)
+        if (joinedSession && joinedSession.id !== trainingSessionId) {
+          window.sessionStorage.setItem('ut112-trainee-session-id', String(joinedSession.id))
+          setTrainingSessionId(joinedSession.id)
+        }
         const currentItems = currentSession ? items.filter((item) => item.training_session_id === currentSession.id) : []
         if (activeSessionIdRef.current !== (currentSession?.id || null)) {
           activeSessionIdRef.current = currentSession?.id || null
@@ -308,8 +299,6 @@ function App() {
         setActiveSessionId(currentSession?.id || null)
         setActiveTrainingSession(currentSession || null)
         setJoinedSessionId(joinedSession?.id || null)
-        setTrainingSessions(sessions.filter((item) => ['DRAFT', 'READY'].includes(item.state)
-          || (item.state === 'ACTIVE' && item.own_run)))
         setCompletedSessionId(lastCompleted?.id || null)
         setIncidents(currentItems)
         if (selectedIncidentId.current && !currentItems.some((item) => item.id === selectedIncidentId.current)) {
@@ -421,17 +410,18 @@ function App() {
         body: JSON.stringify({ username: demoUser.username, password: loginPassword }),
       })
       if (user.role === 'TRAINEE') {
-        if (!loginSession || !loginWorkstation) {
+        if (!loginWorkstation) {
           throw new Error('Выберите рабочее место')
         }
-        await requestJson(`/api/training/sessions/${loginSession.id}/join`, user.username, {
-          method: 'POST',
+        await requestJson('/api/users/workstation', user.username, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ workstation_number: Number(loginWorkstation) }),
         })
-        setJoinedSessionId(loginSession.id)
-        window.sessionStorage.setItem('ut112-trainee-session-id', String(loginSession.id))
-        setTrainingSessionId(loginSession.id)
+        window.sessionStorage.setItem('ut112-workstation-number', loginWorkstation)
+        window.sessionStorage.removeItem('ut112-trainee-session-id')
+        setWorkstationNumber(Number(loginWorkstation))
+        setTrainingSessionId(null)
       }
       window.sessionStorage.setItem('ut112-demo-username', user.username)
       setCurrentUser(user)
@@ -443,31 +433,16 @@ function App() {
     }
   }
 
-  const joinNextSession = async (event) => {
-    event.preventDefault()
-    if (!nextSessionId || !nextWorkstation) return
-    setJoiningSession(true)
-    setError('')
-    try {
-      await requestJson(`/api/training/sessions/${nextSessionId}/join`, currentUser.username, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workstation_number: Number(nextWorkstation) }),
-      })
-      const id = Number(nextSessionId)
-      window.sessionStorage.setItem('ut112-trainee-session-id', String(id))
-      setTrainingSessionId(id)
-      setJoinedSessionId(id)
-      setNextSessionId('')
-      setNextWorkstation('')
-    } catch (cause) { setError(cause.message) } finally { setJoiningSession(false) }
-  }
-
   const logout = () => {
+    if (currentUser?.role === 'TRAINEE' && workstationNumber) {
+      requestJson('/api/users/workstation', currentUser.username, { method: 'DELETE' }).catch(() => {})
+    }
     window.sessionStorage.removeItem('ut112-demo-username')
     window.sessionStorage.removeItem('ut112-trainee-session-id')
+    window.sessionStorage.removeItem('ut112-workstation-number')
     setCurrentUser(null)
+    setWorkstationNumber(null)
     setTrainingSessionId(null)
-    setTrainingSessions([])
     setIncidents([])
     setJoinedSessionId(null)
     setActiveSessionId(null)
@@ -494,11 +469,15 @@ function App() {
 
   const selectUser = async (event) => {
     const demoUsername = event.target.value
+    if (currentUser?.role === 'TRAINEE' && workstationNumber) {
+      requestJson('/api/users/workstation', currentUser.username, { method: 'DELETE' }).catch(() => {})
+    }
     setError('')
     setIncidents([])
     window.sessionStorage.removeItem('ut112-trainee-session-id')
+    window.sessionStorage.removeItem('ut112-workstation-number')
+    setWorkstationNumber(null)
     setTrainingSessionId(null)
-    setTrainingSessions([])
     setJoinedSessionId(null)
     setActiveSessionId(null)
     setActiveTrainingSession(null)
@@ -518,6 +497,13 @@ function App() {
 
     try {
       const selected = await requestJson('/api/users/me', demoUsername)
+      if (selected.role === 'TRAINEE') {
+        window.sessionStorage.removeItem('ut112-demo-username')
+        setCurrentUser(null)
+        setLoginUsername(selected.username)
+        setLoading(false)
+        return
+      }
       window.sessionStorage.setItem('ut112-demo-username', selected.username)
       setCurrentUser(selected)
     } catch (requestError) {
@@ -719,19 +705,17 @@ function App() {
                 <div className={styles.loginSelectField}>
                   <select
                     aria-label="Рабочее место"
-                    disabled={loginSessionsLoading || !loginSession}
                     onChange={(event) => setLoginWorkstation(event.target.value)}
                     required
                     value={loginWorkstation}
                   >
-                    <option value="">{loginSessionsLoading ? 'Загрузка АРМ…' : loginSession ? 'Выберите АРМ' : 'Нет доступного занятия'}</option>
-                    {Array.from({ length: loginSession?.workstation_count || 0 }, (_, index) => index + 1).map((number) => (
+                    <option value="">Выберите АРМ</option>
+                    {Array.from({ length: workstationLimit }, (_, index) => index + 1).map((number) => (
                       <option key={number} value={number}>АРМ {String(number).padStart(2, '0')}</option>
                     ))}
                   </select>
                   <span className={styles.chevronIcon} aria-hidden="true" />
                 </div>
-                {loginSession && <small className={styles.loginSessionName}>{loginSession.title}</small>}
               </label>}
             </div>
             <label>
@@ -836,17 +820,8 @@ function App() {
       />
 
       {!activeSessionId && <section className={styles.sessionReconnect} aria-label="Подключение к занятию">
-        <h2>Подключение к занятию</h2>
-        <p>Вы остались в системе. Выберите следующее занятие и АРМ.</p>
-        {trainingSessions.length ? <form onSubmit={joinNextSession}>
-          <div><label htmlFor="next-training-session">Занятие</label><select id="next-training-session" required value={nextSessionId} onChange={(event) => {
-            const item = trainingSessions.find((entry) => entry.id === Number(event.target.value))
-            setNextSessionId(event.target.value)
-            setNextWorkstation(item?.own_run?.workstation_number ? String(item.own_run.workstation_number) : '')
-          }}><option value="">Выберите занятие</option>{trainingSessions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
-          <div><label htmlFor="next-workstation">Рабочее место</label><select id="next-workstation" required disabled={!nextSessionId} value={nextWorkstation} onChange={(event) => setNextWorkstation(event.target.value)}><option value="">Выберите АРМ</option>{Array.from({ length: trainingSessions.find((item) => item.id === Number(nextSessionId))?.workstation_count || 0 }, (_, index) => index + 1).map((number) => <option key={number} value={number}>АРМ {String(number).padStart(2, '0')}</option>)}</select></div>
-          <button type="submit" disabled={joiningSession || !nextSessionId || !nextWorkstation}>{joiningSession ? 'Подключение…' : 'Подключиться'}</button>
-        </form> : <p>Доступных занятий пока нет.</p>}
+        <h2>АРМ {String(workstationNumber).padStart(2, '0')} подключён</h2>
+        <p>Ожидайте, пока преподаватель подключит рабочее место к занятию.</p>
       </section>}
 
       {selectedIncident ? (

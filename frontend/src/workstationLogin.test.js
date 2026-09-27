@@ -9,7 +9,8 @@ test('dispatcher selects a workstation during authorization', () => {
   assert.match(source, /aria-label="Рабочее место"/)
   assert.match(source, /Выберите АРМ/)
   assert.match(source, /workstation_number: Number\(loginWorkstation\)/)
-  assert.match(source, /\/api\/training\/sessions\/\$\{loginSession\.id\}\/join/)
+  assert.match(source, /requestJson\('\/api\/users\/workstation'/)
+  assert.doesNotMatch(source, /loginSession\.id/)
 })
 
 test('opening a new shared card claims it automatically without a banner', () => {

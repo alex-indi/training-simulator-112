@@ -24,6 +24,9 @@ test('instructor controls active session and trainee sees pause', async ({ brows
     await json(await traineeApi.post(`/api/training/sessions/${session.id}/join`, {
       data: { workstation_number: 1 },
     }))
+    await json(await traineeApi.put('/api/users/workstation', {
+      data: { workstation_number: 1 },
+    }))
     const joined = await json(await instructorApi.get(`/api/training/sessions/${session.id}`))
     const runId = joined.runs[0].id
     await json(await instructorApi.post(`/api/training/sessions/${session.id}/assign`, {
@@ -52,6 +55,7 @@ test('instructor controls active session and trainee sees pause', async ({ brows
     await trainee.addInitScript((id) => {
       sessionStorage.setItem('ut112-demo-username', 'trainee')
       sessionStorage.setItem('ut112-trainee-session-id', String(id))
+      sessionStorage.setItem('ut112-workstation-number', '1')
     }, session.id)
     await instructor.goto('/')
     await expect(instructor.getByRole('heading', { name: title })).toBeVisible()
@@ -105,9 +109,10 @@ test('instructor controls active session and trainee sees pause', async ({ brows
     const nextSession = await json(await instructorApi.post('/api/training/sessions', {
       data: { title: nextTitle, mode: 'MANUAL', workstation_count: 2 },
     }))
-    await trainee.getByLabel('Занятие', { exact: true }).selectOption({ label: nextTitle })
-    await trainee.getByLabel('Рабочее место', { exact: true }).selectOption('1')
-    await trainee.getByRole('button', { name: 'Подключиться' }).click()
+    const connected = await json(await instructorApi.post(`/api/training/sessions/${nextSession.id}/connect-workstation`, {
+      data: { trainee_id: joined.runs[0].trainee_id },
+    }))
+    expect(connected.runs[0].workstation_number).toBe(1)
     await expect.poll(async () => {
       const sessions = await json(await traineeApi.get('/api/training/sessions'))
       return sessions.find((item) => item.id === nextSession.id)?.own_run?.workstation_number
