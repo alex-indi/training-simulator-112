@@ -18,6 +18,7 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const selected = instances.find((item) => item.id === selectedId)
+  const allCardsSelected = instances.length > 0 && instances.every((item) => selectedForRerender.includes(item.id))
   const counts = instances.reduce((result, item) => {
     const name = item.template_snapshot.name
     result[name] = (result[name] || 0) + 1
@@ -109,6 +110,10 @@ export default function PreparedGroupCards({ group, instances, editable, api, re
       <button type="button" disabled={busy || !selectedForRerender.some((id) => instances.some((item) => item.id === id))} onClick={rerenderSelected}>Перегенерировать тексты выбранных</button>
     </div>}
     {!selected && <StatusMessage message={generationStatus} />}
+    {editable && !!instances.length && <label className={styles.selectAllCards}>
+      <input type="checkbox" checked={allCardsSelected} onChange={(event) => setSelectedForRerender(event.target.checked ? instances.map((item) => item.id) : [])} />
+      <span>Выбрать все карточки</span>
+    </label>}
     {!!instances.length && <div className={styles.scenarioList}>
       <nav aria-label={`Карточки группы ${group.name}`} className={styles.cardList}>{instances.map((item, index) => <div key={item.id}>
         {editable && <input type="checkbox" aria-label={`Выбрать карточку ${index + 1} для перегенерации`} checked={selectedForRerender.includes(item.id)} onChange={(event) => setSelectedForRerender((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />}

@@ -1,6 +1,7 @@
 """Проверки базовой карточки происшествия и её API-команд."""
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -100,6 +101,36 @@ def test_delivered_incident_uses_server_time_and_snapshot_copy() -> None:
     assert incident.actions[0].status == DdsServiceEventType.SERVICE_ADDED
     assert incident.actions[0].created_at == server_time
     assert incident.actions[0].is_system is True
+
+
+def test_delivered_incident_generates_and_persists_missing_applicant() -> None:
+    source_snapshot = make_snapshot().model_dump(mode="json")
+    source_snapshot["applicant_name"] = None
+    source_snapshot["applicant_phone"] = None
+
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=source_snapshot,
+    )
+
+    assert len(incident.applicant_name.split()) == 3
+    assert re.fullmatch(r"\+7 \(9\d{2}\) \d{3}-\d{2}-\d{2}", incident.applicant_phone)
+    assert incident.source_snapshot["applicant_name"] == incident.applicant_name
+    assert incident.source_snapshot["applicant_phone"] == incident.applicant_phone
+    assert source_snapshot["applicant_name"] is None
+    assert source_snapshot["applicant_phone"] is None
+
+
+def test_delivered_incident_preserves_explicit_applicant() -> None:
+    source_snapshot = make_snapshot().model_dump(mode="json")
+
+    incident = create_delivered_incident(
+        training_session_id=12,
+        source_snapshot=source_snapshot,
+    )
+
+    assert incident.applicant_name == "Иван Петров"
+    assert incident.applicant_phone == "+79990000000"
 
 
 def test_delivered_incident_removes_postal_index_from_generated_card() -> None:

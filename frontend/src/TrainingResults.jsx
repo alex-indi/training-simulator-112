@@ -16,7 +16,7 @@ function TrainingResults({ user, requestJson }) {
     refresh()
     const timer = window.setInterval(refresh, 15000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [requestJson, user.username])
+  }, [open, requestJson, user.username])
 
   useEffect(() => {
     if (!open) return undefined

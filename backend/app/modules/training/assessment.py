@@ -443,9 +443,12 @@ def _result_read(
     }
     if public:
         data.pop("automatic_score")
-        data["deviations"] = [
-            item for item in data["deviations"] if item["decision"] == "CONFIRMED"
-        ]
+        if result.confirmed_at is None:
+            data["final_score"] = result.automatic_score
+        else:
+            data["deviations"] = [
+                item for item in data["deviations"] if item["decision"] == "CONFIRMED"
+            ]
         data["metrics"] = {
             **result.metrics,
             "reaction_violations": sum(
@@ -821,6 +824,22 @@ async def my_results(
 ) -> list[dict]:
     if user.role != UserRole.TRAINEE:
         raise HTTPException(403, "История доступна обучаемому")
+    completed_sessions = list(
+        (
+            await database.scalars(
+                select(TrainingSession)
+                .join(TrainingRun)
+                .where(
+                    TrainingRun.trainee_id == user.id,
+                    TrainingSession.state == TrainingSessionState.COMPLETED,
+                )
+                .options(selectinload(TrainingSession.runs))
+                .order_by(TrainingSession.completed_at.desc())
+            )
+        ).unique().all()
+    )
+    for session in completed_sessions:
+        await _ensure_results(database, session)
     rows = (
         await database.execute(
             select(AssessmentResult, TrainingRun, TrainingSession)
@@ -829,7 +848,6 @@ async def my_results(
             .where(
                 TrainingRun.trainee_id == user.id,
                 TrainingSession.state == TrainingSessionState.COMPLETED,
-                AssessmentResult.confirmed_at.is_not(None),
             )
             .options(selectinload(AssessmentResult.deviations))
             .order_by(TrainingSession.completed_at.desc())

@@ -1,6 +1,7 @@
 """API-схемы готовой карточки происшествия."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -106,6 +107,12 @@ class IncidentActionRead(BaseModel):
     created_at: datetime
 
 
+class IncidentEmergencyUpdate(BaseModel):
+    """Выбранный диспетчером признак ЧС/ЧП или его отсутствие."""
+
+    emergency_kind: Literal["ЧС", "ЧП"] | None = None
+
+
 class IncidentRead(BaseModel):
     """Каноническое состояние карточки из backend."""
 
@@ -127,6 +134,7 @@ class IncidentRead(BaseModel):
     source: str
     applicant_name: str | None
     applicant_phone: str | None
+    emergency_kind: Literal["ЧС", "ЧП"] | None = None
     address: str
     latitude: float | None
     longitude: float | None

@@ -90,6 +90,7 @@ class Incident(Base):
     source: Mapped[str] = mapped_column(String(120))
     applicant_name: Mapped[str | None] = mapped_column(String(200))
     applicant_phone: Mapped[str | None] = mapped_column(String(50))
+    emergency_kind: Mapped[str | None] = mapped_column(String(2))
     address: Mapped[str] = mapped_column(Text)
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)

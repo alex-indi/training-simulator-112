@@ -86,6 +86,9 @@
 .savedLibraryToolbar h2{margin:0;font-size:18px}
 .savedLibraryToolbar p{margin:2px 0 0;color:var(--dds-muted)}
 .savedLibraryToolbar>small{color:var(--dds-muted)}
+.savedSelectionBar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;color:var(--dds-muted)}
+.savedSelectionBar label{display:flex;align-items:center;gap:8px;color:var(--dds-text);font-weight:600}
+.shell .savedSelectionBar input{width:18px;min-height:18px;height:18px;margin:0}
 .savedTabs{display:flex;gap:6px;flex-wrap:wrap}
 .shell .savedTabs button{min-height:34px;background:#edf3f6}
 .shell .savedTabs button[aria-selected="true"]{border-color:var(--dds-blue);background:var(--dds-blue);color:#fff}
