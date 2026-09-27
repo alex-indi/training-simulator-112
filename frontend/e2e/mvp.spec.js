@@ -42,6 +42,10 @@ test('MVP: общий пул, claim, принятие и сообщение бр
     }))
 
     await login(page, 'trainee', 1)
+    await expect.poll(async () => {
+      const sessions = await json(await trainee.get('/api/training/sessions'))
+      return sessions.find((item) => item.id === session.id)?.own_run?.id
+    }).toBeTruthy()
 
     const grouped = await json(await instructor.post(`/api/training/sessions/${session.id}/groups`, {
       data: {
@@ -87,12 +91,14 @@ test('MVP: общий пул, claim, принятие и сообщение бр
 
     await expect(page.getByText(number).first()).toBeVisible()
     await page.getByText(number).first().click()
-    await page.getByRole('button', { name: 'Взять в работу' }).click()
 
-    const claimed = await json(await trainee.get(`/api/incidents/${incidentId}`))
-    expect(claimed.claimed_by_training_run_id).toBeTruthy()
+    await expect.poll(async () => {
+      const claimed = await json(await trainee.get(`/api/incidents/${incidentId}`))
+      return claimed.claimed_by_training_run_id
+    }).toBeTruthy()
 
-    await page.getByRole('button', { name: /Добавлена/ }).first().click()
+    const ownServiceEdit = page.getByRole('button', { name: 'Изменить статус службы Служба 101' })
+    await ownServiceEdit.click()
     await page.getByLabel('Статус', { exact: true }).selectOption('ACCEPT')
     await page.getByRole('button', { name: 'Сохранить статус' }).click()
 
@@ -106,7 +112,7 @@ test('MVP: общий пул, claim, принятие и сообщение бр
       return incident.activities.some((item) => item.kind === 'TRAINING_BRIGADE' && item.stage === 'EN_ROUTE')
     }, { timeout: 30000 }).toBe(true)
 
-    await page.getByRole('button', { name: /Принята/ }).first().click()
+    await ownServiceEdit.click()
     await page.getByLabel('Статус', { exact: true }).selectOption('START_RESPONSE')
     await page.getByRole('button', { name: 'Сохранить статус' }).click()
 

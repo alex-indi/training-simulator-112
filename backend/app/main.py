@@ -38,7 +38,11 @@ from app.modules.training.assessment import router as assessment_router
 from app.modules.training.control import router as control_router
 from app.modules.training.delivery import router as delivery_router
 from app.modules.training.delivery import scheduler_loop
-from app.modules.training.models import TrainingSession, training_session_trainees
+from app.modules.training.models import (
+    TrainingSession,
+    TrainingSessionState,
+    training_session_trainees,
+)
 from app.modules.training.monitor import router as monitor_router
 from app.modules.training.router import router as training_router
 from app.modules.training.router import template_router
@@ -102,6 +106,8 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> bool:
     username = auth.get("username") if isinstance(auth, dict) else None
     if not isinstance(username, str):
         return False
+
+    trainee_session_ids: list[int] = []
     async with app.state.database_session_factory() as database:
         user = (
             await database.scalars(
@@ -110,10 +116,32 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> bool:
                 )
             )
         ).one_or_none()
+        if user is not None and user.role == UserRole.TRAINEE:
+            trainee_session_ids = list(
+                (
+                    await database.scalars(
+                        select(TrainingSession.id)
+                        .join(training_session_trainees)
+                        .where(
+                            training_session_trainees.c.trainee_id == user.id,
+                            TrainingSession.state.in_(
+                                (
+                                    TrainingSessionState.DRAFT,
+                                    TrainingSessionState.READY,
+                                    TrainingSessionState.ACTIVE,
+                                )
+                            ),
+                        )
+                    )
+                ).all()
+            )
+
     if user is None:
         return False
     await sio.save_session(sid, {"user_id": user.id, "role": user.role.value})
     await sio.enter_room(sid, f"user:{user.id}")
+    for session_id in trainee_session_ids:
+        await sio.enter_room(sid, f"session:{session_id}")
     return True
 
 
