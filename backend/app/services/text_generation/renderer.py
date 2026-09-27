@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -24,9 +25,9 @@ class TextGenerationTask(StrEnum):
 
 
 PROMPT_VERSIONS = {
-    TextGenerationTask.INCIDENT_REPORT: "incident_operator_entry_v6",
-    TextGenerationTask.RESPONSE_MESSAGE: "response_crew_message_v3",
-    TextGenerationTask.ASSESSMENT_SUMMARY: "assessment_summary_v1",
+    TextGenerationTask.INCIDENT_REPORT: "incident_operator_entry_v7",
+    TextGenerationTask.RESPONSE_MESSAGE: "response_crew_message_v4",
+    TextGenerationTask.ASSESSMENT_SUMMARY: "assessment_summary_v2",
 }
 
 
@@ -452,6 +453,11 @@ class AITextRenderer:
 
     async def render(self, request: TextGenerationRequest) -> dict[str, Any]:
         prompt = prompt_for(request.task)
+        prompt += (
+            "\n\nФормат ответа: обычный текст без Markdown. "
+            "Не используй заголовки, списки, выделение звёздочками, "
+            "обратные кавычки и блоки кода."
+        )
         if (
             request.task == TextGenerationTask.INCIDENT_REPORT
             and request.context
@@ -467,6 +473,7 @@ class AITextRenderer:
         fingerprint = input_hash(request, self.provider.name, self.provider.model)
         started = monotonic()
         result = None
+        plain_text = None
         provider_error = False
         if self.enabled and self.provider.name != "template":
             for attempt in range(2):
@@ -474,7 +481,8 @@ class AITextRenderer:
                     result = await asyncio.wait_for(
                         self.provider.generate(request, prompt), timeout=self.timeout_seconds
                     )
-                    _validate_text(result.text)
+                    plain_text = _plain_text(result.text)
+                    _validate_text(plain_text)
                     break
                 except (Exception, asyncio.CancelledError) as exc:
                     if isinstance(exc, asyncio.CancelledError):
@@ -493,7 +501,10 @@ class AITextRenderer:
             if not self.fallback_enabled and self.enabled and self.provider.name != "template":
                 raise RuntimeError("AI rendering failed and fallback is disabled")
             result = await self.fallback.generate(request, prompt)
-            _validate_text(result.text)
+            plain_text = (
+                _plain_text(result.text) if result.provider != "template" else result.text
+            )
+            _validate_text(plain_text)
             result = TextGenerationResult(
                 text=result.text, provider=result.provider, fallback_used=True
             )
@@ -509,7 +520,7 @@ class AITextRenderer:
             result.output_tokens,
         )
         snapshot = TextGenerationResult(
-            text=result.text,
+            text=plain_text,
             provider=result.provider,
             model=result.model,
             prompt_version=version,
@@ -519,6 +530,34 @@ class AITextRenderer:
         ).snapshot(fingerprint)
         snapshot["provider_error"] = provider_error
         return snapshot
+
+
+def _plain_text(value: str) -> str:
+    def unwrap(match: re.Match[str]) -> str:
+        return next(group for group in match.groups() if group is not None)
+
+    lines = []
+    for raw_line in value.splitlines():
+        line = raw_line.strip()
+        if re.fullmatch(r"`{3,}.*|(?:[-*_]\s*){3,}", line):
+            continue
+        line = re.sub(r"^#{1,6}\s+|^>\s?", "", line)
+        line = re.sub(r"^(?:[-*+]\s+|\d+[.)]\s+)", "", line)
+        line = re.sub(
+            r"!?\[([^]]+)]\(([^)]+)\)",
+            lambda match: (
+                match[1] if match[1] == match[2] else f"{match[1]} ({match[2]})"
+            ),
+            line,
+        )
+        line = re.sub(r"\*\*(.+?)\*\*|__(.+?)__|`([^`]+)`", unwrap, line)
+        line = re.sub(
+            r"(?<!\w)\*([^\s*][^*]*?)\*(?!\w)|(?<!\w)_([^\s_][^_]*?)_(?!\w)",
+            unwrap,
+            line,
+        )
+        lines.append(line)
+    return "\n".join(lines).strip()
 
 
 def _validate_text(value: Any) -> None:

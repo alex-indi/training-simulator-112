@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.modules.incidents.models import (
     DDSResponseStatus,
     Incident,
@@ -91,14 +93,23 @@ def test_assessment_matches_brigade_stages_to_later_dds_actions():
         lifecycle_state=IncidentLifecycleState.FINISHED,
         dds_status=DDSResponseStatus.COMPLETED,
         actions=[
-            IncidentAction(action=action, status=action.value, is_system=False,
-                           created_at=start + timedelta(seconds=offset))
+            IncidentAction(
+                action=action,
+                status=action.value,
+                is_system=False,
+                created_at=start + timedelta(seconds=offset),
+            )
             for action, offset in actions
         ],
         activities=[
-            IncidentActivity(kind="TRAINING_BRIGADE", stage=stage, body=body,
-                             service_name="Бригада 101", event_key=f"brigade-101:{stage}",
-                             created_at=start + timedelta(seconds=offset))
+            IncidentActivity(
+                kind="TRAINING_BRIGADE",
+                stage=stage,
+                body=body,
+                service_name="Бригада 101",
+                event_key=f"brigade-101:{stage}",
+                created_at=start + timedelta(seconds=offset),
+            )
             for stage, offset, body in events
         ],
     )
@@ -108,4 +119,121 @@ def test_assessment_matches_brigade_stages_to_later_dds_actions():
     assert [step["seconds"] for step in card["brigade"]] == [18, 60, 15, 70]
     assert [step["severity"] for step in card["brigade"]] == ["OK", "MAJOR", "OK", "MAJOR"]
     assert result.metrics["major_errors"] == 2
+    assert result.metrics["critical_signals"] == 0
+    assert result.metrics["rules_version"] == 3
+
+
+@pytest.mark.parametrize(
+    ("reaction_seconds", "expected_severity", "expected_major_errors"),
+    [
+        (44, "OK", 0),
+        (45, "OK", 0),
+        (46, "MAJOR", 1),
+    ],
+)
+def test_brigade_reaction_boundary_is_exactly_45_seconds(
+    reaction_seconds: int,
+    expected_severity: str,
+    expected_major_errors: int,
+):
+    start = datetime(2026, 9, 24, 17, tzinfo=UTC)
+    event_at = start + timedelta(seconds=60)
+    incident = Incident(
+        id=14,
+        incident_number="КП-14",
+        delivered_at=start,
+        primary_status_at=start + timedelta(seconds=1),
+        lifecycle_state=IncidentLifecycleState.OPENED,
+        dds_status=DDSResponseStatus.ARRIVED,
+        actions=[
+            IncidentAction(
+                action=IncidentActionType.ACCEPT,
+                status=IncidentActionType.ACCEPT.value,
+                is_system=False,
+                created_at=start + timedelta(seconds=1),
+            ),
+            IncidentAction(
+                action=IncidentActionType.MARK_ARRIVAL,
+                status=IncidentActionType.MARK_ARRIVAL.value,
+                is_system=False,
+                created_at=event_at + timedelta(seconds=reaction_seconds),
+            ),
+        ],
+        activities=[
+            IncidentActivity(
+                kind="TRAINING_BRIGADE",
+                stage="ARRIVED",
+                body="Прибыли к месту",
+                service_name="Бригада 101",
+                event_key="brigade-101:ARRIVED",
+                created_at=event_at,
+            )
+        ],
+    )
+
+    result = assess_run(TrainingRun(id=7), [incident], [], [])
+    step = result.metrics["card_results"][0]["brigade"][0]
+
+    assert step["seconds"] == reaction_seconds
+    assert step["severity"] == expected_severity
+    assert result.metrics["major_errors"] == expected_major_errors
+    assert result.metrics["critical_signals"] == 0
+
+
+def test_same_timestamp_brigade_events_do_not_hide_later_matching_actions():
+    start = datetime(2026, 9, 24, 18, tzinfo=UTC)
+    event_at = start + timedelta(seconds=60)
+    incident = Incident(
+        id=15,
+        incident_number="КП-15",
+        delivered_at=start,
+        primary_status_at=start + timedelta(seconds=1),
+        lifecycle_state=IncidentLifecycleState.OPENED,
+        dds_status=DDSResponseStatus.ARRIVED,
+        actions=[
+            IncidentAction(
+                action=IncidentActionType.ACCEPT,
+                status=IncidentActionType.ACCEPT.value,
+                is_system=False,
+                created_at=start + timedelta(seconds=1),
+            ),
+            IncidentAction(
+                action=IncidentActionType.START_RESPONSE,
+                status=IncidentActionType.START_RESPONSE.value,
+                is_system=False,
+                created_at=event_at + timedelta(seconds=10),
+            ),
+            IncidentAction(
+                action=IncidentActionType.MARK_ARRIVAL,
+                status=IncidentActionType.MARK_ARRIVAL.value,
+                is_system=False,
+                created_at=event_at + timedelta(seconds=20),
+            ),
+        ],
+        activities=[
+            IncidentActivity(
+                kind="TRAINING_BRIGADE",
+                stage="EN_ROUTE",
+                body="Выехали к месту",
+                service_name="Бригада 101",
+                event_key="brigade-101:EN_ROUTE",
+                created_at=event_at,
+            ),
+            IncidentActivity(
+                kind="TRAINING_BRIGADE",
+                stage="ARRIVED",
+                body="Прибыли к месту",
+                service_name="Бригада 101",
+                event_key="brigade-101:ARRIVED",
+                created_at=event_at,
+            ),
+        ],
+    )
+
+    result = assess_run(TrainingRun(id=7), [incident], [], [])
+    brigade = result.metrics["card_results"][0]["brigade"]
+
+    assert [step["seconds"] for step in brigade] == [10, 20]
+    assert [step["severity"] for step in brigade] == ["OK", "OK"]
+    assert result.metrics["major_errors"] == 0
     assert result.metrics["critical_signals"] == 0

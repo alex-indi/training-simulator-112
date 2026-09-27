@@ -217,19 +217,13 @@ def assess_run(
             ),
             key=lambda item: (item.created_at, item.id or 0),
         )
-        for index, event in enumerate(brigade_events):
-            next_at = (
-                brigade_events[index + 1].created_at
-                if index + 1 < len(brigade_events)
-                else None
-            )
+        for event in brigade_events:
             response = next(
                 (
                     action
                     for action in actions
                     if action.action == BRIGADE_ACTIONS[event.stage]
                     and action.created_at >= event.created_at
-                    and (next_at is None or action.created_at <= next_at)
                 ),
                 None,
             )
@@ -310,7 +304,7 @@ def assess_run(
         ),
         "additional_errors": sum(item.kind in ADDITIONAL_KINDS for item in deviations),
         "card_results": card_results,
-        "rules_version": 2,
+        "rules_version": 3,
     }
     return AssessmentResult(
         training_run_id=run.id,
