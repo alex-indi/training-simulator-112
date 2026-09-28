@@ -143,12 +143,14 @@ def main() -> None:
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="UT112 portable smoke ") as temporary:
         root = Path(temporary)
+        extracted = root / "папка с кириллицей"
+        extracted.mkdir()
         if sys.platform == "darwin":
-            subprocess.run(["unzip", "-q", str(args.archive.resolve()), "-d", str(root)], check=True)
+            subprocess.run(["unzip", "-q", str(args.archive.resolve()), "-d", str(extracted)], check=True)
         else:
             with zipfile.ZipFile(args.archive) as archive:
-                archive.extractall(root)
-        bundle = root / args.archive.stem
+                archive.extractall(extracted)
+        bundle = extracted / args.archive.stem
         profile = root / "separate profile"
         log = root / "launcher.log"
         python = bundle / "python" / ("python.exe" if sys.platform == "win32" else "bin/python3")
@@ -173,6 +175,12 @@ def main() -> None:
             try:
                 url = _wait_ready(profile, first, log)
                 assert not url.endswith(":8080"), url
+                if sys.platform == "win32":
+                    manifest = json.loads((bundle / "COMPONENTS.json").read_text())
+                    digest = manifest["postgres"]["sha256"]
+                    runtime = profile / f"postgres-runtime-{digest[:12]}"
+                    assert (runtime / "bin" / "initdb.exe").is_file()
+                    assert str(runtime).isascii()
                 assert b'<div id="root">' in _request(url + "/")
                 assert b'<div id="root">' in _request(url + "/admin")
                 assert _request(url + "/socket.io/?EIO=4&transport=polling").startswith(b"0")

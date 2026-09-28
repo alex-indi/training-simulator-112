@@ -27,6 +27,7 @@ if sys.platform == "win32":
 BACKEND_ROOT = Path(__file__).resolve().parent
 BUNDLE_ROOT = BACKEND_ROOT.parent
 POSTGRES_ROOT = BUNDLE_ROOT / "postgres"
+ACTIVE_POSTGRES_ROOT = POSTGRES_ROOT
 FRONTEND_ROOT = BUNDLE_ROOT / "frontend"
 DATABASE_NAME = "training_simulator_112"
 DATABASE_USER = "ut112"
@@ -72,7 +73,7 @@ def _database_settings(home: Path) -> dict[str, str]:
 
 def _postgres_binary(name: str) -> Path:
     suffix = ".exe" if sys.platform == "win32" else ""
-    binary = POSTGRES_ROOT / "bin" / f"{name}{suffix}"
+    binary = ACTIVE_POSTGRES_ROOT / "bin" / f"{name}{suffix}"
     if not binary.is_file():
         raise RuntimeError(f"В архиве отсутствует PostgreSQL: {binary}")
     return binary
@@ -80,10 +81,38 @@ def _postgres_binary(name: str) -> Path:
 
 def _postgres_environment() -> dict[str, str]:
     environment = os.environ.copy()
-    environment["PATH"] = str(POSTGRES_ROOT / "bin") + os.pathsep + environment.get("PATH", "")
+    environment["PATH"] = (
+        str(ACTIVE_POSTGRES_ROOT / "bin") + os.pathsep + environment.get("PATH", "")
+    )
     if sys.platform == "darwin":
-        environment["DYLD_LIBRARY_PATH"] = str(POSTGRES_ROOT / "lib")
+        environment["DYLD_LIBRARY_PATH"] = str(ACTIVE_POSTGRES_ROOT / "lib")
     return environment
+
+
+def _prepare_postgres_runtime(home: Path) -> Path:
+    if sys.platform != "win32" or str(POSTGRES_ROOT).isascii():
+        return POSTGRES_ROOT
+    if not str(home).isascii():
+        raise RuntimeError(
+            "Путь к профилю Windows содержит кириллицу. PostgreSQL нужен каталог с ASCII-путём. "
+            "Укажите UT112_PORTABLE_DATA_DIR на доступный каталог с латинским путём."
+        )
+    manifest = json.loads((BUNDLE_ROOT / "COMPONENTS.json").read_text(encoding="utf-8"))
+    digest = manifest["postgres"]["sha256"]
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise RuntimeError("Некорректная контрольная сумма PostgreSQL в архиве.")
+    destination = home / f"postgres-runtime-{digest[:12]}"
+    if destination.exists():
+        if not (destination / "bin" / "initdb.exe").is_file():
+            raise RuntimeError(f"Неполный каталог PostgreSQL: {destination}")
+        return destination
+    pending = home / f"postgres-runtime-{digest[:12]}.init"
+    if pending.exists():
+        shutil.rmtree(pending)
+    print("Подготавливаю PostgreSQL для запуска из пути с кириллицей...", flush=True)
+    shutil.copytree(POSTGRES_ROOT, pending)
+    pending.replace(destination)
+    return destination
 
 
 def _run_postgres_tool(
@@ -346,6 +375,8 @@ def _serve(home: Path, port: int, addresses: list[str]) -> None:
 
 
 def main() -> int:
+    global ACTIVE_POSTGRES_ROOT
+
     home = data_directory()
     home.mkdir(parents=True, exist_ok=True)
     if sys.platform != "win32":
@@ -358,6 +389,7 @@ def main() -> int:
     database_started = False
     try:
         (home / "instance.json").unlink(missing_ok=True)
+        ACTIVE_POSTGRES_ROOT = _prepare_postgres_runtime(home)
         settings = _database_settings(home)
         _initialize_cluster(home, settings["password"])
         if _running_postgres_port(home) is not None:
