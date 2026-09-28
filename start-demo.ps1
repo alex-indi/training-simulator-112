@@ -3,6 +3,8 @@ $projectRoot = $PSScriptRoot
 $envFile = Join-Path $projectRoot '.env.docker'
 
 function Test-DockerReady {
+    # Windows PowerShell 5.1 treats redirected native stderr as a terminating error under Stop.
+    $ErrorActionPreference = 'Continue'
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
     docker compose version *> $null
     if ($LASTEXITCODE -ne 0) { return $false }
