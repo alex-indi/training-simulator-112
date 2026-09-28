@@ -39,7 +39,19 @@ jobs:
       - name: Build portable archive
         run: python scripts/build_portable.py --target ${{ matrix.target }}
       - name: Smoke test extracted archive
-        run: python scripts/smoke_portable.py dist/UT112-${{ matrix.target }}.zip
+        shell: bash
+        run: |
+          python scripts/smoke_portable.py dist/UT112-${{ matrix.target }}.zip > smoke-portable.log 2>&1
+          status=$?
+          cat smoke-portable.log
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-log-${{ matrix.target }}
+          path: smoke-portable.log
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: UT112-${{ matrix.target }}
