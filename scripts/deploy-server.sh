@@ -44,6 +44,13 @@ echo "=== 1. Fetch repository ==="
 
 git fetch origin main
 
+# Не разворачиваем устаревший CI run поверх более нового main.
+MAIN_SHA="$(git rev-parse FETCH_HEAD)"
+if [ "$TARGET_SHA" != "$MAIN_SHA" ]; then
+    echo "ERROR: target $TARGET_SHA is not current origin/main ($MAIN_SHA)"
+    exit 1
+fi
+
 # Проверяем, что GitHub действительно прислал существующий commit.
 git cat-file -e "${TARGET_SHA}^{commit}"
 
@@ -96,17 +103,22 @@ cd "$REPO_DIR/backend"
 ./.venv/bin/alembic upgrade head
 
 echo
-echo "=== 7. Reload systemd configuration ==="
+echo "=== 7. Update demonstration seed ==="
+
+./.venv/bin/python -m app.scripts.seed_demo
+
+echo
+echo "=== 8. Reload systemd configuration ==="
 
 sudo -n systemctl daemon-reload
 
 echo
-echo "=== 8. Restart backend ==="
+echo "=== 9. Restart backend ==="
 
 sudo -n systemctl restart "$SERVICE"
 
 echo
-echo "=== 9. Backend health check ==="
+echo "=== 10. Backend health check ==="
 
 for attempt in {1..30}; do
     if curl -fsS "$BACKEND_URL/health" >/dev/null; then
@@ -124,7 +136,7 @@ for attempt in {1..30}; do
 done
 
 echo
-echo "=== 10. Update and reload Nginx ==="
+echo "=== 11. Update and reload Nginx ==="
 
 # The active vhost is linked to /etc/nginx/sites-available, not the Git checkout.
 # Install the version shipped with this commit so deploys preserve the gate.
@@ -135,7 +147,7 @@ sudo -n nginx -t
 sudo -n systemctl reload nginx
 
 echo
-echo "=== 11. Public access gate check ==="
+echo "=== 12. Public access gate check ==="
 
 # The backend health check above verifies liveness. The public endpoint must
 # refuse anonymous requests, including after a deployment.
