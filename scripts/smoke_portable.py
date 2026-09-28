@@ -26,9 +26,21 @@ def _request(url: str) -> bytes:
 
 
 def _wait_ready(profile: Path, process: subprocess.Popen, log: Path) -> str:
+    def failure_details() -> str:
+        output = log.read_bytes().decode("utf-8", errors="replace")
+        tail = "\n".join(output.splitlines()[-25:])
+        instance = profile / "instance.json"
+        modified = instance.stat().st_mtime if instance.exists() else None
+        return (
+            f"process={process.poll()}, instance_mtime={modified}, "
+            f"launch_started={process.launch_started}\n{tail}"
+        )
+
     for _ in range(600):
         if process.poll() is not None:
-            raise AssertionError(f"Launcher exited {process.returncode}:\n{log.read_text(errors='replace')}")
+            raise AssertionError(f"Launcher exited: {failure_details()}")
+        if b"Press any key to continue" in log.read_bytes():
+            raise AssertionError(f"Launcher paused after an error: {failure_details()}")
         try:
             instance = profile / "instance.json"
             if instance.stat().st_mtime < process.launch_started:
@@ -40,7 +52,7 @@ def _wait_ready(profile: Path, process: subprocess.Popen, log: Path) -> str:
         except (OSError, KeyError, ValueError, urllib.error.URLError):
             pass
         time.sleep(1)
-    raise AssertionError(f"Launcher timed out:\n{log.read_text(errors='replace')}")
+    raise AssertionError(f"Launcher timed out: {failure_details()}")
 
 
 def _database_marker(python: Path, profile: Path, action: str) -> None:

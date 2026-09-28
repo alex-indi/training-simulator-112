@@ -48,7 +48,7 @@ jobs:
           if [ "$status" -ne 0 ]; then
             python - <<'PY'
           from pathlib import Path
-          output = Path("smoke-portable.log").read_text(encoding="utf-8", errors="replace")[-9000:]
+          output = Path("smoke-portable.log").read_text(encoding="utf-8", errors="replace")[-2200:]
           output = output.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Portable smoke failed::{output}")
           PY
