@@ -1,22 +1,34 @@
 <div align="center">
 
+<img src="frontend/public/favicon.svg" alt="112" width="72" height="72">
+
 # Учебный тренажёр 112
 
 **Интерактивный веб-тренажёр для практической подготовки диспетчеров ДДС к работе с карточками происшествий Системы-112.**
 
 <p>
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/react/react-original.svg" alt="React" title="React" width="40" height="40">
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/vitejs/vitejs-original.svg" alt="Vite" title="Vite" width="40" height="40">
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg" alt="Python" title="Python" width="40" height="40">
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/fastapi/fastapi-original.svg" alt="FastAPI" title="FastAPI" width="40" height="40">
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg" alt="PostgreSQL" title="PostgreSQL" width="40" height="40">
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/docker/docker-original.svg" alt="Docker" title="Docker" width="40" height="40">
-  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nginx/nginx-original.svg" alt="Nginx" title="Nginx" width="40" height="40">
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-149ECA?style=flat-square&amp;logo=react&amp;logoColor=white" alt="React 19"></a>
+  <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-7-646CFF?style=flat-square&amp;logo=vite&amp;logoColor=white" alt="Vite 7"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.12"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.141-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI 0.141"></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&amp;logo=postgresql&amp;logoColor=white" alt="PostgreSQL 16"></a>
+  <a href="https://socket.io/"><img src="https://img.shields.io/badge/Socket.IO-4.8-4B5563?style=flat-square&amp;logo=socketdotio&amp;logoColor=white" alt="Socket.IO 4.8"></a>
+  <a href="https://docs.docker.com/compose/"><img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker Compose"></a>
 </p>
 
 ### [Открыть онлайн-демонстрацию →](https://112.rzd-learning.ru/)
 
+<p>
+  <a href="#о-проекте">О проекте</a> ·
+  <a href="#возможности">Возможности</a> ·
+  <a href="#попробовать">Попробовать</a> ·
+  <a href="#технологии">Технологии</a> ·
+  <a href="#архитектура">Архитектура</a>
+</p>
+
 </div>
+
+---
 
 ## О проекте
 
@@ -50,6 +62,8 @@ flowchart LR
 При этом классификация происшествия, состав привлекаемых служб, состояние занятия и оценочные правила остаются детерминированными и контролируются backend. AI не выставляет итоговую оценку и не подменяет бизнес-логику тренажёра.
 
 В публичной онлайн-демонстрации AI-генерация включена. Для автономных запусков предусмотрен детерминированный fallback, поэтому базовый учебный поток не зависит от внешнего AI API.
+
+---
 
 ## Попробовать
 
@@ -112,41 +126,37 @@ Launcher проверит Docker/Compose, создаст локальную ко
 
 **http://localhost:8080**
 
+> [!TIP]
 > На Windows и macOS launcher при необходимости подсказывает установку недостающих Docker-компонентов. Если рабочая Docker-среда уже настроена, повторная установка не выполняется.
 
 ## Как устроено занятие
 
-```text
-Преподаватель
-  ↓
-создаёт занятие и выбирает учебную группу
-  ↓
-формирует или добавляет карточки происшествий
-  ↓
-обучаемый занимает АРМ и получает карточку
-  ↓
-принимает решение и вручную ведёт статусы ДДС
-  ↓
-получает сообщения служб и учебной бригады 101
-  ↓
-завершает реагирование
-  ↓
-система формирует разбор, преподаватель подтверждает итог
+```mermaid
+flowchart TD
+    A["Преподаватель"] --> B["создаёт занятие и выбирает учебную группу"]
+    B --> C["формирует или добавляет карточки происшествий"]
+    C --> D["обучаемый занимает АРМ и получает карточку"]
+    D --> E["принимает решение и вручную ведёт статусы ДДС"]
+    E --> F["получает сообщения служб и учебной бригады 101"]
+    F --> G["завершает реагирование"]
+    G --> H["система формирует разбор, преподаватель подтверждает итог"]
 ```
 
 Карточки общего пула закрепляются атомарно: первую взятую в работу карточку получает только один обучаемый. Сообщения виртуальных служб не меняют статус ДДС автоматически — обучаемый самостоятельно фиксирует фактические этапы реагирования.
+
+---
 
 ## Технологии
 
 | Слой | Технологии |
 | --- | --- |
-| Frontend | React 19, Vite 7, JavaScript, CSS Modules |
-| Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic |
-| Realtime | Socket.IO |
-| База данных | PostgreSQL 16 |
-| AI | OpenAI / OpenAI-compatible provider + deterministic fallback |
-| Развёртывание | Docker Compose, Nginx, systemd, portable runtime |
-| Качество | Pytest, Ruff, ESLint, Playwright, GitHub Actions |
+| **Frontend** | React 19, Vite 7, JavaScript, CSS Modules |
+| **Backend** | Python 3.12, FastAPI, SQLAlchemy 2, Alembic |
+| **Realtime** | Socket.IO |
+| **База данных** | PostgreSQL 16 |
+| **AI** | OpenAI / OpenAI-compatible provider + deterministic fallback |
+| **Развёртывание** | Docker Compose, Nginx, systemd, portable runtime |
+| **Качество** | Pytest, Ruff, ESLint, Playwright, GitHub Actions |
 
 ## Архитектура
 
@@ -162,16 +172,19 @@ REST хранит каноническое состояние приложени
 
 ## Структура репозитория
 
-```text
-backend/     API, бизнес-логика, миграции, seed и тесты
-frontend/    пользовательский интерфейс и E2E
-scripts/     portable build, smoke checks и deployment helpers
-deploy/      production-конфигурация сервера
-.github/     CI/CD и сборка portable-версий
-```
+| Каталог | Назначение |
+| --- | --- |
+| `backend/` | API, бизнес-логика, миграции, seed и тесты |
+| `frontend/` | пользовательский интерфейс и E2E |
+| `scripts/` | portable build, smoke checks и deployment helpers |
+| `deploy/` | production-конфигурация сервера |
+| `.github/` | CI/CD и сборка portable-версий |
+
+---
 
 ## Статус
 
 Проект находится в состоянии **завершённого MVP**. Реализован сквозной учебный сценарий ДДС 101, преподавательское рабочее место, генерация и библиотека карточек, realtime-взаимодействие, автоматический разбор, публичный стенд, Docker-развёртывание и portable-сборки.
 
-MVP не является промышленной реализацией Системы-112: demo-аутентификация, учебные виртуальные службы и сценарная модель предназначены для демонстрации и обучения.
+> [!NOTE]
+> MVP не является промышленной реализацией Системы-112: demo-аутентификация, учебные виртуальные службы и сценарная модель предназначены для демонстрации и обучения.
