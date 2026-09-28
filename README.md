@@ -96,6 +96,8 @@ npm run build
 
 Готовые статические файлы находятся в `frontend/dist/`; Node.js для их раздачи не нужен. При раздаче настройте SPA fallback на `index.html` для прямого открытия `/admin`, а `/api/*` и `/socket.io/*` направьте на backend без изменения пути. `GET /health` остаётся проверкой доступности backend.
 
+Публичный стенд `112.rzd-learning.ru` защищён паролем на Nginx; порядок настройки и проверки — в [`docs/server-access.md`](docs/server-access.md).
+
 Запуск backend из отдельного терминала после настройки окружения и базы данных:
 
 ```bash
