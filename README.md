@@ -4,8 +4,15 @@
 
 **Интерактивный веб-тренажёр для практической подготовки диспетчеров ДДС к работе с карточками происшествий Системы-112.**
 
-[![CI](https://github.com/alex-indi/training-simulator-112/actions/workflows/ci.yml/badge.svg)](https://github.com/alex-indi/training-simulator-112/actions/workflows/ci.yml)
-[![Portable](https://github.com/alex-indi/training-simulator-112/actions/workflows/portable.yml/badge.svg)](https://github.com/alex-indi/training-simulator-112/actions/workflows/portable.yml)
+<p>
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/react/react-original.svg" alt="React" title="React" width="40" height="40">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/vitejs/vitejs-original.svg" alt="Vite" title="Vite" width="40" height="40">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg" alt="Python" title="Python" width="40" height="40">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/fastapi/fastapi-original.svg" alt="FastAPI" title="FastAPI" width="40" height="40">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg" alt="PostgreSQL" title="PostgreSQL" width="40" height="40">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/docker/docker-original.svg" alt="Docker" title="Docker" width="40" height="40">
+  <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nginx/nginx-original.svg" alt="Nginx" title="Nginx" width="40" height="40">
+</p>
 
 ### [Открыть онлайн-демонстрацию →](https://112.rzd-learning.ru/)
 
