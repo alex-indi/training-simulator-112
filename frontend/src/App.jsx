@@ -19,6 +19,12 @@ const roleLabels = {
   TRAINEE: 'Диспетчер ДДС',
 }
 
+const quickLoginRoleLabels = {
+  ADMIN: 'Администратор',
+  INSTRUCTOR: 'Преподаватель',
+  TRAINEE: 'Обучающийся',
+}
+
 const lifecycleLabels = {
   CREATED: 'Создана',
   DELIVERED: 'Добавлена',
@@ -733,7 +739,7 @@ function App() {
                     {!quickLoginUsers.length && <option value="">Загрузка пользователей…</option>}
                     {quickLoginUsers.map((user) => (
                       <option key={user.id} value={user.username}>
-                        {user.full_name}
+                        {quickLoginRoleLabels[user.role] || user.full_name}
                       </option>
                     ))}
                   </select>

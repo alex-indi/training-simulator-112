@@ -10,8 +10,8 @@ test('trainee can choose a workstation and sign in before a session exists', asy
   ]
   const quickUsers = [
     { id: 1, username: 'admin', full_name: 'Администратор', role: 'ADMIN' },
-    { id: 2, username: 'instructor', full_name: 'Преподаватель', role: 'INSTRUCTOR' },
-    { id: 3, username: 'trainee', full_name: 'Обучаемый', role: 'TRAINEE' },
+    { id: 2, username: 'instructor', full_name: 'Наталья Андреева', role: 'INSTRUCTOR' },
+    { id: 3, username: 'trainee', full_name: 'Александр Иванов', role: 'TRAINEE' },
   ]
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
@@ -27,6 +27,9 @@ test('trainee can choose a workstation and sign in before a session exists', asy
 
   await page.goto('/')
   await expect(page.getByLabel('Пользователь').locator('option')).toHaveCount(3)
+  await expect(page.getByLabel('Пользователь').locator('option')).toHaveText([
+    'Администратор', 'Преподаватель', 'Обучающийся',
+  ])
   await page.getByRole('button', { name: 'Ввести логин другого пользователя' }).click()
   await page.getByLabel('Пользователь').fill('SID')
   const workstation = page.getByRole('combobox', { name: 'Рабочее место' })
