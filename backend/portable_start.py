@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import ipaddress
+import itertools
 import json
+import logging
 import os
 import secrets
 import shutil
@@ -14,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 import webbrowser
@@ -32,6 +35,55 @@ FRONTEND_ROOT = BUNDLE_ROOT / "frontend"
 DATABASE_NAME = "training_simulator_112"
 DATABASE_USER = "ut112"
 POSTGRES_MAJOR = "16"
+STARTUP_STEPS = 7
+CURRENT_STEP = "подготовка запуска"
+
+
+@contextlib.contextmanager
+def _step(number: int, label: str):
+    """Show a small progress indicator without mixing it with service logs."""
+    global CURRENT_STEP
+
+    CURRENT_STEP = label.lower()
+    prefix = f"[{number}/{STARTUP_STEPS}] {label}"
+    interactive = sys.stdout.isatty()
+    stopped = threading.Event()
+    started = time.monotonic()
+
+    def animate() -> None:
+        for frame in itertools.cycle("|/-\\"):
+            if stopped.wait(0.2):
+                return
+            print(f"\r{prefix}... {frame}", end="", flush=True)
+
+    print(f"{prefix}...", end="\r" if interactive else "\n", flush=True)
+    spinner = threading.Thread(target=animate, name="ut112-progress", daemon=True)
+    if interactive:
+        spinner.start()
+    try:
+        yield
+    except BaseException:
+        stopped.set()
+        if interactive:
+            spinner.join()
+            print("\r" + " " * (len(prefix) + 8) + "\r", end="", flush=True)
+        print(f"{prefix}: ошибка", flush=True)
+        raise
+    else:
+        stopped.set()
+        if interactive:
+            spinner.join()
+            print("\r" + " " * (len(prefix) + 8) + "\r", end="", flush=True)
+        print(f"{prefix}: готово ({time.monotonic() - started:.0f} с)", flush=True)
+
+
+def _write_failure_log(home: Path, error: Exception) -> Path:
+    path = home / "logs" / "startup.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(f"\n--- {datetime.now(UTC).isoformat()} ---\n")
+        traceback.print_exception(error, file=stream)
+    return path
 
 
 def data_directory() -> Path:
@@ -109,7 +161,6 @@ def _prepare_postgres_runtime(home: Path) -> Path:
     pending = home / f"postgres-runtime-{digest[:12]}.init"
     if pending.exists():
         shutil.rmtree(pending)
-    print("Подготавливаю PostgreSQL для запуска из пути с кириллицей...", flush=True)
     shutil.copytree(POSTGRES_ROOT, pending)
     pending.replace(destination)
     return destination
@@ -175,7 +226,6 @@ def _backup_before_upgrade(home: Path) -> None:
     backup_root.mkdir(exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     destination = backup_root / f"postgres-{stamp}-{previous[:12]}"
-    print(f"Сохраняю резервную копию базы: {destination}", flush=True)
     shutil.copytree(home / "postgres", destination)
 
 
@@ -196,23 +246,31 @@ def _running_postgres_port(home: Path) -> int | None:
 def _start_postgres(home: Path) -> int:
     running_port = _running_postgres_port(home)
     if running_port is not None:
-        print("Использую уже работающую локальную базу PostgreSQL.", flush=True)
         return running_port
     log = home / "logs" / "postgres.log"
-    for _ in range(3):
+    control_log = home / "logs" / "postgres-start.log"
+    for attempt in range(3):
         port = _free_port()
-        result = _run_postgres_tool(
-            "pg_ctl",
-            "-D", str(home / "postgres"),
-            "-l", str(log),
-            "-o", f"-h 127.0.0.1 -p {port}",
-            "-w", "-t", "30", "start",
-            check=False,
-            capture_output=False,
-        )
+        with control_log.open("a", encoding="utf-8") as stream:
+            stream.write(f"\npg_ctl start: попытка {attempt + 1}\n")
+            stream.flush()
+            result = subprocess.run(
+                [
+                    str(_postgres_binary("pg_ctl")),
+                    "-D", str(home / "postgres"),
+                    "-l", str(log),
+                    "-o", f"-h 127.0.0.1 -p {port}",
+                    "-w", "-t", "30", "start",
+                ],
+                env=_postgres_environment(),
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
         if result.returncode == 0:
             return port
-    raise RuntimeError(f"PostgreSQL не запустился. Подробности: {log}")
+        time.sleep(1)
+    raise RuntimeError(f"PostgreSQL не запустился. Подробности: {control_log}")
 
 
 def _stop_postgres(home: Path) -> None:
@@ -268,25 +326,64 @@ def _prepare_application(home: Path, password: str, port: int) -> None:
     from alembic import command
     from alembic.config import Config
 
-    alembic = Config(str(BACKEND_ROOT / "alembic.ini"))
+    # The archive's alembic.ini routes migration internals to the console.
+    # Configure only the script path here and keep seed details in a file.
+    alembic = Config()
     alembic.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
-    command.upgrade(alembic, "head")
-    if asyncio.run(_needs_seed(password, port)):
-        print("Загружаю демонстрационные данные (только при первом запуске)...", flush=True)
-        from app.scripts.seed_all import seed_all
+    with (home / "logs" / "startup.log").open("a", encoding="utf-8") as log:
+        with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+            command.upgrade(alembic, "head")
+            if asyncio.run(_needs_seed(password, port)):
+                from app.scripts.seed_all import seed_all
 
-        asyncio.run(seed_all())
+                asyncio.run(seed_all())
     _write_private(home / "app-version", _bundled_version() + "\n")
 
 
 def _lan_addresses() -> list[str]:
     addresses: set[str] = set()
+    preferred: set[str] = set()
     with contextlib.suppress(OSError):
         for address in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             ip = address[4][0]
             if ipaddress.ip_address(ip).is_private and not ip.startswith("127."):
                 addresses.add(ip)
-    return sorted(addresses)
+    if sys.platform == "win32":
+        # Prefer active physical adapters over VPN, Hyper-V and WSL interfaces.
+        command = (
+            "Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | "
+            "ForEach-Object { Get-NetIPAddress -InterfaceIndex $_.ifIndex "
+            "-AddressFamily IPv4 | Select-Object -ExpandProperty IPAddress }"
+        )
+        with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=8,
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            for candidate in result.stdout.splitlines():
+                candidate = candidate.strip()
+                with contextlib.suppress(ValueError):
+                    if (
+                        ipaddress.ip_address(candidate).is_private
+                        and not candidate.startswith("127.")
+                    ):
+                        preferred.add(candidate)
+                        addresses.add(candidate)
+    # A UDP connect chooses the default route without sending data.
+    with contextlib.suppress(OSError):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            candidate = probe.getsockname()[0]
+            if ipaddress.ip_address(candidate).is_private and not candidate.startswith("127."):
+                addresses.add(candidate)
+                if not preferred:
+                    preferred.add(candidate)
+    return sorted(addresses, key=lambda ip: (ip not in preferred, ip))
 
 
 def _web_port() -> int:
@@ -332,7 +429,7 @@ def _open_running_instance(home: Path) -> None:
         with contextlib.suppress(OSError, ValueError, KeyError):
             url = json.loads(instance.read_text(encoding="utf-8"))["url"]
             if url.startswith("http://127.0.0.1:") and _healthy(url):
-                print(f"Тренажёр уже запущен: {url}")
+                _print_panel(url, _lan_addresses(), already_running=True)
                 if not os.environ.get("UT112_PORTABLE_NO_BROWSER"):
                     webbrowser.open(url)
                 return
@@ -340,82 +437,136 @@ def _open_running_instance(home: Path) -> None:
     raise RuntimeError("Другой запуск ещё выполняется. Проверьте его окно и журнал.")
 
 
+def _print_panel(local_url: str, addresses: list[str], *, already_running: bool = False) -> None:
+    port = local_url.rsplit(":", 1)[1]
+    print("\n" + "=" * 68)
+    print("  УЧЕБНЫЙ ТРЕНАЖЁР 112 — " + ("УЖЕ ЗАПУЩЕН" if already_running else "ГОТОВ К РАБОТЕ"))
+    print("-" * 68)
+    print(f"  На этом компьютере:  {local_url}")
+    if addresses:
+        print(f"  Для участников в сети: http://{addresses[0]}:{port}")
+        if len(addresses) > 1:
+            print("  Если адрес не открывается, попробуйте другие адаптеры:")
+            for address in addresses[1:]:
+                print(f"    http://{address}:{port}")
+    else:
+        print("  Адрес локальной сети не найден. Проверьте подключение к сети.")
+    print()
+    print("  Откройте адрес в браузере. Участникам передайте адрес сети.")
+    if already_running:
+        print("  Остановка — Enter в первом окне запуска.")
+    else:
+        print("  Оставьте это окно открытым. Для остановки нажмите Enter здесь.")
+    print("  Если появится запрос файрвола, разрешите доступ для локальной сети.")
+    print("=" * 68, flush=True)
+
+
 def _serve(home: Path, port: int, addresses: list[str]) -> None:
     import uvicorn
 
-    server = uvicorn.Server(
-        uvicorn.Config("app.main:socket_app", host="0.0.0.0", port=port, log_level="warning")
+    logging.basicConfig(
+        filename=str(home / "logs" / "application.log"),
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
     )
-    thread = threading.Thread(target=server.run, name="ut112-web")
-    thread.start()
+    server = uvicorn.Server(
+        uvicorn.Config(
+            "app.main:socket_app", host="0.0.0.0", port=port,
+            log_level="warning", log_config=None,
+        )
+    )
+
+    def run_server() -> None:
+        try:
+            server.run()
+        except Exception:
+            logging.exception("Веб-сервер завершился с ошибкой")
+
+    thread = threading.Thread(target=run_server, name="ut112-web")
     local_url = f"http://127.0.0.1:{port}"
     instance = home / "instance.json"
     try:
-        for _ in range(60):
-            if _healthy(local_url):
-                break
-            if not thread.is_alive():
-                raise RuntimeError("Веб-сервер завершился при запуске.")
-            time.sleep(1)
-        else:
-            raise RuntimeError("Веб-сервер не ответил за 60 секунд.")
+        with _step(7, "Запускаю приложение"):
+            thread.start()
+            for _ in range(60):
+                if _healthy(local_url):
+                    break
+                if not thread.is_alive():
+                    raise RuntimeError("Веб-сервер завершился при запуске.")
+                time.sleep(1)
+            else:
+                raise RuntimeError("Веб-сервер не ответил за 60 секунд.")
         _write_private(instance, json.dumps({"url": local_url}))
-        print(f"Тренажёр готов: {local_url}")
-        for address in addresses:
-            print(f"Адрес для локальной сети: http://{address}:{port}")
-        print("Разрешите доступ в локальной сети, если ОС покажет запрос файрвола.")
-        print("Нажмите Enter в этом окне для остановки тренажёра.", flush=True)
+        _print_panel(local_url, addresses)
         if not os.environ.get("UT112_PORTABLE_NO_BROWSER"):
             webbrowser.open(local_url)
         input()
+        print("Останавливаю тренажёр...", flush=True)
     finally:
         instance.unlink(missing_ok=True)
         server.should_exit = True
-        thread.join(timeout=20)
+        if thread.ident is not None:
+            thread.join(timeout=20)
 
 
 def main() -> int:
     global ACTIVE_POSTGRES_ROOT
 
-    home = data_directory()
-    home.mkdir(parents=True, exist_ok=True)
-    if sys.platform != "win32":
-        home.chmod(0o700)
-    (home / "logs").mkdir(exist_ok=True)
-    lock = _acquire_lock(home)
+    print("\nУЧЕБНЫЙ ТРЕНАЖЁР 112 — запуск без интернета\n", flush=True)
+    with _step(1, "Проверяю папку данных"):
+        home = data_directory()
+        home.mkdir(parents=True, exist_ok=True)
+        if sys.platform != "win32":
+            home.chmod(0o700)
+        (home / "logs").mkdir(exist_ok=True)
+        lock = _acquire_lock(home)
     if lock is None:
         _open_running_instance(home)
         return 0
     database_started = False
     try:
         (home / "instance.json").unlink(missing_ok=True)
-        ACTIVE_POSTGRES_ROOT = _prepare_postgres_runtime(home)
-        settings = _database_settings(home)
-        _initialize_cluster(home, settings["password"])
-        if _running_postgres_port(home) is not None:
-            _stop_postgres(home)
-        _backup_before_upgrade(home)
-        port = _start_postgres(home)
+        with _step(2, "Подготавливаю PostgreSQL"):
+            ACTIVE_POSTGRES_ROOT = _prepare_postgres_runtime(home)
+        with _step(3, "Подготавливаю локальную базу"):
+            settings = _database_settings(home)
+            _initialize_cluster(home, settings["password"])
+            if _running_postgres_port(home) is not None:
+                _stop_postgres(home)
+        with _step(4, "Проверяю резервную копию"):
+            _backup_before_upgrade(home)
+        with _step(5, "Запускаю базу данных"):
+            port = _start_postgres(home)
         database_started = True
         web_port = _web_port()
         addresses = _lan_addresses()
         origins = [f"http://{host}:{web_port}" for host in ("127.0.0.1", "localhost", *addresses)]
         os.environ["FRONTEND_ORIGINS"] = ",".join(origins)
         os.environ["UT112_PORTABLE_FRONTEND_DIR"] = str(FRONTEND_ROOT)
-        _prepare_application(home, settings["password"], port)
+        with _step(6, "Обновляю данные приложения"):
+            _prepare_application(home, settings["password"], port)
         _serve(home, web_port, addresses)
-        return 0
     finally:
-        if database_started:
-            _stop_postgres(home)
-        lock.close()
+        try:
+            if database_started:
+                _stop_postgres(home)
+        finally:
+            lock.close()
+    print("Тренажёр остановлен. Результаты сохранены.", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (KeyboardInterrupt, EOFError):
-        print("Тренажёр остановлен.")
+        print("Тренажёр остановлен. Результаты сохранены.")
     except Exception as error:
-        print(f"Ошибка запуска: {error}", file=sys.stderr)
+        print(f"Не удалось запустить тренажёр на этапе «{CURRENT_STEP}».", file=sys.stderr)
+        if isinstance(error, RuntimeError) and "\n" not in str(error):
+            print(f"Причина: {error}", file=sys.stderr)
+        with contextlib.suppress(OSError, RuntimeError):
+            log = _write_failure_log(data_directory(), error)
+            print(f"Подробности сохранены в файле: {log}", file=sys.stderr)
         raise SystemExit(1) from error

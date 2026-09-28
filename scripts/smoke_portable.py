@@ -39,7 +39,9 @@ def _wait_ready(profile: Path, process: subprocess.Popen, log: Path) -> str:
     for _ in range(180):
         if process.poll() is not None:
             raise AssertionError(f"Launcher exited: {failure_details()}")
-        if b"Press any key to continue" in log.read_bytes():
+        if "Для закрытия окна нажмите любую клавишу" in log.read_text(
+            encoding="utf-8", errors="replace"
+        ):
             raise AssertionError(f"Launcher paused after an error: {failure_details()}")
         try:
             instance = profile / "instance.json"
@@ -157,6 +159,9 @@ def main() -> None:
         launcher = bundle / ("Start.cmd" if sys.platform == "win32" else "Start.command")
         assert launcher.is_file() and python.is_file()
         if sys.platform == "win32":
+            launcher_text = launcher.read_text(encoding="utf-8")
+            assert "Для закрытия окна нажмите любую клавишу" in launcher_text
+            assert "pause >nul" in launcher_text
             subprocess.run(
                 [
                     str(python), "-E", "-s", "-c",
@@ -197,6 +202,18 @@ def main() -> None:
                 first.stdin.write(b"\n")
                 first.stdin.flush()
                 assert first.wait(timeout=30) == 0
+                output = log.read_text(encoding="utf-8", errors="replace")
+                assert "[1/7] Проверяю папку данных" in output
+                assert "[7/7] Запускаю приложение" in output
+                assert "ГОТОВ К РАБОТЕ" in output
+                assert f"На этом компьютере:  {url}" in output
+                assert "Для остановки нажмите Enter здесь" in output
+                assert "Результаты сохранены" in output
+                assert "INFO  [alembic" not in output
+                assert "scenario_templates:" not in output
+                second_output = (root / "second.log").read_text(encoding="utf-8", errors="replace")
+                assert "УЖЕ ЗАПУЩЕН" in second_output
+                assert "Остановка — Enter в первом окне запуска" in second_output
             finally:
                 _abort(first, bundle, profile)
         moved = root / "moved bundle with spaces"

@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - codex/portable-offline-demo
+      - main
+      - codex/portable-*
     paths:
       - .github/workflows/portable.yml
       - backend/**
