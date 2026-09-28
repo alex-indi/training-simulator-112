@@ -75,12 +75,3 @@ outputs/
 ~$*.xlsx
 ~$*.ppt
 ~$*.pptx
-
-# Customer source materials are stored outside Git
-materials/customer/
-materials/customer.*
-frontend/src/assets/auth-background.pdf
-
-# Local Codex state
-.codex/local/
-.codex/*.local.toml
