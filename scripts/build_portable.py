@@ -126,8 +126,12 @@ def _write_launchers(stage: Path, target: str) -> None:
         (stage / "Start.cmd").write_text(
             '@echo off\r\nsetlocal\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n'
             '"%~dp0python\\python.exe" -E -s "%~dp0backend\\portable_start.py"\r\n'
-            'if errorlevel 1 pause\r\n',
-            encoding="ascii", newline="",
+            'if errorlevel 1 (\r\n'
+            '  echo.\r\n'
+            '  echo Для закрытия окна нажмите любую клавишу.\r\n'
+            '  pause >nul\r\n'
+            ')\r\n',
+            encoding="utf-8", newline="",
         )
     else:
         launcher = stage / "Start.command"
@@ -143,9 +147,11 @@ def _write_launchers(stage: Path, target: str) -> None:
     (stage / "README.txt").write_text(
         "UT112 — портативный офлайн-тренажёр\n\n"
         "Распакуйте архив целиком и запустите Start.cmd (Windows) или Start.command (macOS).\n"
+        "Дождитесь семи этапов загрузки и панели с адресами в окне запуска.\n"
         "Окно запуска оставьте открытым во время занятия. Enter в нём останавливает стенд.\n"
         "База и результаты сохраняются в профиле пользователя, отдельно от Docker.\n"
         "Участникам дайте адрес локальной сети, показанный в окне запуска.\n"
+        "Если запуск не удался, подробности сохраняются в папке logs в профиле пользователя.\n"
         "На macOS без Developer ID может понадобиться разрешить первый запуск в настройках безопасности.\n",
         encoding="utf-8",
     )
