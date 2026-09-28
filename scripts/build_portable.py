@@ -124,7 +124,7 @@ def _install_requirements(stage: Path, cache: Path, target: str) -> None:
 def _write_launchers(stage: Path, target: str) -> None:
     if target == "windows-x64":
         (stage / "Start.cmd").write_text(
-            '@echo off\r\nsetlocal\r\ncd /d "%~dp0"\r\n'
+            '@echo off\r\nsetlocal\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n'
             '"%~dp0python\\python.exe" -E -s "%~dp0backend\\portable_start.py"\r\n'
             'if errorlevel 1 pause\r\n',
             encoding="ascii", newline="",

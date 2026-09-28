@@ -36,7 +36,7 @@ def _wait_ready(profile: Path, process: subprocess.Popen, log: Path) -> str:
             f"launch_started={process.launch_started}\n{tail}"
         )
 
-    for _ in range(600):
+    for _ in range(180):
         if process.poll() is not None:
             raise AssertionError(f"Launcher exited: {failure_details()}")
         if b"Press any key to continue" in log.read_bytes():
@@ -154,6 +154,18 @@ def main() -> None:
         python = bundle / "python" / ("python.exe" if sys.platform == "win32" else "bin/python3")
         launcher = bundle / ("Start.cmd" if sys.platform == "win32" else "Start.command")
         assert launcher.is_file() and python.is_file()
+        if sys.platform == "win32":
+            subprocess.run(
+                [
+                    str(python), "-E", "-s", "-c",
+                    "import sys; sys.stdout.reconfigure(encoding='cp1252'); "
+                    "import portable_start; print('Проверка кодировки')",
+                ],
+                cwd=bundle / "backend",
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
         with socket.socket() as occupied:
             occupied.bind(("127.0.0.1", 8080))
             occupied.listen()
