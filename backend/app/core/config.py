@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     ai_text_timeout_seconds: float = 15
     ai_text_max_output_tokens: int = 300
     ai_text_fallback_enabled: bool = True
+    portable_mode: bool = False
 
     @property
     def allowed_frontend_origins(self) -> list[str]:

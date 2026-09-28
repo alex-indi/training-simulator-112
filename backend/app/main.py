@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 import socketio
 from fastapi import FastAPI
@@ -47,6 +49,7 @@ from app.modules.training.monitor import router as monitor_router
 from app.modules.training.router import router as training_router
 from app.modules.training.router import template_router
 from app.modules.training.user_groups import router as trainee_groups_router
+from app.portable_static import PortableStaticFiles
 from app.realtime import publish_session_event
 
 logger = logging.getLogger("uvicorn.error")
@@ -230,6 +233,10 @@ app.include_router(response_router)
 async def health() -> dict[str, str]:
     """Подтверждает, что backend запущен и принимает запросы."""
     return {"status": "ok", "service": "training-simulator-112"}
+
+
+if portable_frontend := os.environ.get("UT112_PORTABLE_FRONTEND_DIR"):
+    app.mount("/", PortableStaticFiles(Path(portable_frontend)), name="portable-frontend")
 
 
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)

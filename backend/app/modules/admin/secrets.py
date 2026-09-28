@@ -1,10 +1,17 @@
 """Local encryption boundary for write-only administrative secrets."""
 
+import os
+from pathlib import Path
+
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.core.config import PROJECT_ROOT
 
-KEY_PATH = PROJECT_ROOT / ".local-secrets" / "ai-provider.key"
+KEY_PATH = (
+    Path(os.environ["UT112_PORTABLE_DATA_DIR"]) / "secrets" / "ai-provider.key"
+    if os.environ.get("UT112_PORTABLE_DATA_DIR")
+    else PROJECT_ROOT / ".local-secrets" / "ai-provider.key"
+)
 
 
 def _cipher() -> Fernet:

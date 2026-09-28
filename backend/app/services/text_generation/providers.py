@@ -125,7 +125,11 @@ class OpenAIProvider(OpenAICompatibleProvider):
 
 
 def create_provider(settings: Settings):
-    if not settings.ai_text_enabled or settings.ai_text_provider == "template":
+    if (
+        settings.portable_mode
+        or not settings.ai_text_enabled
+        or settings.ai_text_provider == "template"
+    ):
         return TemplateTextGenerationProvider()
     if settings.ai_text_provider == "openai":
         return OpenAIProvider(
