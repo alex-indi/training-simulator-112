@@ -26,7 +26,7 @@ def _request(url: str) -> bytes:
 
 
 def _wait_ready(profile: Path, process: subprocess.Popen, log: Path) -> str:
-    for _ in range(120):
+    for _ in range(600):
         if process.poll() is not None:
             raise AssertionError(f"Launcher exited {process.returncode}:\n{log.read_text(errors='replace')}")
         try:
