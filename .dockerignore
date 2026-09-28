@@ -1,14 +1,8 @@
 .git
 .github
-.codex
-.agents
-docs
-tasks
-materials
 frontend/e2e
 backend/tests
 **/*.test.js
-frontend/src/assets/auth-background.pdf
 .env
 .env.*
 **/.env
