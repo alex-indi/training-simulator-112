@@ -7,13 +7,13 @@
   },
   {
     "username": "instructor",
-    "full_name": "Наталья Андреева",
+    "full_name": "Преподаватель",
     "role": "INSTRUCTOR",
     "is_active": true
   },
   {
     "username": "trainee",
-    "full_name": "Александр Иванов",
+    "full_name": "Обучающийся",
     "role": "TRAINEE",
     "is_active": true
   },
