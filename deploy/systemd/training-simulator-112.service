@@ -1,0 +1,25 @@
+[Unit]
+Description=Training Simulator 112 Backend
+After=network-online.target postgresql.ervice
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alex
+Group=alex
+
+WorkingDirectory=/home/alex/projects/training-simulator-112/backend
+
+EnvironmentFile=/home/alex/projects/training-simulator-112/.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/home/alex/projects/training-simulator-112/backend/.venv/bin/uvicorn app.main:socket_app --host 127.0.0.1 --port 8112 --workers 1
+
+Restart=on-failure
+RestartSec=3
+
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
