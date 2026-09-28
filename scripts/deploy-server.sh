@@ -24,6 +24,11 @@ if [ -z "$TARGET_SHA" ]; then
     exit 1
 fi
 
+if ! sudo -n test -s /etc/nginx/ut112.htpasswd; then
+    echo "ERROR: /etc/nginx/ut112.htpasswd не создан или пуст"
+    exit 1
+fi
+
 cd "$REPO_DIR"
 
 PREVIOUS_SHA="$(git rev-parse HEAD)"
@@ -119,9 +124,26 @@ for attempt in {1..30}; do
 done
 
 echo
-echo "=== 10. Public health check ==="
+echo "=== 10. Update and reload Nginx ==="
 
-curl -fsS https://112.rzd-learning.ru/health >/dev/null
+# The active vhost is linked to /etc/nginx/sites-available, not the Git checkout.
+# Install the version shipped with this commit so deploys preserve the gate.
+sudo -n install -o root -g root -m 0644 \
+    "$REPO_DIR/deploy/nginx/112.rzd-learning.ru.conf" \
+    /etc/nginx/sites-available/112.rzd-learning.ru.conf
+sudo -n nginx -t
+sudo -n systemctl reload nginx
+
+echo
+echo "=== 11. Public access gate check ==="
+
+# The backend health check above verifies liveness. The public endpoint must
+# refuse anonymous requests, including after a deployment.
+PUBLIC_STATUS="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' https://112.rzd-learning.ru/health)"
+if [ "$PUBLIC_STATUS" != "401" ]; then
+    echo "ERROR: anonymous public health request returned $PUBLIC_STATUS (expected 401)"
+    exit 1
+fi
 
 echo
 echo "========================================"
