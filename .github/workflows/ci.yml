@@ -134,7 +134,7 @@ jobs:
         run: |
           uv run python -m app.scripts.bootstrap_demo
           E2E_SEED=1 uv run python -m tests.e2e_seed
-      - name: Run simplified MVP smoke
+      - name: Run E2E suite
         shell: bash
         run: |
           set -euo pipefail
@@ -162,7 +162,7 @@ jobs:
             sleep 1
             if [ "$attempt" -eq 60 ]; then dump_logs; exit 1; fi
           done
-          if ! (cd frontend && npm run test:e2e:mvp); then
+          if ! (cd frontend && npm run test:e2e); then
             dump_logs
             exit 1
           fi

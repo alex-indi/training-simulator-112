@@ -5,11 +5,10 @@ async function json(response) {
   return response.json()
 }
 
-test('instructor confirms result before trainee can see it', async ({ browser }) => {
+test('trainee sees a completed lesson without a score until instructor confirms it', async ({ browser }) => {
   const apiBase = process.env.E2E_API_URL
   const instructorApi = await apiRequest.newContext({ baseURL: apiBase, extraHTTPHeaders: { 'X-Demo-User': 'instructor' } })
   const traineeApi = await apiRequest.newContext({ baseURL: apiBase, extraHTTPHeaders: { 'X-Demo-User': 'trainee' } })
-  const instructor = await browser.newPage()
   const trainee = await browser.newPage()
   try {
     const title = `UT112-22-${Date.now()}`
@@ -27,36 +26,34 @@ test('instructor confirms result before trainee can see it', async ({ browser })
     await json(await instructorApi.post(`/api/training/sessions/${session.id}/manual-cards`, { data: { scenario_id: queue[0].scenario_id, target: 'RUN', target_id: joined.runs[0].id } }))
     await json(await instructorApi.post(`/api/training/sessions/${session.id}/finish`, { data: { mode: 'IMMEDIATE' } }))
 
-    expect((await json(await traineeApi.get('/api/training/my/results'))).some((row) => row.session_id === session.id)).toBeFalsy()
-    await instructor.addInitScript(() => sessionStorage.setItem('ut112-demo-username', 'instructor'))
-    await instructor.goto('/')
-    await instructor.getByRole('button', { name: new RegExp(title) }).click()
-    await expect(instructor.getByRole('heading', { name: `Разбор · ${title}` })).toBeVisible()
-    await expect(instructor.getByText('Предварительная оценка системы')).toBeVisible()
-    await expect(instructor.getByText('Карточка не завершена', { exact: false })).toBeVisible()
-    await instructor.getByLabel('Причина решения или изменения').fill('Проверена история карточки')
-    const deviations = instructor.locator('article[class*="deviation"]')
-    const count = await deviations.count()
-    for (let index = 0; index < count; index += 1) {
-      await deviations.nth(index).getByRole('button', { name: 'Подтвердить' }).click()
-    }
-    await instructor.getByLabel('Комментарий преподавателя').fill('Хорошая работа')
-    await instructor.getByLabel('Причина решения или изменения').fill('Проверен итог занятия')
-    await instructor.getByRole('button', { name: 'Подтвердить итог' }).click()
-    await expect(instructor.getByText(`История корректировок (${count + 1})`)).toBeVisible()
-
+    const provisional = (await json(await traineeApi.get('/api/training/my/results')))
+      .find((row) => row.session_id === session.id)
+    expect(provisional).toBeTruthy()
+    expect(provisional.result.final_score).toBeNull()
+    expect(provisional.result.confirmed_at).toBeNull()
+    expect(provisional.result).not.toHaveProperty('automatic_score')
     await trainee.addInitScript(() => {
       sessionStorage.setItem('ut112-demo-username', 'trainee')
       sessionStorage.setItem('ut112-workstation-number', '1')
     })
     await trainee.goto('/')
-    const history = trainee.getByText(/Результаты завершённых занятий/)
-    await expect(history).toBeVisible()
-    await history.click()
-    await expect(trainee.getByRole('heading', { name: new RegExp(title) })).toBeVisible()
-    await expect(trainee.locator('article').filter({ hasText: title }).getByText('Хорошая работа')).toBeVisible()
+    await trainee.getByRole('button', { name: /Результаты занятий/ }).click()
+    const result = trainee.getByRole('dialog', { name: 'Результаты занятий' })
+      .getByRole('button', { name: new RegExp(title) })
+    await expect(result).toContainText('Нет оценки')
+
+    await json(await instructorApi.post(`/api/training/sessions/${session.id}/runs/${joined.runs[0].id}/finalize`, {
+      data: { final_score: 80, final_comment: 'Хорошая работа', reason: 'Проверен итог занятия' },
+    }))
+    const confirmed = (await json(await traineeApi.get('/api/training/my/results')))
+      .find((row) => row.session_id === session.id)
+    expect(confirmed.result.final_score).toBe(80)
+    expect(confirmed.result.confirmed_at).toBeTruthy()
+    await trainee.reload()
+    await trainee.getByRole('button', { name: /Результаты занятий/ }).click()
+    await expect(trainee.getByRole('dialog', { name: 'Результаты занятий' })
+      .getByRole('button', { name: new RegExp(title) })).toContainText('Итог: 80 / 100')
   } finally {
-    await instructor.close()
     await trainee.close()
     await instructorApi.dispose()
     await traineeApi.dispose()

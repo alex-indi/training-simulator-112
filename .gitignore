@@ -16,6 +16,7 @@ Desktop.ini
 !.env.example
 !.env.docker.example
 .local-secrets/
+materials/
 
 # Python
 __pycache__/
